@@ -1,0 +1,13 @@
+load("@rules_go//go:def.bzl", "nogo")
+
+nogo(
+    name = "sky_nogo",
+    vet = True,
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_kisielk_errcheck//errcheck",
+        "@com_github_timakin_bodyclose//passes/bodyclose",
+        "@org_golang_x_tools//go/analysis/passes/nilness",
+        "@org_golang_x_tools//go/analysis/passes/unusedwrite",
+    ],
+)

@@ -1,0 +1,24 @@
+# Root BUILD.bazel
+# gazelle:prefix github.com/albertocavalcante/sky
+# gazelle:build_file_name BUILD.bazel
+# gazelle:go_naming_convention import
+load("@gazelle//:def.bzl", "gazelle")
+
+# Run gazelle for the entire workspace:
+#   bazel run //:gazelle
+
+gazelle(
+    name = "gazelle",
+)
+
+alias(
+    name = "format",
+    actual = "//tools/format",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "format.check",
+    actual = "//tools/format:format.check",
+    visibility = ["//visibility:public"],
+)

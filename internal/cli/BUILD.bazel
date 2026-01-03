@@ -1,0 +1,9 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "cli",
+    srcs = ["cli.go"],
+    importpath = "github.com/albertocavalcante/sky/internal/cli",
+    visibility = ["//:__subpackages__"],
+    deps = ["//internal/version"],
+)
