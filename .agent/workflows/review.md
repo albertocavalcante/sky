@@ -215,18 +215,14 @@ NO EXCEPTIONS. NO SKIPPING.
 ## Phase 3: Reply & Resolve (GraphQL Mutations)
 
 <critical>
-You need THREE IDs from Phase 1 data:
-- `PR_NODE_ID`: From `.data.repository.pullRequest.id`
-- `COMMENT_NODE_ID`: From thread's `.comments.nodes[0].id` (for reply)
-- `THREAD_NODE_ID`: From thread's `.id` (for resolve)
+You need TWO primary IDs from Phase 1 data for mutations:
+- `THREAD_NODE_ID`: From thread's `.id` (Used for BOTH replying and resolving)
+- `COMMENT_NODE_ID`: From thread's `.comments.nodes[0].id` (Optional, for context)
 </critical>
 
 ### 3.1 Extract IDs
 
 ```bash
-# Get PR Node ID
-jq -r '.data.repository.pullRequest.id' /tmp/pr-<PR_NUMBER>-threads.json
-
 # Get Thread and Comment IDs for a specific thread
 jq -r '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved==false) | {thread_id: .id, comment_id: .comments.nodes[0].id, path: .path, line: .line}' /tmp/pr-<PR_NUMBER>-threads.json
 ```
@@ -235,9 +231,8 @@ jq -r '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved==
 
 ```bash
 gh api graphql \
-  -F pullRequestId="<PR_NODE_ID>" \
-  -F inReplyTo="<COMMENT_NODE_ID>" \
-  -F body="Fixed in <SHORT_SHA>." \
+  -F threadId="<THREAD_NODE_ID>" \
+  -F body="Fixed in <SHORT_SHA>. [Brief details]" \
   -f query="$(cat .agent/queries/reply-to-thread.graphql)"
 ```
 
@@ -248,6 +243,17 @@ gh api graphql \
   -F threadId="<THREAD_NODE_ID>" \
   -f query="$(cat .agent/queries/resolve-review-thread.graphql)"
 ```
+
+---
+
+## Phase 3.5: Common Pitfalls & Determinism
+
+<pitfalls>
+1. **GraphQL Variable Mismatch**: `addPullRequestReviewThreadReply` uses `pullRequestReviewThreadId` (mapped to `$threadId` in our query), NOT the PR ID.
+2. **Broken Syntax on Replace**: When using the `replace` tool on complex blocks (e.g., adding a new function after an existing one), ALWAYS verify that closing braces `}` of the surrounding scope are preserved.
+3. **Stale ID State**: If a review has multiple comments in one thread, ensure you are targeting the `threadId` and not just the latest `commentId`.
+4. **Bazel Build Latency**: CI might report success while your local state is dirty. Always run `make format` and `bazel test //...` before pushing.
+</pitfalls>
 
 <reply_templates>
 
@@ -309,9 +315,11 @@ go mod tidy
 
 <issue>Test failure</issue>
 <diagnosis>
+
 ```bash
 gh run view <RUN_ID> --log-failed
 ```
+
 </diagnosis>
 <resolution>
 1. Reproduce locally: `bazel test //path/to/failing:test`
@@ -368,17 +376,27 @@ rm -f /tmp/pr-<PR_NUMBER>-*.json /tmp/pr-<PR_NUMBER>-*.patch
 ## PR #<NUMBER> Review Summary
 
 | Metric            | Value             |
-| -----------------| ----------------- |
+| ----------------- | ----------------- |
 | Threads Addressed | X                 |
 | Commits Added     | Y                 |
+| Latest Commit     | `<SHORT_SHA>`     |
 | CI Status         | ✅ Pass / ❌ Fail |
 | Unresolved        | 0                 |
 
 ### Actions Taken
 
-- Fixed: [list of fixes]
-- Deferred: [list with issue links]
-- Rejected: [list with reasoning]
+#### 🛠 Fixed
+
+- `<file>:<line>`: [Brief explanation of fix] (addressed in `<SHA>`)
+
+#### ⏩ Deferred
+
+- `<file>:<line>`: Created #NNN to track [reason]
+
+#### 🚫 Rejected
+
+- `<file>:<line>`: [Technical reasoning/Citation]
 ```
 
+```
 ```

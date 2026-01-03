@@ -20,21 +20,21 @@ make gazelle # Generate/update BUILD.bazel files
 
 ## READ BEFORE ACTING
 
-| IF task involves...             | THEN read                       |
-| ------------------------------- | ------------------------------- |
-| Creating branch, committing PR  | `.agent/rules/git-workflow.md`  |
-| Writing tests, naming, style    | `.agent/rules/code-quality.md`  |
+| IF task involves...            | THEN read                      |
+| ------------------------------ | ------------------------------ |
+| Creating branch, committing PR | `.agent/rules/git-workflow.md` |
+| Writing tests, naming, style   | `.agent/rules/code-quality.md` |
 
 ## Repository Layout
 
-| Path        | Purpose                           |
-| ----------- | --------------------------------- |
-| `cmd/`      | CLI entrypoints for tools         |
-| `internal/` | Shared, non-public Go packages    |
-| `docs/`     | Design notes and roadmap          |
+| Path        | Purpose                        |
+| ----------- | ------------------------------ |
+| `cmd/`      | CLI entrypoints for tools      |
+| `internal/` | Shared, non-public Go packages |
+| `docs/`     | Design notes and roadmap       |
 
 ## Helper Files
 
-| Path             | Contains             |
-| ---------------- | -------------------- |
-| `.agent/rules/`  | Permanent rules      |
+| Path            | Contains        |
+| --------------- | --------------- |
+| `.agent/rules/` | Permanent rules |

@@ -1,8 +1,5 @@
-mutation($pullRequestId: ID!, $inReplyTo: ID!, $body: String!) {
-  addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $pullRequestId, body: $body}) {
+mutation($threadId: ID!, $body: String!) {
+  addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $threadId, body: $body}) {
     comment { id }
   }
 }
-# Note: The above is for adding a comment to a thread. 
-# For a simple reply to a comment, we use addPullRequestReviewComment.
-# But for threads, we usually want to reply to the thread itself.
