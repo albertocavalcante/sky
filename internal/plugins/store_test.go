@@ -143,3 +143,35 @@ func TestStoreConcurrency(t *testing.T) {
 		})
 	}
 }
+
+func TestStoreConcurrentUpsert(t *testing.T) {
+	root := t.TempDir()
+	store := NewStore(root)
+
+	workers := 20
+	errc := make(chan error, workers)
+
+	for i := 0; i < workers; i++ {
+		go func(id int) {
+			err := store.UpsertPlugin(Plugin{
+				Name:    "same-plugin",
+				Version: fmt.Sprintf("1.0.%d", id),
+			})
+			errc <- err
+		}(i)
+	}
+
+	for i := 0; i < workers; i++ {
+		if err := <-errc; err != nil {
+			t.Errorf("worker failed: %v", err)
+		}
+	}
+
+	plugins, err := store.LoadPlugins()
+	if err != nil {
+		t.Fatalf("load plugins: %v", err)
+	}
+	if len(plugins) != 1 {
+		t.Fatalf("expected 1 plugin, got %d", len(plugins))
+	}
+}

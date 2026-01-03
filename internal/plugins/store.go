@@ -65,14 +65,32 @@ func (s Store) LockFile() string {
 	return filepath.Join(s.Root, "lock")
 }
 
-func (s Store) withLock(fn func() error) error {
+// withWriteLock executes the provided function while holding an exclusive write lock
+// on the store. It ensures the store's root directory exists before acquiring the lock.
+func (s Store) withWriteLock(fn func() error) error {
 	if err := s.Ensure(); err != nil {
 		return err
 	}
 
 	fileLock := flock.New(s.LockFile())
 	if err := fileLock.Lock(); err != nil {
-		return fmt.Errorf("acquire lock: %w", err)
+		return fmt.Errorf("acquire write lock: %w", err)
+	}
+	defer func() { _ = fileLock.Unlock() }()
+
+	return fn()
+}
+
+// withReadLock executes the provided function while holding a shared read lock
+// on the store. It ensures the store's root directory exists before acquiring the lock.
+func (s Store) withReadLock(fn func() error) error {
+	if err := s.Ensure(); err != nil {
+		return err
+	}
+
+	fileLock := flock.New(s.LockFile())
+	if err := fileLock.RLock(); err != nil {
+		return fmt.Errorf("acquire read lock: %w", err)
 	}
 	defer func() { _ = fileLock.Unlock() }()
 
@@ -88,8 +106,22 @@ func (s Store) PluginPath(name string, pluginType PluginType) string {
 	return filepath.Join(s.PluginsDir(), filename)
 }
 
-// LoadPlugins loads the installed plugins list.
+// LoadPlugins loads the installed plugins list, acquiring a read lock.
 func (s Store) LoadPlugins() ([]Plugin, error) {
+	var plugins []Plugin
+	err := s.withReadLock(func() error {
+		var loadErr error
+		plugins, loadErr = s.loadPluginsNL()
+		return loadErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	return plugins, nil
+}
+
+// loadPluginsNL loads the installed plugins list without acquiring a lock.
+func (s Store) loadPluginsNL() ([]Plugin, error) {
 	var plugins []Plugin
 	if err := readJSON(s.PluginsFile(), &plugins); err != nil {
 		return nil, fmt.Errorf("load plugins: %w", err)
@@ -108,8 +140,8 @@ func (s Store) LoadPlugins() ([]Plugin, error) {
 	return plugins, nil
 }
 
-// SavePlugins persists the plugin list.
-func (s Store) SavePlugins(plugins []Plugin) error {
+// savePlugins persists the plugin list.
+func (s Store) savePlugins(plugins []Plugin) error {
 	if err := s.Ensure(); err != nil {
 		return err
 	}
@@ -118,12 +150,12 @@ func (s Store) SavePlugins(plugins []Plugin) error {
 
 // UpsertPlugin inserts or replaces a plugin entry.
 func (s Store) UpsertPlugin(plugin Plugin) error {
-	return s.withLock(func() error {
+	return s.withWriteLock(func() error {
 		if err := ValidateName(plugin.Name); err != nil {
 			return err
 		}
 
-		plugins, err := s.LoadPlugins()
+		plugins, err := s.loadPluginsNL()
 		if err != nil {
 			return err
 		}
@@ -139,7 +171,7 @@ func (s Store) UpsertPlugin(plugin Plugin) error {
 		if !replaced {
 			plugins = append(plugins, plugin)
 		}
-		return s.SavePlugins(plugins)
+		return s.savePlugins(plugins)
 	})
 }
 
@@ -168,12 +200,12 @@ func (s Store) FindPlugin(name string) (*Plugin, error) {
 // RemovePlugin removes a plugin entry and its binary.
 func (s Store) RemovePlugin(name string) (*Plugin, error) {
 	var removed *Plugin
-	err := s.withLock(func() error {
+	err := s.withWriteLock(func() error {
 		if err := ValidateName(name); err != nil {
 			return err
 		}
 
-		plugins, err := s.LoadPlugins()
+		plugins, err := s.loadPluginsNL()
 		if err != nil {
 			return err
 		}
@@ -192,7 +224,7 @@ func (s Store) RemovePlugin(name string) (*Plugin, error) {
 			return fmt.Errorf("plugin %q not installed", name)
 		}
 
-		if err := s.SavePlugins(remaining); err != nil {
+		if err := s.savePlugins(remaining); err != nil {
 			return err
 		}
 
@@ -204,8 +236,22 @@ func (s Store) RemovePlugin(name string) (*Plugin, error) {
 	return removed, err
 }
 
-// LoadMarketplaces loads the configured marketplaces.
+// LoadMarketplaces loads the configured marketplaces, acquiring a read lock.
 func (s Store) LoadMarketplaces() ([]Marketplace, error) {
+	var marketplaces []Marketplace
+	err := s.withReadLock(func() error {
+		var loadErr error
+		marketplaces, loadErr = s.loadMarketplacesNL()
+		return loadErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	return marketplaces, nil
+}
+
+// loadMarketplacesNL loads the configured marketplaces without acquiring a lock.
+func (s Store) loadMarketplacesNL() ([]Marketplace, error) {
 	var marketplaces []Marketplace
 	if err := readJSON(s.MarketplacesFile(), &marketplaces); err != nil {
 		return nil, fmt.Errorf("load marketplaces: %w", err)
@@ -219,8 +265,8 @@ func (s Store) LoadMarketplaces() ([]Marketplace, error) {
 	return marketplaces, nil
 }
 
-// SaveMarketplaces persists the marketplace list.
-func (s Store) SaveMarketplaces(marketplaces []Marketplace) error {
+// saveMarketplaces persists the marketplace list.
+func (s Store) saveMarketplaces(marketplaces []Marketplace) error {
 	if err := s.Ensure(); err != nil {
 		return err
 	}
@@ -229,7 +275,7 @@ func (s Store) SaveMarketplaces(marketplaces []Marketplace) error {
 
 // UpsertMarketplace inserts or replaces a marketplace entry.
 func (s Store) UpsertMarketplace(marketplace Marketplace) error {
-	return s.withLock(func() error {
+	return s.withWriteLock(func() error {
 		if err := ValidateName(marketplace.Name); err != nil {
 			return err
 		}
@@ -237,7 +283,7 @@ func (s Store) UpsertMarketplace(marketplace Marketplace) error {
 			return fmt.Errorf("marketplace url is required")
 		}
 
-		marketplaces, err := s.LoadMarketplaces()
+		marketplaces, err := s.loadMarketplacesNL()
 		if err != nil {
 			return err
 		}
@@ -253,19 +299,19 @@ func (s Store) UpsertMarketplace(marketplace Marketplace) error {
 		if !replaced {
 			marketplaces = append(marketplaces, marketplace)
 		}
-		return s.SaveMarketplaces(marketplaces)
+		return s.saveMarketplaces(marketplaces)
 	})
 }
 
 // RemoveMarketplace removes a marketplace entry.
 func (s Store) RemoveMarketplace(name string) (*Marketplace, error) {
 	var removed *Marketplace
-	err := s.withLock(func() error {
+	err := s.withWriteLock(func() error {
 		if err := ValidateName(name); err != nil {
 			return err
 		}
 
-		marketplaces, err := s.LoadMarketplaces()
+		marketplaces, err := s.loadMarketplacesNL()
 		if err != nil {
 			return err
 		}
@@ -284,7 +330,7 @@ func (s Store) RemoveMarketplace(name string) (*Marketplace, error) {
 			return fmt.Errorf("marketplace %q not configured", name)
 		}
 
-		return s.SaveMarketplaces(remaining)
+		return s.saveMarketplaces(remaining)
 	})
 	return removed, err
 }
