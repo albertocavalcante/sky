@@ -1,0 +1,33 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "plugins",
+    srcs = [
+        "install.go",
+        "marketplace.go",
+        "names.go",
+        "protocol.go",
+        "runner.go",
+        "runner_exec.go",
+        "runner_wasi.go",
+        "store.go",
+        "types.go",
+    ],
+    importpath = "github.com/albertocavalcante/sky/internal/plugins",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@com_github_gofrs_flock//:flock",
+        "@com_github_tetratelabs_wazero//:wazero",
+        "@com_github_tetratelabs_wazero//imports/wasi_snapshot_preview1",
+        "@com_github_tetratelabs_wazero//sys",
+    ],
+)
+
+go_test(
+    name = "plugins_test",
+    srcs = [
+        "runner_test.go",
+        "store_test.go",
+    ],
+    embed = [":plugins"],
+)
