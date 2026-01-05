@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"os"
 
@@ -19,25 +18,17 @@ func main() {
 
 func run(args []string, stdout, _ io.Writer) error {
 	if len(args) == 0 {
-		writeln(stdout, "skycheck: type checker not implemented yet")
-		writeln(stdout, "")
-		writeln(stdout, "Usage: skycheck [flags] <files...>")
-		writeln(stdout, "")
-		writeln(stdout, "Options:")
-		writeln(stdout, "  --mode=ide|ci    Analysis mode (default: ci)")
-		writeln(stdout, "  --type-mode=...  Type checking mode: disabled, parse_only, enabled")
-		writeln(stdout, "  --json           Output diagnostics as JSON")
+		cli.Writeln(stdout, "skycheck: type checker not implemented yet")
+		cli.Writeln(stdout, "")
+		cli.Writeln(stdout, "Usage: skycheck [flags] <files...>")
+		cli.Writeln(stdout, "")
+		cli.Writeln(stdout, "Options:")
+		cli.Writeln(stdout, "  --mode=ide|ci    Analysis mode (default: ci)")
+		cli.Writeln(stdout, "  --type-mode=...  Type checking mode: disabled, parse_only, enabled")
+		cli.Writeln(stdout, "  --json           Output diagnostics as JSON")
 		return nil
 	}
 
-	writef(stdout, "skycheck: type checking %d file(s) is not implemented yet\n", len(args))
+	cli.Writef(stdout, "skycheck: type checking %d file(s) is not implemented yet\n", len(args))
 	return nil
-}
-
-func writef(w io.Writer, format string, args ...any) {
-	_, _ = fmt.Fprintf(w, format, args...)
-}
-
-func writeln(w io.Writer, args ...any) {
-	_, _ = fmt.Fprintln(w, args...)
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"os"
 
@@ -18,27 +17,19 @@ func main() {
 }
 
 func run(args []string, stdout, _ io.Writer) error {
-	writeln(stdout, "skyrepl: Starlark REPL not implemented yet")
-	writeln(stdout, "")
-	writeln(stdout, "This will provide an interactive Starlark environment with:")
-	writeln(stdout, "  - Dialect-aware evaluation (bazel, buck2, starlark)")
-	writeln(stdout, "  - Tab completion for builtins and loaded symbols")
-	writeln(stdout, "  - Type hover information (when --type-mode=enabled)")
-	writeln(stdout, "  - Preload files with --preload=<file>")
-	writeln(stdout, "")
-	writeln(stdout, "Usage: skyrepl [flags] [<file>...]")
-	writeln(stdout, "")
-	writeln(stdout, "Options:")
-	writeln(stdout, "  --dialect=...    Dialect: bazel, buck2, starlark (default: starlark)")
-	writeln(stdout, "  --preload=...    Preload files before starting REPL")
-	writeln(stdout, "  -e <expr>        Evaluate expression and exit")
+	cli.Writeln(stdout, "skyrepl: Starlark REPL not implemented yet")
+	cli.Writeln(stdout, "")
+	cli.Writeln(stdout, "This will provide an interactive Starlark environment with:")
+	cli.Writeln(stdout, "  - Dialect-aware evaluation (bazel, buck2, starlark)")
+	cli.Writeln(stdout, "  - Tab completion for builtins and loaded symbols")
+	cli.Writeln(stdout, "  - Type hover information (when --type-mode=enabled)")
+	cli.Writeln(stdout, "  - Preload files with --preload=<file>")
+	cli.Writeln(stdout, "")
+	cli.Writeln(stdout, "Usage: skyrepl [flags] [<file>...]")
+	cli.Writeln(stdout, "")
+	cli.Writeln(stdout, "Options:")
+	cli.Writeln(stdout, "  --dialect=...    Dialect: bazel, buck2, starlark (default: starlark)")
+	cli.Writeln(stdout, "  --preload=...    Preload files before starting REPL")
+	cli.Writeln(stdout, "  -e <expr>        Evaluate expression and exit")
 	return nil
-}
-
-func writef(w io.Writer, format string, args ...any) {
-	_, _ = fmt.Fprintf(w, format, args...)
-}
-
-func writeln(w io.Writer, args ...any) {
-	_, _ = fmt.Fprintln(w, args...)
 }
