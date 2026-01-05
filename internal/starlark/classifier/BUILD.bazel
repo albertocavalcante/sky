@@ -1,9 +1,19 @@
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "classifier",
-    srcs = ["classifier.go"],
+    srcs = [
+        "classifier.go",
+        "default.go",
+    ],
     importpath = "github.com/albertocavalcante/sky/internal/starlark/classifier",
     visibility = ["//:__subpackages__"],
+    deps = ["//internal/starlark/filekind"],
+)
+
+go_test(
+    name = "classifier_test",
+    srcs = ["default_test.go"],
+    embed = [":classifier"],
     deps = ["//internal/starlark/filekind"],
 )
