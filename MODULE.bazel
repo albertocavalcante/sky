@@ -12,6 +12,8 @@ bazel_dep(name = "rules_go", version = "0.59.0")
 bazel_dep(name = "gazelle", version = "0.47.0")
 bazel_dep(name = "aspect_rules_lint", version = "2.0.0-beta.1")
 
+bazel_dep(name = "buildifier_prebuilt", version = "8.0.3", dev_dependency = True)
+
 go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
 go_sdk.download(version = "1.24.6")
 go_sdk.nogo(nogo = "//tools/nogo:sky_nogo")

@@ -15,6 +15,7 @@ These rules are non-negotiable.
 | Verify before push     | `git status` + `git diff --cached`        | Catches mistakes early      |
 
 Forbidden:
+
 - `git add .` or `git add -A`
 - `git commit` without verifying branch
 - `git push --force` (use `--force-with-lease` if necessary)
@@ -47,5 +48,6 @@ Use Conventional Commits:
 ```
 
 Examples:
+
 - `feat(parser): add starlark module loader`
 - `fix(lint): handle empty files`

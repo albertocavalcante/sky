@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "typemode",
+    srcs = ["typemode.go"],
+    importpath = "github.com/albertocavalcante/sky/internal/starlark/typemode",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "typemode_test",
+    srcs = ["typemode_test.go"],
+    embed = [":typemode"],
+)

@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"sort"
 	"text/tabwriter"
 	"time"
@@ -14,6 +17,16 @@ import (
 	"github.com/albertocavalcante/sky/internal/plugins"
 	"github.com/albertocavalcante/sky/internal/version"
 )
+
+// coreCommands maps short aliases to standalone binary names.
+// These commands are dispatched to co-located binaries before falling back to plugins.
+var coreCommands = map[string]string{
+	"fmt":   "skyfmt",
+	"lint":  "skylint",
+	"check": "skycheck",
+	"query": "skyquery",
+	"repl":  "skyrepl",
+}
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -35,8 +48,56 @@ func run(args []string, stdout, stderr io.Writer) int {
 		printUsage(stderr)
 		return 0
 	default:
+		// Check for core command aliases (fmt, lint, check, etc.)
+		if binary, ok := coreCommands[args[0]]; ok {
+			return runCoreCommand(binary, args[1:], stdout, stderr)
+		}
 		return runInstalledPlugin(args, stdout, stderr)
 	}
+}
+
+// runCoreCommand runs a core command binary (skyfmt, skylint, etc.).
+// It looks for the binary in the same directory as the sky binary,
+// then falls back to PATH, and finally falls back to the plugin system.
+func runCoreCommand(binary string, args []string, stdout, stderr io.Writer) int {
+	// First, try to find the binary alongside the sky executable
+	path, err := findCoreBinary(binary)
+	if err != nil {
+		// Fall back to plugin system
+		return runInstalledPlugin(append([]string{binary}, args...), stdout, stderr)
+	}
+
+	cmd := exec.Command(path, args...)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	cmd.Stdin = os.Stdin
+
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode()
+		}
+		writef(stderr, "sky: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+// findCoreBinary looks for a core command binary.
+// It first checks the same directory as the sky binary, then falls back to PATH.
+func findCoreBinary(name string) (string, error) {
+	// Try to find the binary alongside the sky executable
+	exe, err := os.Executable()
+	if err == nil {
+		dir := filepath.Dir(exe)
+		candidate := filepath.Join(dir, name)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+	}
+
+	// Fall back to PATH lookup
+	return exec.LookPath(name)
 }
 
 func runPlugin(args []string, stdout, stderr io.Writer) int {
@@ -424,7 +485,14 @@ func writeln(w io.Writer, args ...any) {
 func printUsage(w io.Writer) {
 	writeln(w, "usage: sky <command> [args]")
 	writeln(w)
-	writeln(w, "core commands:")
+	writeln(w, "starlark tools:")
+	writeln(w, "  fmt          format Starlark files")
+	writeln(w, "  lint         lint Starlark files")
+	writeln(w, "  check        type check Starlark files")
+	writeln(w, "  query        query Starlark sources")
+	writeln(w, "  repl         interactive Starlark REPL")
+	writeln(w)
+	writeln(w, "management:")
 	writeln(w, "  plugin       manage plugins")
 	writeln(w, "  version      show version")
 	writeln(w)
