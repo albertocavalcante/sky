@@ -9,7 +9,7 @@ import os
 
 def inventory(file_path):
     if not os.path.exists(file_path):
-        print(f"Error: {file_path} not found")
+        print(f"Error: {file_path} not found", file=sys.stderr)
         sys.exit(1)
         
     with open(file_path, 'r') as f:
@@ -33,6 +33,6 @@ def inventory(file_path):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: uv run inventory_threads.py <threads.json>")
+        print("Usage: uv run pr.py <threads.json>", file=sys.stderr)
         sys.exit(1)
     inventory(sys.argv[1])
