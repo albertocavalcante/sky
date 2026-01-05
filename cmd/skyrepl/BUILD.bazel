@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "skyrepl_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/albertocavalcante/sky/cmd/skyrepl",
+    visibility = ["//visibility:private"],
+    deps = ["//internal/cli"],
+)
+
+go_binary(
+    name = "skyrepl",
+    embed = [":skyrepl_lib"],
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,9 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "builtins",
+    srcs = ["provider.go"],
+    importpath = "github.com/albertocavalcante/sky/internal/starlark/builtins",
+    visibility = ["//:__subpackages__"],
+    deps = ["//internal/starlark/filekind"],
+)

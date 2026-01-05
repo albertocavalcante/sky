@@ -58,3 +58,13 @@ func writef(w io.Writer, format string, args ...any) {
 func writeln(w io.Writer, args ...any) {
 	_, _ = fmt.Fprintln(w, args...)
 }
+
+// Writef writes formatted output to the writer.
+func Writef(w io.Writer, format string, args ...any) {
+	_, _ = fmt.Fprintf(w, format, args...)
+}
+
+// Writeln writes a line to the writer.
+func Writeln(w io.Writer, args ...any) {
+	_, _ = fmt.Fprintln(w, args...)
+}

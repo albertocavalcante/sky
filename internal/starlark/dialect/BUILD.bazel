@@ -1,0 +1,12 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "dialect",
+    srcs = ["dialect.go"],
+    importpath = "github.com/albertocavalcante/sky/internal/starlark/dialect",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/starlark/filekind",
+        "//internal/starlark/typemode",
+    ],
+)

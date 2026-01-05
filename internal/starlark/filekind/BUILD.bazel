@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "filekind",
+    srcs = ["filekind.go"],
+    importpath = "github.com/albertocavalcante/sky/internal/starlark/filekind",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "filekind_test",
+    srcs = ["filekind_test.go"],
+    embed = [":filekind"],
+)

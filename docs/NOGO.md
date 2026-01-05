@@ -20,7 +20,7 @@ executes automatically during Bazel builds.
   - `errcheck`
 - The Go module includes `golang.org/x/tools` to provide the analyzers.
 - Nogo runs for all Go targets in this repository by default.
-The curated list is documented in `docs/NOGO_ANALYZERS.md`.
+  The curated list is documented in `docs/NOGO_ANALYZERS.md`.
 
 ## Usage
 
