@@ -1,0 +1,90 @@
+{
+  "functions": [
+    {
+      "name": "example_function",
+      "doc": "An example function demonstrating the JSON schema",
+      "params": [
+        {
+          "name": "name",
+          "type": "string",
+          "default": "",
+          "required": true,
+          "variadic": false,
+          "kwargs": false
+        },
+        {
+          "name": "srcs",
+          "type": "list[str]",
+          "default": "[]",
+          "required": false,
+          "variadic": false,
+          "kwargs": false
+        },
+        {
+          "name": "args",
+          "type": "any",
+          "default": "",
+          "required": false,
+          "variadic": true,
+          "kwargs": false
+        },
+        {
+          "name": "kwargs",
+          "type": "any",
+          "default": "",
+          "required": false,
+          "variadic": false,
+          "kwargs": true
+        }
+      ],
+      "return_type": "None"
+    }
+  ],
+  "types": [
+    {
+      "name": "ExampleType",
+      "doc": "An example type definition",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "doc": "The name field"
+        },
+        {
+          "name": "value",
+          "type": "int",
+          "doc": "The value field"
+        }
+      ],
+      "methods": [
+        {
+          "name": "get_value",
+          "doc": "Returns the value",
+          "params": [
+            {
+              "name": "default",
+              "type": "int",
+              "default": "0",
+              "required": false,
+              "variadic": false,
+              "kwargs": false
+            }
+          ],
+          "return_type": "int"
+        }
+      ]
+    }
+  ],
+  "globals": [
+    {
+      "name": "EXAMPLE_CONSTANT",
+      "type": "string",
+      "doc": "An example global constant"
+    },
+    {
+      "name": "EXAMPLE_NUMBER",
+      "type": "int",
+      "doc": "An example global number"
+    }
+  ]
+}

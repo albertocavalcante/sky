@@ -408,7 +408,7 @@ func TestConvertProtoToBuiltins(t *testing.T) {
 		expected builtins.Builtins
 	}{
 		{
-			name: "empty builtins",
+			name:  "empty builtins",
 			proto: &builtinspb.Builtins{},
 			expected: builtins.Builtins{
 				Functions: []builtins.Signature{},

@@ -1,0 +1,243 @@
+{
+  "functions": [
+    {
+      "name": "abs",
+      "doc": "Returns the absolute value of a number",
+      "params": [
+        {
+          "name": "x",
+          "type": "int | float",
+          "required": true
+        }
+      ],
+      "return_type": "int | float"
+    },
+    {
+      "name": "bool",
+      "doc": "Converts a value to boolean",
+      "params": [
+        {
+          "name": "x",
+          "type": "any",
+          "default": "False",
+          "required": false
+        }
+      ],
+      "return_type": "bool"
+    },
+    {
+      "name": "dict",
+      "doc": "Creates a new dictionary",
+      "params": [
+        {
+          "name": "args",
+          "type": "any",
+          "variadic": true
+        },
+        {
+          "name": "kwargs",
+          "type": "any",
+          "kwargs": true
+        }
+      ],
+      "return_type": "dict"
+    },
+    {
+      "name": "len",
+      "doc": "Returns the length of a sequence or collection",
+      "params": [
+        {
+          "name": "x",
+          "type": "sequence",
+          "required": true
+        }
+      ],
+      "return_type": "int"
+    },
+    {
+      "name": "list",
+      "doc": "Creates a new list",
+      "params": [
+        {
+          "name": "iterable",
+          "type": "iterable",
+          "default": "[]",
+          "required": false
+        }
+      ],
+      "return_type": "list"
+    },
+    {
+      "name": "print",
+      "doc": "Prints values to standard output",
+      "params": [
+        {
+          "name": "args",
+          "type": "any",
+          "variadic": true
+        },
+        {
+          "name": "sep",
+          "type": "string",
+          "default": "\" \"",
+          "required": false
+        }
+      ],
+      "return_type": "None"
+    },
+    {
+      "name": "range",
+      "doc": "Returns a range of integers",
+      "params": [
+        {
+          "name": "start_or_stop",
+          "type": "int",
+          "required": true
+        },
+        {
+          "name": "stop",
+          "type": "int",
+          "required": false
+        },
+        {
+          "name": "step",
+          "type": "int",
+          "default": "1",
+          "required": false
+        }
+      ],
+      "return_type": "range"
+    },
+    {
+      "name": "str",
+      "doc": "Converts a value to string",
+      "params": [
+        {
+          "name": "x",
+          "type": "any",
+          "required": true
+        }
+      ],
+      "return_type": "string"
+    }
+  ],
+  "types": [
+    {
+      "name": "dict",
+      "doc": "Dictionary type",
+      "fields": [],
+      "methods": [
+        {
+          "name": "get",
+          "doc": "Returns the value for key if key is in the dictionary",
+          "params": [
+            {
+              "name": "key",
+              "type": "any",
+              "required": true
+            },
+            {
+              "name": "default",
+              "type": "any",
+              "default": "None",
+              "required": false
+            }
+          ],
+          "return_type": "any"
+        },
+        {
+          "name": "items",
+          "doc": "Returns a list of (key, value) pairs",
+          "params": [],
+          "return_type": "list"
+        },
+        {
+          "name": "keys",
+          "doc": "Returns a list of keys",
+          "params": [],
+          "return_type": "list"
+        },
+        {
+          "name": "values",
+          "doc": "Returns a list of values",
+          "params": [],
+          "return_type": "list"
+        }
+      ]
+    },
+    {
+      "name": "list",
+      "doc": "List type",
+      "fields": [],
+      "methods": [
+        {
+          "name": "append",
+          "doc": "Appends an element to the list",
+          "params": [
+            {
+              "name": "item",
+              "type": "any",
+              "required": true
+            }
+          ],
+          "return_type": "None"
+        },
+        {
+          "name": "extend",
+          "doc": "Extends the list with elements from an iterable",
+          "params": [
+            {
+              "name": "iterable",
+              "type": "iterable",
+              "required": true
+            }
+          ],
+          "return_type": "None"
+        }
+      ]
+    },
+    {
+      "name": "string",
+      "doc": "String type",
+      "fields": [],
+      "methods": [
+        {
+          "name": "split",
+          "doc": "Splits the string by separator",
+          "params": [
+            {
+              "name": "sep",
+              "type": "string",
+              "default": "\" \"",
+              "required": false
+            }
+          ],
+          "return_type": "list[string]"
+        },
+        {
+          "name": "strip",
+          "doc": "Returns a copy with leading and trailing whitespace removed",
+          "params": [],
+          "return_type": "string"
+        }
+      ]
+    }
+  ],
+  "globals": [
+    {
+      "name": "True",
+      "type": "bool",
+      "doc": "Boolean true constant"
+    },
+    {
+      "name": "False",
+      "type": "bool",
+      "doc": "Boolean false constant"
+    },
+    {
+      "name": "None",
+      "type": "NoneType",
+      "doc": "The None constant"
+    }
+  ]
+}

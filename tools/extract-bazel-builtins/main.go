@@ -7,14 +7,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	buildpb "github.com/bazelbuild/buildtools/build_proto"
 	builtinspb "github.com/albertocavalcante/sky/internal/starlark/builtins/proto"
+	buildpb "github.com/bazelbuild/buildtools/build_proto"
 	"google.golang.org/protobuf/proto"
 )
 
 var (
-	inputPath  = flag.String("input", "", "Path to input build-language.pb file")
-	outputDir  = flag.String("output", "", "Output directory for generated .pb files")
+	inputPath = flag.String("input", "", "Path to input build-language.pb file")
+	outputDir = flag.String("output", "", "Output directory for generated .pb files")
 )
 
 func main() {
