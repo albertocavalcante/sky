@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package sky.builtins;
+
+option go_package = "github.com/albertocavalcante/sky/internal/starlark/builtins/proto;builtinspb";
+
+message Builtins {
+  repeated Type types = 1;
+  repeated Value values = 2;
+}
+
+message Type {
+  string name = 1;
+  string doc = 2;
+  repeated Field fields = 3;
+}
+
+message Field {
+  string name = 1;
+  string type = 2;
+  string doc = 3;
+  optional Callable callable = 4;
+}
+
+message Value {
+  string name = 1;
+  string type = 2;
+  string doc = 3;
+  optional Callable callable = 4;
+}
+
+message Callable {
+  repeated Param params = 1;
+  string return_type = 2;
+  string doc = 3;
+}
+
+message Param {
+  string name = 1;
+  string type = 2;
+  string doc = 3;
+  string default_value = 4;
+  bool is_mandatory = 5;
+  bool is_star_arg = 6;
+  bool is_star_star_arg = 7;
+}

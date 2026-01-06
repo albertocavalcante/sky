@@ -1,0 +1,71 @@
+types {
+  name: "TestType"
+  doc: "A test type for unit testing"
+  fields {
+    name: "field1"
+    type: "str"
+    doc: "A simple string field"
+  }
+  fields {
+    name: "field2"
+    type: "int"
+    doc: "A simple integer field"
+  }
+  fields {
+    name: "method1"
+    type: "function"
+    doc: "A test method"
+    callable {
+      params {
+        name: "arg1"
+        type: "str"
+        is_mandatory: true
+      }
+      return_type: "str"
+      doc: "A test method that takes a string and returns a string"
+    }
+  }
+}
+
+values {
+  name: "test_function"
+  type: "function"
+  doc: "A test function"
+  callable {
+    params {
+      name: "required_param"
+      type: "str"
+      is_mandatory: true
+    }
+    params {
+      name: "optional_param"
+      type: "int"
+      default_value: "42"
+      is_mandatory: false
+    }
+    params {
+      name: "args"
+      type: "any"
+      is_star_arg: true
+    }
+    params {
+      name: "kwargs"
+      type: "any"
+      is_star_star_arg: true
+    }
+    return_type: "None"
+    doc: "A test function with various parameter types"
+  }
+}
+
+values {
+  name: "TEST_CONSTANT"
+  type: "str"
+  doc: "A test constant"
+}
+
+values {
+  name: "TEST_NUMBER"
+  type: "int"
+  doc: "A test number constant"
+}

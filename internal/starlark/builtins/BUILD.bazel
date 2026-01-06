@@ -7,3 +7,12 @@ go_library(
     visibility = ["//:__subpackages__"],
     deps = ["//internal/starlark/filekind"],
 )
+
+filegroup(
+    name = "data",
+    srcs = glob(
+        ["data/proto/**/*.pb", "data/proto/**/*.pbtxt"],
+        allow_empty = True,
+    ),
+    visibility = ["//:__subpackages__"],
+)

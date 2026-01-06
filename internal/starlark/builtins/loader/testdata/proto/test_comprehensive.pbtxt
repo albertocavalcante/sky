@@ -1,0 +1,196 @@
+# Comprehensive test proto with multiple types, functions, and globals
+
+types {
+  name: "File"
+  doc: "A Starlark file object"
+  fields {
+    name: "path"
+    type: "str"
+    doc: "The file path"
+  }
+  fields {
+    name: "basename"
+    type: "str"
+    doc: "The base filename"
+  }
+  fields {
+    name: "dirname"
+    type: "str"
+    doc: "The directory name"
+  }
+}
+
+types {
+  name: "Provider"
+  doc: "A provider that supplies information"
+  fields {
+    name: "name"
+    type: "str"
+    doc: "Provider name"
+  }
+  fields {
+    name: "get_value"
+    type: "function"
+    doc: "Get a value from the provider"
+    callable {
+      params {
+        name: "key"
+        type: "str"
+        is_mandatory: true
+        doc: "The key to retrieve"
+      }
+      params {
+        name: "default"
+        type: "any"
+        default_value: "None"
+        is_mandatory: false
+        doc: "Default value if key not found"
+      }
+      return_type: "any"
+      doc: "Returns the value for the key, or default if not found"
+    }
+  }
+  fields {
+    name: "set_value"
+    type: "function"
+    doc: "Set a value in the provider"
+    callable {
+      params {
+        name: "key"
+        type: "str"
+        is_mandatory: true
+      }
+      params {
+        name: "value"
+        type: "any"
+        is_mandatory: true
+      }
+      return_type: "None"
+    }
+  }
+}
+
+values {
+  name: "glob"
+  type: "function"
+  doc: "Returns a list of files matching the glob pattern"
+  callable {
+    params {
+      name: "include"
+      type: "list[str]"
+      is_mandatory: true
+      doc: "List of glob patterns to include"
+    }
+    params {
+      name: "exclude"
+      type: "list[str]"
+      default_value: "[]"
+      is_mandatory: false
+      doc: "List of glob patterns to exclude"
+    }
+    params {
+      name: "exclude_directories"
+      type: "int"
+      default_value: "1"
+      is_mandatory: false
+      doc: "Whether to exclude directories"
+    }
+    return_type: "list[str]"
+    doc: "Returns a list of file paths matching the patterns"
+  }
+}
+
+values {
+  name: "select"
+  type: "function"
+  doc: "Select a value based on configuration"
+  callable {
+    params {
+      name: "conditions"
+      type: "dict[str, any]"
+      is_mandatory: true
+      doc: "A dictionary mapping conditions to values"
+    }
+    params {
+      name: "no_match_error"
+      type: "str"
+      default_value: "\"\""
+      is_mandatory: false
+      doc: "Error message if no condition matches"
+    }
+    return_type: "any"
+  }
+}
+
+values {
+  name: "print"
+  type: "function"
+  doc: "Print values to output"
+  callable {
+    params {
+      name: "args"
+      type: "any"
+      is_star_arg: true
+      doc: "Values to print"
+    }
+    params {
+      name: "sep"
+      type: "str"
+      default_value: "\" \""
+      is_mandatory: false
+      doc: "Separator between values"
+    }
+    return_type: "None"
+  }
+}
+
+values {
+  name: "dict_merge"
+  type: "function"
+  doc: "Merge multiple dictionaries"
+  callable {
+    params {
+      name: "dicts"
+      type: "dict"
+      is_star_arg: true
+      doc: "Dictionaries to merge"
+    }
+    params {
+      name: "kwargs"
+      type: "any"
+      is_star_star_arg: true
+      doc: "Additional key-value pairs"
+    }
+    return_type: "dict"
+  }
+}
+
+values {
+  name: "True"
+  type: "bool"
+  doc: "Boolean true constant"
+}
+
+values {
+  name: "False"
+  type: "bool"
+  doc: "Boolean false constant"
+}
+
+values {
+  name: "None"
+  type: "NoneType"
+  doc: "None constant representing absence of value"
+}
+
+values {
+  name: "WORKSPACE_ROOT"
+  type: "str"
+  doc: "The path to the workspace root"
+}
+
+values {
+  name: "PACKAGE_NAME"
+  type: "str"
+  doc: "The name of the current package"
+}

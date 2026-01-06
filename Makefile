@@ -16,4 +16,4 @@ gazelle:
 	bazel run //:gazelle
 
 tidy:
-	go mod tidy
+	bazel run @rules_go//go -- mod tidy
