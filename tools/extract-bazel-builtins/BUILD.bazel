@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "extract-bazel-builtins_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/albertocavalcante/sky/tools/extract-bazel-builtins",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//internal/starlark/builtins/proto",
+        "@com_github_bazelbuild_buildtools//build_proto",
+        "@org_golang_google_protobuf//proto",
+    ],
+)
+
+go_binary(
+    name = "extract-bazel-builtins",
+    embed = [":extract-bazel-builtins_lib"],
+    visibility = ["//visibility:public"],
+)

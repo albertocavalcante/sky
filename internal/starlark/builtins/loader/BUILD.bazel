@@ -1,0 +1,33 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "loader",
+    srcs = ["proto_loader.go"],
+    embedsrcs = glob(
+        ["data/proto/**/*.pb", "data/proto/**/*.pbtxt"],
+        allow_empty = True,
+    ),
+    importpath = "github.com/albertocavalcante/sky/internal/starlark/builtins/loader",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/starlark/builtins",
+        "//internal/starlark/builtins/proto",
+        "//internal/starlark/filekind",
+        "@org_golang_google_protobuf//encoding/prototext",
+        "@org_golang_google_protobuf//proto",
+    ],
+)
+
+go_test(
+    name = "loader_test",
+    srcs = ["proto_loader_test.go"],
+    data = glob(["testdata/**"]),
+    embed = [":loader"],
+    deps = [
+        "//internal/starlark/builtins",
+        "//internal/starlark/builtins/proto",
+        "//internal/starlark/filekind",
+        "@com_github_google_go_cmp//cmp",
+        "@org_golang_google_protobuf//proto",
+    ],
+)
