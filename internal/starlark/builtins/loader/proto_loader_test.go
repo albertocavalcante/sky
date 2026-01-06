@@ -677,9 +677,8 @@ func TestConvertProtoToBuiltins(t *testing.T) {
 
 // TestBuiltins_LoadProtoData verifies loading proto data from embedded filesystem.
 func TestLoadProtoData(t *testing.T) {
-	provider := newTestProtoProvider()
-
 	t.Run("load existing file", func(t *testing.T) {
+		provider := newTestProtoProvider()
 		testData := []byte("test data")
 		provider.injectTestData("test.pb", testData)
 
@@ -694,6 +693,7 @@ func TestLoadProtoData(t *testing.T) {
 	})
 
 	t.Run("fallback to pbtxt", func(t *testing.T) {
+		provider := newTestProtoProvider()
 		testData := []byte("text proto data")
 		provider.injectTestData("test.pbtxt", testData)
 
@@ -708,6 +708,7 @@ func TestLoadProtoData(t *testing.T) {
 	})
 
 	t.Run("file not found", func(t *testing.T) {
+		provider := newTestProtoProvider()
 		_, err := provider.loadProtoData("nonexistent.pb")
 		if err == nil {
 			t.Error("Expected error for nonexistent file, got nil")
