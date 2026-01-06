@@ -40,23 +40,6 @@ type ProtoProvider struct {
 	dataFS fsReader
 }
 
-// fsReader is an interface for reading files (allows testing and different backends).
-type fsReader interface {
-	ReadFile(name string) ([]byte, error)
-}
-
-// testEmbedFS is a simple in-memory filesystem for testing.
-type testEmbedFS struct {
-	files map[string][]byte
-}
-
-func (e *testEmbedFS) ReadFile(name string) ([]byte, error) {
-	if data, ok := e.files[name]; ok {
-		return data, nil
-	}
-	return nil, fmt.Errorf("file not found: %s", name)
-}
-
 // embeddedProtoFS provides access to embedded proto files.
 type embeddedProtoFS struct{}
 
@@ -88,13 +71,13 @@ func NewProtoProvider() *ProtoProvider {
 func newTestProtoProvider() *ProtoProvider {
 	return &ProtoProvider{
 		cache:  make(map[string]map[filekind.Kind]builtins.Builtins),
-		dataFS: &testEmbedFS{files: make(map[string][]byte)},
+		dataFS: &embedFS{files: make(map[string][]byte)},
 	}
 }
 
 // injectTestData injects test data into the provider (for testing only).
 func (p *ProtoProvider) injectTestData(filename string, data []byte) {
-	if fs, ok := p.dataFS.(*testEmbedFS); ok {
+	if fs, ok := p.dataFS.(*embedFS); ok {
 		fs.files[filename] = data
 	}
 }
