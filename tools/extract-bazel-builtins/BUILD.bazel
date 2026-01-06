@@ -17,3 +17,63 @@ go_binary(
     embed = [":extract-bazel-builtins_lib"],
     visibility = ["//visibility:public"],
 )
+
+go_binary(
+    name = "inspect",
+    srcs = ["inspect.go"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//internal/starlark/builtins/proto",
+        "@org_golang_google_protobuf//proto",
+    ],
+)
+
+go_binary(
+    name = "inspect-source",
+    srcs = ["inspect_source.go"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_bazelbuild_buildtools//build_proto",
+        "@org_golang_google_protobuf//proto",
+    ],
+)
+
+go_binary(
+    name = "inspect-detailed",
+    srcs = ["inspect_detailed.go"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//internal/starlark/builtins/proto",
+        "@org_golang_google_protobuf//proto",
+    ],
+)
+
+go_binary(
+    name = "stats",
+    srcs = ["stats.go"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//internal/starlark/builtins/proto",
+        "@org_golang_google_protobuf//proto",
+    ],
+)
+
+go_binary(
+    name = "source-stats",
+    srcs = ["source_stats.go"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_bazelbuild_buildtools//build_proto",
+        "@org_golang_google_protobuf//proto",
+    ],
+)
+
+go_binary(
+    name = "show-rule",
+    srcs = ["show_rule.go"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//internal/starlark/builtins/proto",
+        "@org_golang_google_protobuf//proto",
+    ],
+)
