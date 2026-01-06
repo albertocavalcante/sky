@@ -286,6 +286,7 @@ internal/starlark/builtins/loader/data/json/
 ├── bazel-bzl.json        # Bazel .bzl files
 ├── bazel-workspace.json  # Bazel WORKSPACE files
 ├── bazel-module.json     # Bazel MODULE.bazel files
+├── bazel-bzlmod.json     # Bazel bzlmod extension .bzl files
 ├── buck2-buck.json       # Buck2 BUCK files
 ├── buck2-bzl.json        # Buck2 .bzl files
 ├── starlark-core.json    # Core Starlark builtins
@@ -350,7 +351,7 @@ The loader handles errors gracefully:
 - `KindBzl`: .bzl files (Starlark extensions)
 - `KindWORKSPACE`: WORKSPACE files
 - `KindMODULE`: MODULE.bazel files
-- `KindBzlmod`: Bzlmod files
+- `KindBzlmod`: .bzl files used in bzlmod extensions
 
 ### Buck2
 

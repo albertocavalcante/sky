@@ -16,6 +16,7 @@ import (
 )
 
 // Proto data files embedded via Bazel embedsrcs
+//
 //go:embed data/proto/bazel_build.pb
 var bazelBuildPB []byte
 

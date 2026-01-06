@@ -19,11 +19,11 @@ type StarplsBuiltins struct {
 
 // StarplsBuiltin represents a single builtin in starpls format.
 type StarplsBuiltin struct {
-	Name     string            `json:"name"`
-	Doc      string            `json:"doc,omitempty"`
-	Type     string            `json:"type,omitempty"`
-	Callable *StarplsCallable  `json:"callable,omitempty"`
-	Fields   []StarplsField    `json:"fields,omitempty"`
+	Name     string           `json:"name"`
+	Doc      string           `json:"doc,omitempty"`
+	Type     string           `json:"type,omitempty"`
+	Callable *StarplsCallable `json:"callable,omitempty"`
+	Fields   []StarplsField   `json:"fields,omitempty"`
 }
 
 // StarplsCallable represents a callable in starpls format.
@@ -35,13 +35,13 @@ type StarplsCallable struct {
 
 // StarplsParam represents a parameter in starpls format.
 type StarplsParam struct {
-	Name           string `json:"name"`
-	Type           string `json:"type,omitempty"`
-	Doc            string `json:"doc,omitempty"`
-	DefaultValue   string `json:"default_value,omitempty"`
-	IsMandatory    bool   `json:"is_mandatory"`
-	IsStarArg      bool   `json:"is_star_arg"`
-	IsStarStarArg  bool   `json:"is_star_star_arg"`
+	Name          string `json:"name"`
+	Type          string `json:"type,omitempty"`
+	Doc           string `json:"doc,omitempty"`
+	DefaultValue  string `json:"default_value,omitempty"`
+	IsMandatory   bool   `json:"is_mandatory"`
+	IsStarArg     bool   `json:"is_star_arg"`
+	IsStarStarArg bool   `json:"is_star_star_arg"`
 }
 
 // StarplsField represents a field in starpls format.
