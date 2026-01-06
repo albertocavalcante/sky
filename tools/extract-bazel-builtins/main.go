@@ -284,10 +284,18 @@ func defaultValueToString(val *buildpb.AttributeValue) string {
 		return fmt.Sprintf("%t", val.GetBool())
 	}
 	if len(val.List) > 0 {
-		return "[]"
+		var parts []string
+		for _, item := range val.List {
+			parts = append(parts, defaultValueToString(item))
+		}
+		return fmt.Sprintf("[%s]", strings.Join(parts, ", "))
 	}
 	if len(val.Dict) > 0 {
-		return "{}"
+		var parts []string
+		for _, kv := range val.Dict {
+			parts = append(parts, fmt.Sprintf("%q: %s", kv.GetKey(), defaultValueToString(kv.GetValue())))
+		}
+		return fmt.Sprintf("{%s}", strings.Join(parts, ", "))
 	}
 	return ""
 }

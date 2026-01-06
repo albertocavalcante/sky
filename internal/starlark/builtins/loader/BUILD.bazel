@@ -2,9 +2,15 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "loader",
-    srcs = ["proto_loader.go"],
+    srcs = [
+        "proto_loader.go",
+    ],
     embedsrcs = glob(
-        ["data/proto/**/*.pb", "data/proto/**/*.pbtxt"],
+        [
+            "data/proto/**/*.pb",
+            "data/proto/**/*.pbtxt",
+            "data/json/**/*.json",
+        ],
         allow_empty = True,
     ),
     importpath = "github.com/albertocavalcante/sky/internal/starlark/builtins/loader",
@@ -20,7 +26,9 @@ go_library(
 
 go_test(
     name = "loader_test",
-    srcs = ["proto_loader_test.go"],
+    srcs = [
+        "proto_loader_test.go",
+    ],
     data = glob(["testdata/**"]),
     embed = [":loader"],
     deps = [

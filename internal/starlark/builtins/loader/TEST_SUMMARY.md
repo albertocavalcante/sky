@@ -2,13 +2,13 @@
 
 ## Overview
 
-This document summarizes the comprehensive test suite created for the proto loader implementation in `/Users/adsc/dev/ws/sky/main/internal/starlark/builtins/loader/`.
+This document summarizes the comprehensive test suite created for the proto loader implementation in `internal/starlark/builtins/loader/`.
 
 ## Files Created
 
 ### Test Files
 
-#### `/Users/adsc/dev/ws/sky/main/internal/starlark/builtins/loader/proto_loader_test.go` (1,261 lines)
+#### `internal/starlark/builtins/loader/proto_loader_test.go` (1,261 lines)
 
 Comprehensive test suite containing:
 
@@ -43,31 +43,31 @@ Comprehensive test suite containing:
 
 ### Test Fixtures
 
-#### `/Users/adsc/dev/ws/sky/main/internal/starlark/builtins/loader/testdata/proto/test_simple.pbtxt`
+#### `internal/starlark/builtins/loader/testdata/proto/test_simple.pbtxt`
 
 - Minimal proto for basic testing
 - 1 type (`TestType`) with 2 fields and 1 method
 - 1 function (`test_function`) with 4 parameters (required, optional, *args, **kwargs)
 - 2 constants (`TEST_CONSTANT`, `TEST_NUMBER`)
 
-#### `/Users/adsc/dev/ws/sky/main/internal/starlark/builtins/loader/testdata/proto/test_comprehensive.pbtxt`
+#### `internal/starlark/builtins/loader/testdata/proto/test_comprehensive.pbtxt`
 
 - Realistic proto resembling actual Starlark builtins
 - 2 types (`File`, `Provider`) with fields and methods
 - 4 functions (`glob`, `select`, `print`, `dict_merge`) with various parameter patterns
 - 5 global constants (`True`, `False`, `None`, `WORKSPACE_ROOT`, `PACKAGE_NAME`)
 
-#### `/Users/adsc/dev/ws/sky/main/internal/starlark/builtins/loader/testdata/proto/test_empty.pbtxt`
+#### `internal/starlark/builtins/loader/testdata/proto/test_empty.pbtxt`
 
 - Empty proto for edge case testing
 
-#### `/Users/adsc/dev/ws/sky/main/internal/starlark/builtins/loader/testdata/proto/test_invalid.pbtxt`
+#### `internal/starlark/builtins/loader/testdata/proto/test_invalid.pbtxt`
 
 - Invalid proto for error handling tests
 
 ### Documentation
 
-#### `/Users/adsc/dev/ws/sky/main/internal/starlark/builtins/loader/TEST_COVERAGE.md`
+#### `internal/starlark/builtins/loader/TEST_COVERAGE.md`
 
 Comprehensive documentation covering:
 
@@ -78,7 +78,7 @@ Comprehensive documentation covering:
 - Running instructions
 - Future enhancement ideas
 
-#### `/Users/adsc/dev/ws/sky/main/internal/starlark/builtins/loader/TESTING.md`
+#### `internal/starlark/builtins/loader/TESTING.md`
 
 Quick reference guide with:
 
@@ -88,7 +88,7 @@ Quick reference guide with:
 - Adding new tests guidelines
 - Performance expectations
 
-#### `/Users/adsc/dev/ws/sky/main/internal/starlark/builtins/loader/testdata/README.md`
+#### `internal/starlark/builtins/loader/testdata/README.md`
 
 Test fixture documentation:
 
@@ -99,7 +99,7 @@ Test fixture documentation:
 
 ### Build Configuration
 
-#### `/Users/adsc/dev/ws/sky/main/internal/starlark/builtins/loader/BUILD.bazel` (updated)
+#### `internal/starlark/builtins/loader/BUILD.bazel` (updated)
 
 Added `go_test` target with:
 

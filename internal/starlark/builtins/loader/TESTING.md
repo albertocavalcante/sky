@@ -7,7 +7,7 @@ This document provides a quick reference for working with the proto loader test 
 ### Run all tests
 
 ```bash
-cd /Users/adsc/dev/ws/sky/main
+# From the repository root
 go test ./internal/starlark/builtins/loader/...
 ```
 

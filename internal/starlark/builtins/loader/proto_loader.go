@@ -2,9 +2,8 @@
 package loader
 
 import (
+	_ "embed"
 	"fmt"
-	"os"
-	"path"
 	"strings"
 	"sync"
 
@@ -15,6 +14,19 @@ import (
 	builtinspb "github.com/albertocavalcante/sky/internal/starlark/builtins/proto"
 	"github.com/albertocavalcante/sky/internal/starlark/filekind"
 )
+
+// Proto data files embedded via Bazel embedsrcs
+//go:embed data/proto/bazel_build.pb
+var bazelBuildPB []byte
+
+//go:embed data/proto/bazel_workspace.pb
+var bazelWorkspacePB []byte
+
+//go:embed data/proto/bazel_bzl.pb
+var bazelBzlPB []byte
+
+//go:embed data/proto/bazel_module.pb
+var bazelModulePB []byte
 
 // ProtoProvider loads builtin definitions from proto files.
 type ProtoProvider struct {
@@ -33,40 +45,42 @@ type fsReader interface {
 	ReadFile(name string) ([]byte, error)
 }
 
-// embedFS is a simple in-memory filesystem for testing.
-type embedFS struct {
+// testEmbedFS is a simple in-memory filesystem for testing.
+type testEmbedFS struct {
 	files map[string][]byte
 }
 
-func (e *embedFS) ReadFile(name string) ([]byte, error) {
+func (e *testEmbedFS) ReadFile(name string) ([]byte, error) {
 	if data, ok := e.files[name]; ok {
 		return data, nil
 	}
 	return nil, fmt.Errorf("file not found: %s", name)
 }
 
-// diskFS reads files from disk (for development/runtime).
-type diskFS struct {
-	baseDir string
-}
+// embeddedProtoFS provides access to embedded proto files.
+type embeddedProtoFS struct{}
 
-func (d *diskFS) ReadFile(name string) ([]byte, error) {
-	fullPath := path.Join(d.baseDir, name)
-	data, err := os.ReadFile(fullPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read %s: %w", name, err)
+func (e *embeddedProtoFS) ReadFile(name string) ([]byte, error) {
+	switch name {
+	case "data/proto/bazel_build.pb":
+		return bazelBuildPB, nil
+	case "data/proto/bazel_workspace.pb":
+		return bazelWorkspacePB, nil
+	case "data/proto/bazel_bzl.pb":
+		return bazelBzlPB, nil
+	case "data/proto/bazel_module.pb":
+		return bazelModulePB, nil
+	default:
+		return nil, fmt.Errorf("file not found: %s", name)
 	}
-	return data, nil
 }
 
 // NewProtoProvider creates a new proto-based builtin provider.
-// For now, uses runtime file reading. Will add embed support later.
+// Uses Go embed to load proto data files at compile time.
 func NewProtoProvider() *ProtoProvider {
-	// TODO: Add embed.FS support once proto files are generated
-	// For now, this will fail gracefully if files don't exist yet
 	return &ProtoProvider{
 		cache:  make(map[string]map[filekind.Kind]builtins.Builtins),
-		dataFS: &diskFS{baseDir: "internal/starlark/builtins/loader"},
+		dataFS: &embeddedProtoFS{},
 	}
 }
 
@@ -74,13 +88,13 @@ func NewProtoProvider() *ProtoProvider {
 func newTestProtoProvider() *ProtoProvider {
 	return &ProtoProvider{
 		cache:  make(map[string]map[filekind.Kind]builtins.Builtins),
-		dataFS: &embedFS{files: make(map[string][]byte)},
+		dataFS: &testEmbedFS{files: make(map[string][]byte)},
 	}
 }
 
 // injectTestData injects test data into the provider (for testing only).
 func (p *ProtoProvider) injectTestData(filename string, data []byte) {
-	if fs, ok := p.dataFS.(*embedFS); ok {
+	if fs, ok := p.dataFS.(*testEmbedFS); ok {
 		fs.files[filename] = data
 	}
 }
@@ -105,15 +119,15 @@ func (p *ProtoProvider) Builtins(dialect string, kind filekind.Kind) (builtins.B
 	}
 
 	// Load the proto file
-	data, err := p.loadProtoData(filename)
+	data, loadedFilename, err := p.loadProtoData(filename)
 	if err != nil {
 		return builtins.Builtins{}, fmt.Errorf("failed to load proto data for %s/%s: %w", dialect, kind, err)
 	}
 
 	// Parse the proto file
-	protoBuiltins, err := p.parseProtoFile(data, filename)
+	protoBuiltins, err := p.parseProtoFile(data, loadedFilename)
 	if err != nil {
-		return builtins.Builtins{}, fmt.Errorf("failed to parse proto file %s: %w", filename, err)
+		return builtins.Builtins{}, fmt.Errorf("failed to parse proto file %s: %w", loadedFilename, err)
 	}
 
 	// Convert proto to Go struct
@@ -185,15 +199,15 @@ func (p *ProtoProvider) protoFilename(dialect string, kind filekind.Kind) string
 	}
 
 	// Try binary format first (.pb), fall back to text format (.pbtxt)
-	return path.Join("data", "proto", basename+".pb")
+	return fmt.Sprintf("data/proto/%s.pb", basename)
 }
 
 // loadProtoData loads proto data from the embedded filesystem.
-func (p *ProtoProvider) loadProtoData(filename string) ([]byte, error) {
+func (p *ProtoProvider) loadProtoData(filename string) ([]byte, string, error) {
 	// Try to read the requested file from embedded FS
 	data, err := p.dataFS.ReadFile(filename)
 	if err == nil {
-		return data, nil
+		return data, filename, nil
 	}
 
 	// Try alternative extension (.pbtxt instead of .pb)
@@ -201,11 +215,11 @@ func (p *ProtoProvider) loadProtoData(filename string) ([]byte, error) {
 		altFilename := strings.TrimSuffix(filename, ".pb") + ".pbtxt"
 		data, err = p.dataFS.ReadFile(altFilename)
 		if err == nil {
-			return data, nil
+			return data, altFilename, nil
 		}
 	}
 
-	return nil, fmt.Errorf("proto data file not found: %s", filename)
+	return nil, "", fmt.Errorf("proto data file not found: %s", filename)
 }
 
 // parseProtoFile parses a proto file in either binary (.pb) or text (.pbtxt) format.

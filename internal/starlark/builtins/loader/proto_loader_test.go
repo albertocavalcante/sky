@@ -682,9 +682,13 @@ func TestLoadProtoData(t *testing.T) {
 		testData := []byte("test data")
 		provider.injectTestData("test.pb", testData)
 
-		result, err := provider.loadProtoData("test.pb")
+		result, filename, err := provider.loadProtoData("test.pb")
 		if err != nil {
 			t.Fatalf("loadProtoData failed: %v", err)
+		}
+
+		if filename != "test.pb" {
+			t.Errorf("Expected filename %q, got %q", "test.pb", filename)
 		}
 
 		if string(result) != string(testData) {
@@ -697,9 +701,13 @@ func TestLoadProtoData(t *testing.T) {
 		testData := []byte("text proto data")
 		provider.injectTestData("test.pbtxt", testData)
 
-		result, err := provider.loadProtoData("test.pb")
+		result, filename, err := provider.loadProtoData("test.pb")
 		if err != nil {
 			t.Fatalf("loadProtoData failed: %v", err)
+		}
+
+		if filename != "test.pbtxt" {
+			t.Errorf("Expected filename %q, got %q", "test.pbtxt", filename)
 		}
 
 		if string(result) != string(testData) {
@@ -709,7 +717,7 @@ func TestLoadProtoData(t *testing.T) {
 
 	t.Run("file not found", func(t *testing.T) {
 		provider := newTestProtoProvider()
-		_, err := provider.loadProtoData("nonexistent.pb")
+		_, _, err := provider.loadProtoData("nonexistent.pb")
 		if err == nil {
 			t.Error("Expected error for nonexistent file, got nil")
 		}
@@ -768,12 +776,16 @@ func TestBuiltins_Interface(t *testing.T) {
 		}
 	})
 
-	t.Run("missing proto file", func(t *testing.T) {
-		// Create a new provider without test data
-		emptyProvider := NewProtoProvider()
-		_, err := emptyProvider.Builtins("bazel", filekind.KindBUILD)
-		if err == nil {
-			t.Error("Expected error for missing proto file, got nil")
+	t.Run("empty proto file", func(t *testing.T) {
+		// bazel_bzl.pb and bazel_module.pb are embedded as empty files
+		// They should parse successfully but return empty builtins
+		provider := NewProtoProvider()
+		result, err := provider.Builtins("bazel", filekind.KindBzl)
+		if err != nil {
+			t.Fatalf("Expected success for empty proto file, got error: %v", err)
+		}
+		if len(result.Functions) != 0 || len(result.Types) != 0 || len(result.Globals) != 0 {
+			t.Error("Expected empty builtins for empty proto file")
 		}
 	})
 }
