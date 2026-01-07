@@ -5,7 +5,11 @@ go_library(
     srcs = ["main.go"],
     importpath = "github.com/albertocavalcante/sky/cmd/skylint",
     visibility = ["//visibility:private"],
-    deps = ["//internal/cli"],
+    deps = [
+        "//internal/starlark/linter",
+        "//internal/starlark/linter/buildtools",
+        "//internal/version",
+    ],
 )
 
 go_binary(
