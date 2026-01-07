@@ -3,10 +3,14 @@ load("@rules_go//go:def.bzl", "go_library")
 go_library(
     name = "linter",
     srcs = [
+        "config.go",
         "driver.go",
         "registry.go",
         "reporter.go",
+        "reporter_github.go",
+        "reporter_json.go",
         "rule.go",
+        "suppress.go",
     ],
     importpath = "github.com/albertocavalcante/sky/internal/starlark/linter",
     visibility = ["//:__subpackages__"],

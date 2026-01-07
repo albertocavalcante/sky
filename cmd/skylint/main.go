@@ -29,6 +29,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		enableFlag         string
 		disableFlag        string
 		formatFlag         string
+		configFlag         string
+		warningsAsErrors   bool
 		listRulesFlag      bool
 		listCategoriesFlag bool
 		explainFlag        string
@@ -39,7 +41,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	fs.StringVar(&enableFlag, "enable", "", "enable rules (comma-separated, supports 'all' and categories)")
 	fs.StringVar(&disableFlag, "disable", "", "disable rules (comma-separated, supports patterns like 'native-*')")
-	fs.StringVar(&formatFlag, "format", "text", "output format: text, compact")
+	fs.StringVar(&formatFlag, "format", "text", "output format: text, compact, json, github")
+	fs.StringVar(&configFlag, "config", "", "config file path (default: search for .skylint.json)")
+	fs.BoolVar(&warningsAsErrors, "warnings-as-errors", false, "treat warnings as errors")
 	fs.BoolVar(&listRulesFlag, "list-rules", false, "list all available rules")
 	fs.BoolVar(&listCategoriesFlag, "list-categories", false, "list all rule categories")
 	fs.StringVar(&explainFlag, "explain", "", "show detailed explanation for a rule")
@@ -96,7 +100,20 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return explainRule(stdout, stderr, registry, explainFlag)
 	}
 
-	// Apply enable/disable flags
+	// Load configuration file
+	config, err := linter.LoadConfig(configFlag)
+	if err != nil {
+		writef(stderr, "skylint: failed to load config: %v\n", err)
+		return exitError
+	}
+
+	// Apply config to registry
+	if err := config.ApplyToRegistry(registry); err != nil {
+		writef(stderr, "skylint: failed to apply config: %v\n", err)
+		return exitError
+	}
+
+	// Apply enable/disable flags (these override config file)
 	if enableFlag != "" {
 		rules := parseCommaSeparated(enableFlag)
 		registry.Enable(rules...)
@@ -105,6 +122,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if disableFlag != "" {
 		rules := parseCommaSeparated(disableFlag)
 		registry.Disable(rules...)
+	}
+
+	// Apply warnings-as-errors flag (overrides config file)
+	if warningsAsErrors || config.WarningsAsErrors {
+		warningsAsErrors = true
 	}
 
 	// Validate registry
@@ -136,6 +158,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		reporter = linter.NewTextReporter()
 	case "compact":
 		reporter = linter.NewCompactReporter()
+	case "json":
+		reporter = linter.NewJSONReporter()
+	case "github":
+		reporter = linter.NewGitHubReporter()
 	default:
 		writef(stderr, "skylint: unknown format: %s\n", formatFlag)
 		return exitError
@@ -149,6 +175,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	// Determine exit code
 	if result.HasErrors() || len(result.Errors) > 0 {
+		return exitError
+	}
+	// If warnings-as-errors is enabled, treat warnings as errors
+	if warningsAsErrors && result.HasWarnings() {
 		return exitError
 	}
 	if result.HasWarnings() {

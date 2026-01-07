@@ -89,6 +89,9 @@ func (d *Driver) RunFile(path string) ([]Finding, error) {
 		return nil, fmt.Errorf("parsing file: %w", err)
 	}
 
+	// Parse suppression comments
+	suppressionParser := NewSuppressionParser(content)
+
 	// Get enabled rules in dependency order
 	rules := d.registry.EnabledRules()
 
@@ -140,6 +143,9 @@ func (d *Driver) RunFile(path string) ([]Finding, error) {
 			results[rule] = result
 		}
 	}
+
+	// Filter out suppressed findings
+	findings = FilterSuppressed(findings, suppressionParser)
 
 	return findings, nil
 }
