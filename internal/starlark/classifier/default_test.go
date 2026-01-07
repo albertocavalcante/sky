@@ -154,6 +154,112 @@ func TestDefaultClassifier_Classify(t *testing.T) {
 			wantFileKind: filekind.KindSkyI,
 		},
 
+		// Other Starlark file variants
+		{
+			name:         ".sky file",
+			path:         "config.sky",
+			wantDialect:  "starlark",
+			wantFileKind: filekind.KindStarlark,
+		},
+		{
+			name:         ".bara.sky file (Copybara)",
+			path:         "copy.bara.sky",
+			wantDialect:  "starlark",
+			wantFileKind: filekind.KindStarlark,
+		},
+		{
+			name:         ".axl file",
+			path:         "rules.axl",
+			wantDialect:  "starlark",
+			wantFileKind: filekind.KindStarlark,
+		},
+		{
+			name:         ".axl file in directory",
+			path:         "config/app.axl",
+			wantDialect:  "starlark",
+			wantFileKind: filekind.KindStarlark,
+		},
+
+		// Tilt
+		{
+			name:         "Tiltfile",
+			path:         "Tiltfile",
+			wantDialect:  "starlark",
+			wantFileKind: filekind.KindStarlark,
+		},
+		{
+			name:         "Tiltfile in directory",
+			path:         "services/web/Tiltfile",
+			wantDialect:  "starlark",
+			wantFileKind: filekind.KindStarlark,
+		},
+
+		// Isopod
+		{
+			name:         ".ipd file (Isopod)",
+			path:         "deploy.ipd",
+			wantDialect:  "starlark",
+			wantFileKind: filekind.KindStarlark,
+		},
+
+		// Please Build
+		{
+			name:         ".plz file (Please)",
+			path:         "rules.plz",
+			wantDialect:  "starlark",
+			wantFileKind: filekind.KindBUILD,
+		},
+
+		// Drone CI / Cirrus CI (compound extensions - .star suffix)
+		{
+			name:         ".drone.star file",
+			path:         ".drone.star",
+			wantDialect:  "starlark",
+			wantFileKind: filekind.KindStarlark,
+		},
+		{
+			name:         ".cirrus.star file",
+			path:         ".cirrus.star",
+			wantDialect:  "starlark",
+			wantFileKind: filekind.KindStarlark,
+		},
+
+		// Buck2 BXL
+		{
+			name:         ".bxl file (Buck2 BXL)",
+			path:         "queries.bxl",
+			wantDialect:  "buck2",
+			wantFileKind: filekind.KindBzlBuck,
+		},
+
+		// Protoconf
+		{
+			name:         ".pconf file (Protoconf)",
+			path:         "config.pconf",
+			wantDialect:  "starlark",
+			wantFileKind: filekind.KindStarlark,
+		},
+		{
+			name:         ".pinc file (Protoconf include)",
+			path:         "helpers.pinc",
+			wantDialect:  "starlark",
+			wantFileKind: filekind.KindStarlark,
+		},
+		{
+			name:         ".mpconf file (Protoconf mutable)",
+			path:         "mutable.mpconf",
+			wantDialect:  "starlark",
+			wantFileKind: filekind.KindStarlark,
+		},
+
+		// Full .starlark extension
+		{
+			name:         ".starlark file",
+			path:         "script.starlark",
+			wantDialect:  "starlark",
+			wantFileKind: filekind.KindStarlark,
+		},
+
 		// Edge cases - unknown files
 		{
 			name:         "unknown extension",

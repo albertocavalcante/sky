@@ -21,7 +21,7 @@ func (c *DefaultClassifier) Classify(path string) (Classification, error) {
 	// Extract the base filename
 	base := filepath.Base(path)
 
-	// Check for exact filename matches first (BUILD, WORKSPACE, BUCK, etc.)
+	// Check for exact filename matches first (BUILD, WORKSPACE, BUCK, Tiltfile, etc.)
 	switch base {
 	case "BUILD", "BUILD.bazel":
 		return Classification{
@@ -43,6 +43,11 @@ func (c *DefaultClassifier) Classify(path string) (Classification, error) {
 			Dialect:  "buck2",
 			FileKind: filekind.KindBUCK,
 		}, nil
+	case "Tiltfile":
+		return Classification{
+			Dialect:  "starlark",
+			FileKind: filekind.KindStarlark,
+		}, nil
 	}
 
 	// Check for extension-based matches
@@ -55,7 +60,24 @@ func (c *DefaultClassifier) Classify(path string) (Classification, error) {
 			Dialect:  "bazel",
 			FileKind: filekind.KindBzl,
 		}, nil
-	case ".star":
+	case ".bxl":
+		// Buck2 BXL (Buck2 Extension Language)
+		return Classification{
+			Dialect:  "buck2",
+			FileKind: filekind.KindBzlBuck,
+		}, nil
+	case ".plz":
+		// Please Build system
+		return Classification{
+			Dialect:  "starlark",
+			FileKind: filekind.KindBUILD, // Similar to BUILD files
+		}, nil
+	case ".star", ".starlark", ".sky", ".axl", ".ipd", ".pconf", ".pinc", ".mpconf":
+		// .star, .starlark - generic Starlark (Kurtosis, Drone CI, Cirrus CI, Qri)
+		// .sky - Skycfg, Copybara (.bara.sky)
+		// .axl - Starlark config files
+		// .ipd - Isopod (Kubernetes)
+		// .pconf, .pinc, .mpconf - Protoconf
 		return Classification{
 			Dialect:  "starlark",
 			FileKind: filekind.KindStarlark,

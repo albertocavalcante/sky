@@ -8,6 +8,13 @@ import (
 	"github.com/albertocavalcante/sky/internal/version"
 )
 
+// ExitCodeError is an error that specifies a particular exit code.
+type ExitCodeError int
+
+func (e ExitCodeError) Error() string {
+	return fmt.Sprintf("exit code %d", e)
+}
+
 // Command defines a single CLI entrypoint.
 type Command struct {
 	Name    string
@@ -44,6 +51,10 @@ func Execute(cmd Command, args []string, stdout, stderr io.Writer) int {
 	}
 
 	if err := cmd.Run(fs.Args(), stdout, stderr); err != nil {
+		// Check for explicit exit code
+		if exitErr, ok := err.(ExitCodeError); ok {
+			return int(exitErr)
+		}
 		writef(stderr, "%s: %v\n", cmd.Name, err)
 		return 1
 	}
