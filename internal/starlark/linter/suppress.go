@@ -93,7 +93,7 @@ func (p *SuppressionParser) parseLineForSuppressions(line string, lineNum int) [
 	}
 
 	// Look for disable patterns
-	if supp := p.parseDisableDirective(comment, lineNum); supp != nil {
+	if supp := p.parseDisableDirective(line, commentIdx, comment, lineNum); supp != nil {
 		suppressions = append(suppressions, *supp)
 	}
 
@@ -105,17 +105,11 @@ func (p *SuppressionParser) parseLineForSuppressions(line string, lineNum int) [
 }
 
 // parseDisableDirective parses a "skylint: disable=rule-name" directive.
-func (p *SuppressionParser) parseDisableDirective(comment string, lineNum int) *Suppression {
-	// Look for "skylint: disable=..."
-	disablePrefix := "skylint: disable="
-	idx := strings.Index(comment, disablePrefix)
+func (p *SuppressionParser) parseDisableDirective(line string, commentIdx int, comment string, lineNum int) *Suppression {
+	// Look for "skylint: disable=..." (note: not disable-next-line)
+	disablePrefix, idx := findDirectivePrefix(comment, "disable=")
 	if idx == -1 {
-		// Try without space
-		disablePrefix = "skylint:disable="
-		idx = strings.Index(comment, disablePrefix)
-		if idx == -1 {
-			return nil
-		}
+		return nil
 	}
 
 	// Extract the rule list
@@ -129,8 +123,9 @@ func (p *SuppressionParser) parseDisableDirective(comment string, lineNum int) *
 	rules := parseRuleList(rulesStr)
 
 	// Determine if this is inline (has code before the comment) or line suppression
-	codeBeforeComment := strings.TrimSpace(comment[:idx])
-	if len(codeBeforeComment) > 0 && !strings.HasPrefix(codeBeforeComment, "#") {
+	// Check the original line before the comment starts
+	codeBeforeComment := strings.TrimSpace(line[:commentIdx])
+	if len(codeBeforeComment) > 0 {
 		return &Suppression{
 			Type:  SuppressionInline,
 			Rules: rules,
@@ -148,15 +143,9 @@ func (p *SuppressionParser) parseDisableDirective(comment string, lineNum int) *
 // parseDisableNextLineDirective parses a "skylint: disable-next-line=rule-name" directive.
 func (p *SuppressionParser) parseDisableNextLineDirective(comment string, lineNum int) *Suppression {
 	// Look for "skylint: disable-next-line=..."
-	disablePrefix := "skylint: disable-next-line="
-	idx := strings.Index(comment, disablePrefix)
+	disablePrefix, idx := findDirectivePrefix(comment, "disable-next-line=")
 	if idx == -1 {
-		// Try without space
-		disablePrefix = "skylint:disable-next-line="
-		idx = strings.Index(comment, disablePrefix)
-		if idx == -1 {
-			return nil
-		}
+		return nil
 	}
 
 	// Extract the rule list
@@ -174,6 +163,27 @@ func (p *SuppressionParser) parseDisableNextLineDirective(comment string, lineNu
 		Rules: rules,
 		Line:  lineNum,
 	}
+}
+
+// findDirectivePrefix looks for a skylint directive prefix in a comment.
+// It tries both "skylint: <directive>" and "skylint:<directive>" (without space).
+// Returns the prefix that was found and its index, or ("", -1) if not found.
+func findDirectivePrefix(comment string, directive string) (string, int) {
+	// Try with space first
+	prefix := "skylint: " + directive
+	idx := strings.Index(comment, prefix)
+	if idx != -1 {
+		return prefix, idx
+	}
+
+	// Try without space
+	prefix = "skylint:" + directive
+	idx = strings.Index(comment, prefix)
+	if idx != -1 {
+		return prefix, idx
+	}
+
+	return "", -1
 }
 
 // parseRuleList parses a comma-separated list of rule names.
@@ -246,7 +256,7 @@ func matchesSuppressionRules(finding Finding, rules []string) bool {
 
 // FilterSuppressed removes suppressed findings from a list.
 func FilterSuppressed(findings []Finding, parser *SuppressionParser) []Finding {
-	var filtered []Finding
+	filtered := make([]Finding, 0, len(findings))
 	for _, finding := range findings {
 		if !parser.IsSuppressed(finding) {
 			filtered = append(filtered, finding)

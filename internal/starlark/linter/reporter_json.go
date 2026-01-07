@@ -3,6 +3,7 @@ package linter
 import (
 	"encoding/json"
 	"io"
+	"sort"
 )
 
 // JSONReporter outputs findings in JSON format for CI integration.
@@ -74,9 +75,25 @@ func (r *JSONReporter) buildOutput(result *Result) jsonOutput {
 		fileMap[finding.FilePath] = append(fileMap[finding.FilePath], finding)
 	}
 
-	// Build file list
-	var files []jsonFile
-	for path, findings := range fileMap {
+	// Build file list (sorted for deterministic output)
+	filePaths := make([]string, 0, len(fileMap))
+	for path := range fileMap {
+		filePaths = append(filePaths, path)
+	}
+	sort.Strings(filePaths)
+
+	files := make([]jsonFile, 0, len(filePaths))
+	for _, path := range filePaths {
+		findings := fileMap[path]
+
+		// Sort findings by line and column for deterministic output
+		sort.Slice(findings, func(i, j int) bool {
+			if findings[i].Line != findings[j].Line {
+				return findings[i].Line < findings[j].Line
+			}
+			return findings[i].Column < findings[j].Column
+		})
+
 		jf := jsonFile{
 			Path:     path,
 			Findings: make([]jsonFinding, 0, len(findings)),
