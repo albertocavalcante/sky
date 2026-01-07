@@ -46,9 +46,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.BoolVar(&versionFlag, "version", false, "print version and exit")
 
 	fs.Usage = func() {
-		writeln(stderr, "Usage: skylint [flags] [path ...]")
+		writeln(stderr, "Usage: skylint [flags] path ...")
 		writeln(stderr)
-		writeln(stderr, "Lints Starlark files. With no paths, reads from stdin.")
+		writeln(stderr, "Lints Starlark files.")
 		writeln(stderr)
 		writeln(stderr, "Flags:")
 		fs.PrintDefaults()
@@ -205,16 +205,8 @@ func listCategories(w io.Writer, registry *linter.Registry) int {
 
 // explainRule shows detailed information about a specific rule.
 func explainRule(stdout, stderr io.Writer, registry *linter.Registry, ruleName string) int {
-	rules := registry.AllRules()
-	var found *linter.Rule
-	for _, rule := range rules {
-		if rule.Name == ruleName {
-			found = rule
-			break
-		}
-	}
-
-	if found == nil {
+	found, ok := registry.Rule(ruleName)
+	if !ok {
 		writef(stderr, "skylint: unknown rule: %s\n", ruleName)
 		writeln(stderr, "\nUse --list-rules to see all available rules")
 		return exitError

@@ -2,6 +2,7 @@ package linter
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -44,9 +45,9 @@ func (r *Registry) Register(rules ...*Rule) error {
 			return fmt.Errorf("duplicate rule name: %s", rule.Name)
 		}
 
-		// Validate rule name format (kebab-case)
+		// Validate rule name format (kebab-case or snake_case)
 		if !isValidRuleName(rule.Name) {
-			return fmt.Errorf("invalid rule name %q: must be kebab-case (lowercase with hyphens)", rule.Name)
+			return fmt.Errorf("invalid rule name %q: must be kebab-case or snake_case (lowercase with hyphens or underscores)", rule.Name)
 		}
 
 		// Register the rule
@@ -62,6 +63,13 @@ func (r *Registry) Register(rules ...*Rule) error {
 	}
 
 	return nil
+}
+
+// Rule returns the rule with the given name.
+// Returns nil and false if the rule does not exist.
+func (r *Registry) Rule(name string) (*Rule, bool) {
+	rule, ok := r.rules[name]
+	return rule, ok
 }
 
 // Enable enables the specified rules by name or category.
@@ -260,7 +268,7 @@ func (r *Registry) validateRule(rule *Rule, visited map[string]bool) error {
 	return nil
 }
 
-// isValidRuleName checks if a rule name follows kebab-case convention.
+// isValidRuleName checks if a rule name follows kebab-case or snake_case convention.
 // Allows lowercase letters, digits, hyphens, and underscores.
 func isValidRuleName(name string) bool {
 	if name == "" {
@@ -283,29 +291,11 @@ func isValidRuleName(name string) bool {
 	return true
 }
 
-// matchGlob is a simple glob pattern matcher supporting only '*' wildcard.
+// matchGlob matches a string against a glob pattern using filepath.Match.
 func matchGlob(pattern, str string) bool {
-	if !strings.Contains(pattern, "*") {
-		return pattern == str
-	}
-
-	// Simple implementation: split on '*' and check prefix/suffix
-	parts := strings.Split(pattern, "*")
-	if len(parts) == 2 {
-		prefix, suffix := parts[0], parts[1]
-		return strings.HasPrefix(str, prefix) && strings.HasSuffix(str, suffix) &&
-			len(str) >= len(prefix)+len(suffix)
-	}
-
-	// For more complex patterns, fall back to basic prefix/suffix matching
-	if strings.HasPrefix(pattern, "*") {
-		return strings.HasSuffix(str, strings.TrimPrefix(pattern, "*"))
-	}
-	if strings.HasSuffix(pattern, "*") {
-		return strings.HasPrefix(str, strings.TrimSuffix(pattern, "*"))
-	}
-
-	return false
+	matched, err := filepath.Match(pattern, str)
+	// Treat malformed patterns as a non-match.
+	return err == nil && matched
 }
 
 // topologicalSort sorts rules so dependencies come before dependents.
@@ -350,8 +340,9 @@ func topologicalSort(rules []*Rule) []*Rule {
 
 	// If we couldn't sort all rules, there's a cycle (shouldn't happen if Validate was called)
 	if len(sorted) != len(rules) {
-		// Fall back to original order
-		return rules
+		// This indicates a dependency cycle, which is a programming error.
+		// The Validate() method should have caught this, so we panic.
+		panic("dependency cycle detected in linter rules")
 	}
 
 	return sorted

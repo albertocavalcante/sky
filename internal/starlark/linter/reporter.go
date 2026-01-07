@@ -203,11 +203,10 @@ func NewFileReporter() *FileReporter {
 }
 
 // Report implements the Reporter interface with file grouping.
-// Note: This requires enhancing Finding to track the file path.
-// For MVP, we'll use the TextReporter as-is.
+// For MVP, we use the TextReporter as-is since the functionality is similar.
 
 // CompactReporter outputs findings in a compact, single-line format.
-// Format: file:line:column: severity: message [rule]
+// Format: file:line:column: severity: message (rule)
 type CompactReporter struct {
 	ColorOutput bool
 }
@@ -221,12 +220,62 @@ func NewCompactReporter() *CompactReporter {
 
 // Report implements the Reporter interface for compact output.
 func (r *CompactReporter) Report(w io.Writer, result *Result) error {
-	// Since Finding doesn't track FilePath yet, we'll need to enhance it
-	// For now, this is a placeholder that outputs similar to TextReporter
-	tr := &TextReporter{
-		ShowRule:     true,
-		ShowCategory: false,
-		ColorOutput:  r.ColorOutput,
+	if len(result.Findings) == 0 && len(result.Errors) == 0 {
+		return nil
 	}
-	return tr.Report(w, result)
+
+	// Sort findings by file, then line, then column
+	sortedFindings := make([]Finding, len(result.Findings))
+	copy(sortedFindings, result.Findings)
+	sort.Slice(sortedFindings, func(i, j int) bool {
+		fi, fj := sortedFindings[i], sortedFindings[j]
+		if fi.FilePath != fj.FilePath {
+			return fi.FilePath < fj.FilePath
+		}
+		if fi.Line != fj.Line {
+			return fi.Line < fj.Line
+		}
+		return fi.Column < fj.Column
+	})
+
+	// Output each finding on a single line
+	for _, finding := range sortedFindings {
+		// Format: file:line:column: severity: message (rule)
+		location := fmt.Sprintf("%s:%d:%d:", finding.FilePath, finding.Line, finding.Column)
+		severity := r.formatSeverity(finding.Severity)
+		var line string
+		if finding.Rule != "" {
+			line = fmt.Sprintf("%s %s %s (%s)\n", location, severity, finding.Message, finding.Rule)
+		} else {
+			line = fmt.Sprintf("%s %s %s\n", location, severity, finding.Message)
+		}
+		if _, err := w.Write([]byte(line)); err != nil {
+			return err
+		}
+	}
+
+	// Report errors
+	for _, fileErr := range result.Errors {
+		if _, err := fmt.Fprintf(w, "%s: error: %v\n", fileErr.Path, fileErr.Err); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// formatSeverity formats the severity for display.
+func (r *CompactReporter) formatSeverity(s Severity) string {
+	switch s {
+	case SeverityError:
+		return "error:"
+	case SeverityWarning:
+		return "warning:"
+	case SeverityInfo:
+		return "info:"
+	case SeverityHint:
+		return "hint:"
+	default:
+		return "unknown:"
+	}
 }

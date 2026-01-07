@@ -3,6 +3,7 @@ package buildtools
 
 import (
 	"os"
+	"strings"
 
 	"github.com/bazelbuild/buildtools/build"
 	"github.com/bazelbuild/buildtools/warn"
@@ -272,12 +273,8 @@ func getWarningURL(name string) string {
 // contains checks if str contains any of the substrings.
 func contains(str string, substrings ...string) bool {
 	for _, sub := range substrings {
-		if len(str) >= len(sub) {
-			for i := 0; i <= len(str)-len(sub); i++ {
-				if str[i:i+len(sub)] == sub {
-					return true
-				}
-			}
+		if strings.Contains(str, sub) {
+			return true
 		}
 	}
 	return false
