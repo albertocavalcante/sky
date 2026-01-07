@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "formatter",
+    srcs = ["formatter.go"],
+    importpath = "github.com/albertocavalcante/sky/internal/starlark/formatter",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/starlark/classifier",
+        "//internal/starlark/filekind",
+        "@com_github_bazelbuild_buildtools//build",
+    ],
+)
+
+go_test(
+    name = "formatter_test",
+    srcs = ["formatter_test.go"],
+    embed = [":formatter"],
+    deps = ["//internal/starlark/filekind"],
+)
