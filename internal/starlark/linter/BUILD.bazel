@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "linter",
+    srcs = [
+        "driver.go",
+        "registry.go",
+        "reporter.go",
+        "rule.go",
+    ],
+    importpath = "github.com/albertocavalcante/sky/internal/starlark/linter",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/starlark/classifier",
+        "//internal/starlark/filekind",
+        "//internal/starlark/validator",
+        "@com_github_bazelbuild_buildtools//build",
+    ],
+)
