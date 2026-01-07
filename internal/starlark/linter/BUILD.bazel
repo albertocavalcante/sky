@@ -1,12 +1,16 @@
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "linter",
     srcs = [
+        "config.go",
         "driver.go",
         "registry.go",
         "reporter.go",
+        "reporter_github.go",
+        "reporter_json.go",
         "rule.go",
+        "suppress.go",
     ],
     importpath = "github.com/albertocavalcante/sky/internal/starlark/linter",
     visibility = ["//:__subpackages__"],
@@ -16,4 +20,16 @@ go_library(
         "//internal/starlark/validator",
         "@com_github_bazelbuild_buildtools//build",
     ],
+)
+
+go_test(
+    name = "linter_test",
+    srcs = [
+        "config_test.go",
+        "reporter_github_test.go",
+        "reporter_json_test.go",
+        "suppress_test.go",
+    ],
+    embed = [":linter"],
+    deps = ["@com_github_google_go_cmp//cmp"],
 )
