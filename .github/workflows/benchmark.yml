@@ -1,0 +1,236 @@
+name: Benchmark
+
+on:
+  push:
+    branches:
+      - main
+      - trunk
+    paths:
+      - "starlark-go-x/**"
+      - "internal/starlark/**"
+      - ".github/workflows/benchmark.yml"
+  pull_request:
+    branches:
+      - main
+      - trunk
+    paths:
+      - "starlark-go-x/**"
+      - "internal/starlark/**"
+  workflow_dispatch:
+    inputs:
+      compare_upstream:
+        description: "Compare against upstream google/starlark-go"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.25"
+  BENCHMARK_COUNT: 5
+
+jobs:
+  # ===========================================================================
+  # Job 1: Benchmark starlark-go-x
+  # ===========================================================================
+  benchmark-starlark-go-x:
+    name: Benchmark starlark-go-x
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      # actions/checkout v6.0.1
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      # actions/setup-go v6.2.0
+      - name: Setup Go
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            starlark-go-x/trunk/go.sum
+
+      - name: Verify Go version
+        run: go version
+
+      # ----------------------------------------------------------------------
+      # Benchmark starlark-go-x trunk
+      # ----------------------------------------------------------------------
+      - name: Run starlark-go-x benchmarks
+        working-directory: starlark-go-x/trunk
+        run: |
+          echo "=== Benchmarking starlark-go-x (hooks=nil) ==="
+          go test -bench=. -benchmem -count=${{ env.BENCHMARK_COUNT }} ./starlark/... | tee ${{ runner.temp }}/starlark-bench.txt
+          go test -bench=. -benchmem -count=${{ env.BENCHMARK_COUNT }} ./syntax/... | tee -a ${{ runner.temp }}/starlark-bench.txt
+
+      - name: Run Sky internal benchmarks
+        run: |
+          echo "=== Benchmarking Sky internal/starlark ==="
+          go test -bench=. -benchmem -count=${{ env.BENCHMARK_COUNT }} ./internal/starlark/... | tee ${{ runner.temp }}/sky-bench.txt
+
+      # ----------------------------------------------------------------------
+      # Upload results
+      # ----------------------------------------------------------------------
+      # actions/upload-artifact v4.6.0
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        with:
+          name: benchmark-results
+          path: |
+            ${{ runner.temp }}/starlark-bench.txt
+            ${{ runner.temp }}/sky-bench.txt
+          retention-days: 30
+
+      - name: Display benchmark summary
+        run: |
+          echo "## Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### starlark-go-x" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat ${{ runner.temp }}/starlark-bench.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Sky internal/starlark" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat ${{ runner.temp }}/sky-bench.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # Job 2: Compare with upstream (manual trigger only)
+  # ===========================================================================
+  compare-upstream:
+    name: Compare with upstream starlark-go
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    if: github.event_name == 'workflow_dispatch' && inputs.compare_upstream
+    permissions:
+      contents: read
+
+    steps:
+      # actions/checkout v6.0.1
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      # actions/setup-go v6.2.0
+      - name: Setup Go
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install benchstat
+        run: go install golang.org/x/perf/cmd/benchstat@latest
+
+      # ----------------------------------------------------------------------
+      # Clone and benchmark upstream
+      # ----------------------------------------------------------------------
+      - name: Clone upstream google/starlark-go
+        run: |
+          git clone --depth=1 https://github.com/google/starlark-go.git ${{ runner.temp }}/upstream-starlark
+
+      - name: Benchmark upstream
+        working-directory: ${{ runner.temp }}/upstream-starlark
+        run: |
+          echo "=== Benchmarking upstream google/starlark-go ==="
+          go test -bench=. -benchmem -count=${{ env.BENCHMARK_COUNT }} ./starlark/... | tee ${{ runner.temp }}/upstream.txt
+          go test -bench=. -benchmem -count=${{ env.BENCHMARK_COUNT }} ./syntax/... | tee -a ${{ runner.temp }}/upstream.txt
+
+      # ----------------------------------------------------------------------
+      # Benchmark starlark-go-x
+      # ----------------------------------------------------------------------
+      - name: Benchmark starlark-go-x
+        working-directory: starlark-go-x/trunk
+        run: |
+          echo "=== Benchmarking starlark-go-x (hooks=nil) ==="
+          go test -bench=. -benchmem -count=${{ env.BENCHMARK_COUNT }} ./starlark/... | tee ${{ runner.temp }}/starlark-go-x.txt
+          go test -bench=. -benchmem -count=${{ env.BENCHMARK_COUNT }} ./syntax/... | tee -a ${{ runner.temp }}/starlark-go-x.txt
+
+      # ----------------------------------------------------------------------
+      # Compare with benchstat
+      # ----------------------------------------------------------------------
+      - name: Compare benchmarks
+        run: |
+          echo "=== Comparison: upstream vs starlark-go-x ==="
+          benchstat ${{ runner.temp }}/upstream.txt ${{ runner.temp }}/starlark-go-x.txt | tee ${{ runner.temp }}/comparison.txt
+
+      - name: Upload comparison results
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        with:
+          name: benchmark-comparison
+          path: |
+            ${{ runner.temp }}/upstream.txt
+            ${{ runner.temp }}/starlark-go-x.txt
+            ${{ runner.temp }}/comparison.txt
+          retention-days: 30
+
+      - name: Display comparison summary
+        run: |
+          echo "## Upstream Comparison" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Comparing google/starlark-go (baseline) vs starlark-go-x (hooks=nil)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat ${{ runner.temp }}/comparison.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Expected**: < 1% overhead when hooks are nil" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # Job 3: PR Performance Regression Check
+  # ===========================================================================
+  regression-check:
+    name: Performance Regression Check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      # actions/checkout v6.0.1
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # actions/setup-go v6.2.0
+      - name: Setup Go
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            starlark-go-x/trunk/go.sum
+
+      - name: Run benchmarks
+        working-directory: starlark-go-x/trunk
+        run: |
+          go test -bench=. -benchmem -count=${{ env.BENCHMARK_COUNT }} ./starlark/... | tee ${{ runner.temp }}/bench.txt
+
+      # benchmark-action/github-action-benchmark v1.20.7
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@4bdcce38c94cec68da58d012ac24b7b1155efe8b
+        with:
+          tool: "go"
+          output-file-path: ${{ runner.temp }}/bench.txt
+          # Fail if performance degrades by more than 30%
+          alert-threshold: "130%"
+          fail-on-alert: true
+          comment-on-alert: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Don't push to gh-pages on PRs
+          auto-push: false
+          # Compare against previous results
+          save-data-file: false
