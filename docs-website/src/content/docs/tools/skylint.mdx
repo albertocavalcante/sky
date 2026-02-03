@@ -3,7 +3,7 @@ title: skylint
 description: Starlark linter with auto-fix support
 ---
 
-import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 
 # skylint
 
@@ -76,6 +76,10 @@ The tables below organize rules by their logical purpose. The actual category as
 
 | Rule | Description |
 |------|-------------|
+| `attr-cfg` | Checks for invalid cfg attribute |
+| `attr-non-empty` | Checks for non-empty attribute requirements |
+| `attr-output-default` | Checks for output attributes with defaults |
+| `build-args-kwargs` | Checks for **kwargs in build rules |
 | `constant-glob` | Checks for constant glob patterns |
 | `duplicated-name` | Checks for duplicate variable names |
 | `keyword-position-args` | Checks for positional args after keywords |
@@ -84,6 +88,7 @@ The tables below organize rules by their logical purpose. The actual category as
 | `return-value` | Checks for return value issues |
 | `rule-impl-return` | Checks rule implementation return value |
 | `uninitialized` | Checks for uninitialized variables |
+| `unnamed-macro` | Checks for unnamed macro definitions |
 
 ### Style Rules
 
@@ -91,8 +96,15 @@ The tables below organize rules by their logical purpose. The actual category as
 |------|-------------|
 | `confusing-name` | Checks for confusing variable names |
 | `name-conventions` | Checks naming conventions |
+| `package-on-top` | Checks that package() is at top |
 | `print` | Checks for print statements |
 | `unsorted-dict-items` | Checks for unsorted dictionary items |
+
+### Control Flow Rules
+
+| Rule | Description |
+|------|-------------|
+| `return-inside-loop` | Checks for return statements inside loops |
 
 ### Import Rules
 
@@ -165,17 +177,6 @@ The tables below organize rules by their logical purpose. The actual category as
 |------|-------------|
 | `integer-division` | Checks for integer division compatibility |
 | `string-iteration` | Checks for string iteration compatibility |
-
-### Other Rules
-
-| Rule | Description |
-|------|-------------|
-| `attr-cfg` | Checks for invalid cfg attribute |
-| `attr-non-empty` | Checks for non-empty attribute requirements |
-| `attr-output-default` | Checks for output attributes with defaults |
-| `build-args-kwargs` | Checks for **kwargs in build rules |
-| `package-on-top` | Checks that package() is at top |
-| `unnamed-macro` | Checks for unnamed macro definitions |
 
 ## Configuration
 
