@@ -1,0 +1,232 @@
+---
+title: Language Basics
+description: Learn Starlark syntax and core features
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+# Starlark Language Basics
+
+A quick tour of Starlark syntax and features.
+
+## Data Types
+
+### Primitives
+
+```python
+# Numbers
+count = 42
+pi = 3.14159
+
+# Strings
+name = "Starlark"
+multiline = """
+This is a
+multiline string
+"""
+
+# Booleans
+enabled = True
+disabled = False
+
+# None
+empty = None
+```
+
+### Collections
+
+```python
+# Lists (mutable until frozen)
+fruits = ["apple", "banana", "cherry"]
+fruits.append("date")
+
+# Tuples (immutable)
+point = (10, 20)
+
+# Dictionaries
+person = {
+    "name": "Alice",
+    "age": 30,
+    "languages": ["Python", "Go"],
+}
+
+# Sets (via dict keys)
+unique = {x: True for x in [1, 2, 2, 3]}.keys()  # [1, 2, 3]
+```
+
+## Functions
+
+### Basic Functions
+
+```python
+def add(x, y):
+    return x + y
+
+result = add(2, 3)  # 5
+```
+
+### Named Arguments
+
+```python
+def greet(name, greeting="Hello"):
+    return "{}, {}!".format(greeting, name)
+
+greet("World")              # Hello, World!
+greet("World", "Hi")        # Hi, World!
+greet(greeting="Hey", name="You")  # Hey, You!
+```
+
+### Variadic Functions
+
+```python
+# *args - positional arguments
+def sum_all(*numbers):
+    total = 0
+    for n in numbers:
+        total += n
+    return total
+
+sum_all(1, 2, 3, 4)  # 10
+
+# **kwargs - keyword arguments
+def configure(**options):
+    return options
+
+configure(debug=True, verbose=False)  # {"debug": True, "verbose": False}
+```
+
+## Control Flow
+
+### Conditionals
+
+```python
+def classify(age):
+    if age < 13:
+        return "child"
+    elif age < 20:
+        return "teenager"
+    else:
+        return "adult"
+```
+
+### For Loops
+
+```python
+# Iterate over list
+for fruit in ["apple", "banana"]:
+    print(fruit)
+
+# Iterate with index
+for i, fruit in enumerate(["apple", "banana"]):
+    print(i, fruit)
+
+# Iterate over dict
+for key, value in {"a": 1, "b": 2}.items():
+    print(key, value)
+
+# Range-based loop
+for i in range(5):
+    print(i)  # 0, 1, 2, 3, 4
+```
+
+:::note
+Starlark has no `while` loops to prevent infinite execution. Use `for` with `range()` instead.
+:::
+
+## Comprehensions
+
+```python
+# List comprehension
+squares = [x * x for x in range(5)]  # [0, 1, 4, 9, 16]
+
+# With condition
+evens = [x for x in range(10) if x % 2 == 0]  # [0, 2, 4, 6, 8]
+
+# Dict comprehension
+word_lengths = {word: len(word) for word in ["hello", "world"]}
+# {"hello": 5, "world": 5}
+```
+
+## String Operations
+
+```python
+name = "Starlark"
+
+# Methods
+name.upper()          # "STARLARK"
+name.lower()          # "starlark"
+name.startswith("Star")  # True
+name.replace("ark", "fish")  # "Starlfish"
+
+# Formatting
+"Hello, {}!".format("World")  # "Hello, World!"
+"x={}, y={}".format(10, 20)   # "x=10, y=20"
+
+# Join and split
+", ".join(["a", "b", "c"])  # "a, b, c"
+"a,b,c".split(",")          # ["a", "b", "c"]
+```
+
+## Loading Modules
+
+```python
+# Load symbols from another file
+load("//lib:utils.star", "helper", "CONSTANT")
+
+# Load with alias
+load("//lib:math.star", my_add = "add")
+
+# Use loaded symbols
+result = helper()
+value = CONSTANT
+sum = my_add(1, 2)
+```
+
+:::note
+Unlike Python's `import`, Starlark's `load()` executes at parse time and only imports specific symbols.
+:::
+
+## Structs
+
+Starlark doesn't have classes, but you can use structs for structured data:
+
+```python
+# Create a struct constructor
+def make_person(name, age):
+    return struct(
+        name = name,
+        age = age,
+        is_adult = age >= 18,
+    )
+
+alice = make_person("Alice", 25)
+print(alice.name)      # "Alice"
+print(alice.is_adult)  # True
+```
+
+## Providers (Bazel)
+
+In Bazel rules, providers are the standard way to pass information:
+
+```python
+MyInfo = provider(fields = ["value", "files"])
+
+def _my_rule_impl(ctx):
+    return [MyInfo(
+        value = "hello",
+        files = ctx.files.srcs,
+    )]
+```
+
+## Best Practices
+
+1. **Prefer immutability** - Don't modify data after creation
+2. **Use descriptive names** - Starlark code is often configuration
+3. **Keep functions pure** - Same inputs, same outputs
+4. **Document with docstrings** - Tools like `skydoc` extract them
+5. **Test your Starlark** - Use `skytest` for unit tests
+
+## Try It Online
+
+Practice Starlark in the browser:
+- [Starlark Playground](https://starlark-lang.org/playground.html)

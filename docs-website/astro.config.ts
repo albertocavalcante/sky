@@ -57,6 +57,14 @@ export default defineConfig({
 					],
 				},
 				{
+					label: 'Starlark Language',
+					items: [
+						{ label: 'What is Starlark?', slug: 'starlark/overview' },
+						{ label: 'Language Basics', slug: 'starlark/basics' },
+						{ label: 'Resources', slug: 'starlark/resources' },
+					],
+				},
+				{
 					label: 'Tools',
 					items: [
 						{ label: 'Overview', slug: 'tools/overview' },
