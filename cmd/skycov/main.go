@@ -1,7 +1,11 @@
 package main
 
-import "os"
+import (
+	"os"
+
+	"github.com/albertocavalcante/sky/internal/cmd/skycov"
+)
 
 func main() {
-	os.Exit(Run(os.Args[1:]))
+	os.Exit(skycov.Run(os.Args[1:]))
 }

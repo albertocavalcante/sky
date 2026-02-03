@@ -1,4 +1,4 @@
-package main
+package skyfmt
 
 import (
 	"bytes"

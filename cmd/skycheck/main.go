@@ -1,7 +1,11 @@
 package main
 
-import "os"
+import (
+	"os"
+
+	"github.com/albertocavalcante/sky/internal/cmd/skycheck"
+)
 
 func main() {
-	os.Exit(Run(os.Args[1:]))
+	os.Exit(skycheck.Run(os.Args[1:]))
 }

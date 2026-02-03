@@ -2,23 +2,10 @@ load("@rules_go//go:def.bzl", "go_binary", "go_library")
 
 go_library(
     name = "skyrepl_lib",
-    srcs = [
-        "main.go",
-        "run.go",
-    ],
+    srcs = ["main.go"],
     importpath = "github.com/albertocavalcante/sky/cmd/skyrepl",
     visibility = ["//visibility:private"],
-    deps = [
-        "//internal/version",
-        "@net_starlark_go//lib/json",
-        "@net_starlark_go//lib/math",
-        "@net_starlark_go//lib/time",
-        "@net_starlark_go//repl",
-        "@net_starlark_go//resolve",
-        "@net_starlark_go//starlark",
-        "@net_starlark_go//syntax",
-        "@org_golang_x_term//:term",
-    ],
+    deps = ["//internal/cmd/skyrepl"],
 )
 
 go_binary(

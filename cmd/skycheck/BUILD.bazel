@@ -2,16 +2,10 @@ load("@rules_go//go:def.bzl", "go_binary", "go_library")
 
 go_library(
     name = "skycheck_lib",
-    srcs = [
-        "main.go",
-        "run.go",
-    ],
+    srcs = ["main.go"],
     importpath = "github.com/albertocavalcante/sky/cmd/skycheck",
     visibility = ["//visibility:private"],
-    deps = [
-        "//internal/starlark/checker",
-        "//internal/version",
-    ],
+    deps = ["//internal/cmd/skycheck"],
 )
 
 go_binary(

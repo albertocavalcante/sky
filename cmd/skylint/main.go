@@ -1,7 +1,11 @@
 package main
 
-import "os"
+import (
+	"os"
+
+	"github.com/albertocavalcante/sky/internal/cmd/skylint"
+)
 
 func main() {
-	os.Exit(Run(os.Args[1:]))
+	os.Exit(skylint.Run(os.Args[1:]))
 }

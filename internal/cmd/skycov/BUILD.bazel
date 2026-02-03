@@ -1,0 +1,12 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "skycov",
+    srcs = ["run.go"],
+    importpath = "github.com/albertocavalcante/sky/internal/cmd/skycov",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/starlark/coverage",
+        "//internal/version",
+    ],
+)

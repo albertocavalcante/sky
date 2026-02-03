@@ -2,17 +2,10 @@ load("@rules_go//go:def.bzl", "go_binary", "go_library")
 
 go_library(
     name = "skyfmt_lib",
-    srcs = [
-        "main.go",
-        "run.go",
-    ],
+    srcs = ["main.go"],
     importpath = "github.com/albertocavalcante/sky/cmd/skyfmt",
     visibility = ["//visibility:private"],
-    deps = [
-        "//internal/starlark/filekind",
-        "//internal/starlark/formatter",
-        "//internal/version",
-    ],
+    deps = ["//internal/cmd/skyfmt"],
 )
 
 go_binary(

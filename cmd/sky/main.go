@@ -51,22 +51,39 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	default:
 		// Check for core command aliases (fmt, lint, check, etc.)
-		if binary, ok := coreCommands[args[0]]; ok {
-			return runCoreCommand(binary, args[1:], stdout, stderr)
+		if _, ok := coreCommands[args[0]]; ok {
+			return runCoreCommand(args[0], args[1:], stdout, stderr)
+		}
+		// Check if it's an embedded tool by full name (skylint, skyfmt, etc.)
+		if tool := getEmbeddedTool(args[0]); tool != nil {
+			return tool(context.Background(), args[1:], os.Stdin, stdout, stderr)
 		}
 		return runInstalledPlugin(args, stdout, stderr)
 	}
 }
 
-// runCoreCommand runs a core command binary (skyfmt, skylint, etc.).
-// It looks for the binary in the same directory as the sky binary,
-// then falls back to PATH, and finally falls back to the plugin system.
-func runCoreCommand(binary string, args []string, stdout, stderr io.Writer) int {
-	// First, try to find the binary alongside the sky executable
+// runCoreCommand runs a core command.
+// Resolution order:
+// 1. Embedded tools (if built with -tags=sky_full)
+// 2. External binary in same directory as sky executable
+// 3. External binary in PATH
+// 4. Plugin system
+func runCoreCommand(name string, args []string, stdout, stderr io.Writer) int {
+	// First, check for embedded tool
+	if tool := getEmbeddedTool(name); tool != nil {
+		return tool(context.Background(), args, os.Stdin, stdout, stderr)
+	}
+
+	// Try to find the external binary
+	binary := coreCommands[name]
+	if binary == "" {
+		binary = name // Use name directly if not in alias map
+	}
+
 	path, err := findCoreBinary(binary)
 	if err != nil {
 		// Fall back to plugin system
-		return runInstalledPlugin(append([]string{binary}, args...), stdout, stderr)
+		return runInstalledPlugin(append([]string{name}, args...), stdout, stderr)
 	}
 
 	cmd := exec.Command(path, args...)

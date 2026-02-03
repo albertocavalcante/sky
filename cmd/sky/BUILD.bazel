@@ -2,7 +2,11 @@ load("@rules_go//go:def.bzl", "go_binary", "go_library")
 
 go_library(
     name = "sky_lib",
-    srcs = ["main.go"],
+    srcs = [
+        "embedded.go",
+        "embedded_minimal.go",
+        "main.go",
+    ],
     importpath = "github.com/albertocavalcante/sky/cmd/sky",
     visibility = ["//visibility:private"],
     deps = [
