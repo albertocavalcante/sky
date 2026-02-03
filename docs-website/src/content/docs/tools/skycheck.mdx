@@ -1,12 +1,233 @@
 ---
 title: skycheck
-description: skycheck tool documentation
+description: Static analysis for Starlark files
 ---
+
+import { Aside } from '@astrojs/starlight/components';
 
 # skycheck
 
-Documentation coming soon.
+A static analysis tool for Starlark files that checks for undefined names, unused variables, and parse errors without executing the code.
+
+## Installation
 
 ```bash
-skycheck --help
+go install github.com/albertocavalcante/sky/cmd/skycheck@latest
 ```
+
+## Usage
+
+```bash
+# Check a single file
+skycheck file.star
+
+# Check multiple files
+skycheck *.star
+
+# Check with JSON output
+skycheck --json file.star
+
+# Quiet mode (errors only)
+skycheck --quiet file.star
+```
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output diagnostics as JSON |
+| `--quiet` | Only output errors, suppress warnings |
+| `--version` | Print version and exit |
+
+## What skycheck Detects
+
+skycheck performs static analysis to detect:
+
+### Undefined Names
+
+Variables or functions that are used but never defined:
+
+```starlark
+def example():
+    return undefined_variable  # Error: undefined name
+```
+
+### Unused Local Variables
+
+Variables that are defined but never used:
+
+```starlark
+def example():
+    unused = 42  # Warning: unused variable
+    return "result"
+```
+
+### Parse Errors
+
+Syntax errors that prevent the file from being parsed:
+
+```starlark
+def broken(
+    # Missing closing parenthesis - parse error
+```
+
+## Output Formats
+
+### Text Output (Default)
+
+```bash
+$ skycheck lib.star
+lib.star:10:5: error: undefined: helper_function [undefined-name]
+lib.star:15:9: warning: local variable 'temp' is unused [unused-variable]
+
+Found 1 error(s) and 1 warning(s) in 1 file(s)
+```
+
+The text format shows:
+- File path and line:column location
+- Severity (error or warning)
+- Description of the issue
+- Diagnostic code in brackets
+
+### JSON Output
+
+```bash
+$ skycheck --json lib.star
+```
+
+```json
+{
+  "files": 1,
+  "errors": 1,
+  "warnings": 1,
+  "diagnostics": [
+    {
+      "file": "lib.star",
+      "line": 10,
+      "column": 5,
+      "severity": "error",
+      "code": "undefined-name",
+      "message": "undefined: helper_function"
+    },
+    {
+      "file": "lib.star",
+      "line": 15,
+      "column": 9,
+      "severity": "warning",
+      "code": "unused-variable",
+      "message": "local variable 'temp' is unused"
+    }
+  ]
+}
+```
+
+## Diagnostic Codes
+
+| Code | Severity | Description |
+|------|----------|-------------|
+| `undefined-name` | Error | Reference to undefined variable or function |
+| `unused-variable` | Warning | Local variable defined but never used |
+| `parse-error` | Error | Syntax error in the file |
+
+## CI Integration
+
+### GitHub Actions
+
+```yaml
+- name: Check Starlark files
+  run: |
+    go install github.com/albertocavalcante/sky/cmd/skycheck@latest
+    skycheck *.star
+```
+
+### Pre-commit
+
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: skycheck
+        name: skycheck
+        entry: skycheck
+        language: system
+        files: \.star$
+```
+
+### Makefile
+
+```makefile
+.PHONY: check
+
+check:
+	skycheck *.star rules/*.bzl
+```
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | No issues found |
+| 1 | Errors found |
+| 2 | Only warnings found (no errors) |
+
+<Aside type="tip">
+Use exit code 2 to distinguish between "has warnings but no errors" and "has errors". This can be useful in CI pipelines where you want to fail on errors but only warn about warnings.
+</Aside>
+
+## Examples
+
+### Check All Starlark Files in a Project
+
+```bash
+# Check all .star files
+skycheck *.star
+
+# Check files in subdirectories (shell glob)
+skycheck **/*.star
+
+# Check specific directories
+skycheck rules/*.bzl internal/*.star
+```
+
+### Integration with Other Tools
+
+```bash
+# Run skycheck as part of a larger check pipeline
+skycheck *.star && skylint . && skytest -r .
+
+# Combine with skyfmt for a full lint pass
+skyfmt --check . && skycheck *.star
+```
+
+### Quiet Mode for CI
+
+```bash
+# Only fail on errors, ignore warnings
+skycheck --quiet *.star
+```
+
+### Processing JSON Output
+
+```bash
+# Count errors with jq
+skycheck --json *.star | jq '.errors'
+
+# Get list of files with issues
+skycheck --json *.star | jq '.diagnostics[].file' | sort -u
+
+# Filter for errors only
+skycheck --json *.star | jq '.diagnostics[] | select(.severity == "error")'
+```
+
+## Comparison with skylint
+
+| Feature | skycheck | skylint |
+|---------|----------|---------|
+| Undefined names | Yes | No |
+| Unused variables | Yes | Yes |
+| Parse errors | Yes | Yes |
+| Style issues | No | Yes |
+| Auto-fix | No | Yes |
+| Buildtools rules | No | Yes |
+
+Use skycheck for semantic analysis (undefined names, unused variables) and skylint for style/formatting issues. Both tools complement each other.

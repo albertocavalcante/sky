@@ -1,12 +1,298 @@
 ---
 title: skyrepl
-description: skyrepl tool documentation
+description: Interactive Starlark REPL with built-in modules
 ---
+
+import { Aside } from '@astrojs/starlight/components';
 
 # skyrepl
 
-Documentation coming soon.
+An interactive Read-Eval-Print Loop (REPL) for Starlark with built-in modules for JSON, math, and time operations. Use it to experiment with Starlark code, test expressions, or run scripts.
+
+## Installation
 
 ```bash
-skyrepl --help
+go install github.com/albertocavalcante/sky/cmd/skyrepl@latest
 ```
+
+## Usage
+
+```bash
+# Start interactive REPL
+skyrepl
+
+# Execute a file
+skyrepl script.star
+
+# Evaluate an expression
+skyrepl -e '1 + 1'
+
+# Preload a file, then start REPL
+skyrepl -preload lib.star
+
+# Enable recursion and while loops
+skyrepl -recursion
+
+# Show environment on exit
+skyrepl -showenv script.star
+```
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `-e` | Evaluate expression and exit |
+| `-preload` | Comma-separated files to preload |
+| `-showenv` | Print final environment on exit |
+| `-recursion` | Allow recursion and while statements |
+| `-version` | Print version and exit |
+
+## Interactive Mode
+
+When started without arguments, skyrepl enters interactive mode:
+
+```
+$ skyrepl
+skyrepl v0.1.0 (Starlark REPL)
+Type expressions to evaluate. Use Ctrl-D to exit.
+Built-in modules: json, math, time
+
+>>> 1 + 1
+2
+>>> "hello" + " world"
+"hello world"
+>>> [x * 2 for x in range(5)]
+[0, 2, 4, 6, 8]
+```
+
+### REPL Shortcuts
+
+| Shortcut | Description |
+|----------|-------------|
+| `_` | Value of the last expression |
+| `Ctrl-C` | Cancel current input |
+| `Ctrl-D` | Exit REPL |
+
+```
+>>> 2 + 3
+5
+>>> _ * 2
+10
+>>> result = _
+>>> result
+10
+```
+
+## Built-in Modules
+
+skyrepl includes three built-in modules from the starlark-go standard library:
+
+### json Module
+
+```starlark
+>>> data = {"name": "Alice", "age": 30}
+>>> json.encode(data)
+'{"age":30,"name":"Alice"}'
+>>> json.decode('{"x": 1, "y": 2}')
+{"x": 1, "y": 2}
+```
+
+| Function | Description |
+|----------|-------------|
+| `json.encode(value)` | Encode a value to JSON string |
+| `json.decode(string)` | Decode a JSON string to a value |
+| `json.indent(string, prefix="", indent="\t")` | Reformat JSON with indentation |
+
+### math Module
+
+```starlark
+>>> math.sqrt(16)
+4.0
+>>> math.pi
+3.141592653589793
+>>> math.ceil(2.3)
+3
+>>> math.floor(2.9)
+2
+```
+
+| Function/Constant | Description |
+|-------------------|-------------|
+| `math.ceil(x)` | Smallest integer greater than or equal to x |
+| `math.floor(x)` | Largest integer less than or equal to x |
+| `math.sqrt(x)` | Square root of x |
+| `math.pow(x, y)` | x raised to power y |
+| `math.abs(x)` | Absolute value of x |
+| `math.pi` | Pi constant |
+| `math.e` | Euler's number |
+
+### time Module
+
+```starlark
+>>> time.now()
+time.time(2024-01-15T10:30:00Z)
+>>> t = time.parse_time("2024-01-15T10:30:00Z")
+>>> t.year
+2024
+>>> time.parse_duration("1h30m")
+time.duration(1h30m0s)
+```
+
+| Function | Description |
+|----------|-------------|
+| `time.now()` | Current time |
+| `time.parse_time(string)` | Parse time from RFC3339 string |
+| `time.parse_duration(string)` | Parse duration (e.g., "1h30m") |
+| `time.time(...)` | Create time value |
+
+## Running Scripts
+
+Execute a Starlark file:
+
+```bash
+$ cat script.star
+def greet(name):
+    return "Hello, " + name + "!"
+
+message = greet("World")
+print(message)
+
+$ skyrepl script.star
+Hello, World!
+```
+
+### Show Final Environment
+
+Use `-showenv` to see all defined variables after execution:
+
+```bash
+$ skyrepl -showenv script.star
+Hello, World!
+greet = <function greet>
+message = Hello, World!
+```
+
+## Preloading Files
+
+Load library files before starting the REPL or running a script:
+
+```bash
+# Preload utilities, then start REPL
+skyrepl -preload utils.star
+
+# Preload multiple files
+skyrepl -preload "lib.star,helpers.star"
+
+# Preload and run script
+skyrepl -preload lib.star script.star
+```
+
+```starlark
+# utils.star
+def double(x):
+    return x * 2
+
+def square(x):
+    return x * x
+```
+
+```
+$ skyrepl -preload utils.star
+>>> double(5)
+10
+>>> square(4)
+16
+```
+
+## Expression Evaluation
+
+Evaluate a single expression and exit:
+
+```bash
+$ skyrepl -e '2 ** 10'
+1024
+
+$ skyrepl -e '[x for x in range(10) if x % 2 == 0]'
+[0, 2, 4, 6, 8]
+
+$ skyrepl -e 'json.encode({"a": 1, "b": 2})'
+{"a":1,"b":2}
+```
+
+## Recursion Mode
+
+By default, Starlark disables recursion to ensure termination. Enable it with `-recursion`:
+
+```bash
+$ skyrepl -recursion
+>>> def factorial(n):
+...     if n <= 1:
+...         return 1
+...     return n * factorial(n - 1)
+...
+>>> factorial(5)
+120
+```
+
+<Aside type="caution">
+Enabling recursion allows unbounded loops. Be careful with recursive functions that don't terminate.
+</Aside>
+
+## Examples
+
+### Interactive Data Exploration
+
+```
+>>> data = json.decode('{"users": [{"name": "Alice"}, {"name": "Bob"}]}')
+>>> data["users"]
+[{"name": "Alice"}, {"name": "Bob"}]
+>>> [u["name"] for u in data["users"]]
+["Alice", "Bob"]
+```
+
+### Time Calculations
+
+```
+>>> start = time.parse_time("2024-01-01T00:00:00Z")
+>>> duration = time.parse_duration("24h")
+>>> # Time arithmetic works with the time module
+>>> start
+time.time(2024-01-01T00:00:00Z)
+```
+
+### Building Configuration
+
+```
+>>> def make_target(name, deps = []):
+...     return {
+...         "name": name,
+...         "deps": deps,
+...         "visibility": ["//visibility:public"],
+...     }
+...
+>>> make_target("mylib", ["//lib:base"])
+{"deps": ["//lib:base"], "name": "mylib", "visibility": ["//visibility:public"]}
+>>> json.encode(_)
+'{"deps":["//lib:base"],"name":"mylib","visibility":["//visibility:public"]}'
+```
+
+### Debugging Starlark Logic
+
+```bash
+# Test a function from your library
+$ skyrepl -preload rules/defs.bzl -e 'my_rule("test")'
+
+# Interactive debugging
+$ skyrepl -preload rules/defs.bzl
+>>> # Now you can call and test functions interactively
+>>> result = helper_function({"key": "value"})
+>>> result
+```
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Execution error (script error, eval error) |
+| 2 | Usage error (invalid flags, too many arguments) |

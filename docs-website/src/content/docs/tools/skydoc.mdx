@@ -1,12 +1,382 @@
 ---
 title: skydoc
-description: skydoc tool documentation
+description: Documentation generator for Starlark files
 ---
+
+import { Aside } from '@astrojs/starlight/components';
 
 # skydoc
 
-Documentation coming soon.
+A documentation generator that extracts docstrings from Starlark files and generates formatted documentation in Markdown or JSON format. Supports Python-style docstrings with `Args:`, `Returns:`, and other sections.
+
+## Installation
 
 ```bash
-skydoc --help
+go install github.com/albertocavalcante/sky/cmd/skydoc@latest
+```
+
+## Usage
+
+```bash
+# Generate markdown documentation to stdout
+skydoc lib.star
+
+# Write to a file
+skydoc -o docs/lib.md lib.star
+
+# Generate JSON output
+skydoc -format json lib.star
+
+# Include private symbols (starting with _)
+skydoc -private lib.star
+
+# Custom title
+skydoc -title "My Library" lib.star
+
+# Without table of contents
+skydoc -toc=false lib.star
+```
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `-o` | Output file (default: stdout) |
+| `-format` | Output format: `markdown`, `json` (default: `markdown`) |
+| `-private` | Include private symbols (starting with `_`) |
+| `-title` | Document title (default: filename) |
+| `-toc` | Include table of contents (default: `true`) |
+| `-version` | Print version and exit |
+
+## Docstring Format
+
+skydoc supports Python-style docstrings with the following sections:
+
+### Basic Structure
+
+```starlark
+def my_function(name, count=1):
+    """Short one-line description.
+
+    Longer description that can span multiple lines.
+    Provides more detail about what the function does.
+
+    Args:
+        name: The name parameter description.
+        count: How many times to repeat (default: 1).
+
+    Returns:
+        A formatted string result.
+
+    Example:
+        result = my_function("hello", count=3)
+    """
+    return name * count
+```
+
+### Supported Sections
+
+| Section | Description |
+|---------|-------------|
+| `Args:` | Function parameters |
+| `Returns:` | Return value description |
+| `Raises:` | Exceptions that may be raised |
+| `Example:` | Usage examples |
+| `Note:` | Additional notes |
+| `Deprecated:` | Deprecation notice |
+
+## Output Formats
+
+### Markdown Output
+
+```bash
+skydoc lib.star
+```
+
+Generates:
+
+```markdown
+# lib.star
+
+## Table of Contents
+
+- [my_function](#my_function)
+- [helper](#helper)
+
+## Functions
+
+### my_function
+
+```starlark
+my_function(name, count=1)
+```
+
+Short one-line description.
+
+Longer description that can span multiple lines.
+
+**Args:**
+- `name`: The name parameter description.
+- `count`: How many times to repeat (default: 1).
+
+**Returns:**
+A formatted string result.
+```
+
+### JSON Output
+
+```bash
+skydoc -format json lib.star
+```
+
+```json
+{
+  "name": "lib.star",
+  "module_doc": "Module-level documentation.",
+  "functions": [
+    {
+      "name": "my_function",
+      "signature": "my_function(name, count=1)",
+      "doc": {
+        "summary": "Short one-line description.",
+        "description": "Longer description...",
+        "args": [
+          {"name": "name", "doc": "The name parameter description."},
+          {"name": "count", "doc": "How many times to repeat (default: 1)."}
+        ],
+        "returns": "A formatted string result."
+      }
+    }
+  ],
+  "variables": []
+}
+```
+
+## Documenting Different Elements
+
+### Module Documentation
+
+```starlark
+"""Library for string manipulation utilities.
+
+This module provides functions for common string operations
+used throughout the build system.
+
+Example:
+    load("//lib:strings.bzl", "capitalize", "truncate")
+
+    result = capitalize("hello")  # "Hello"
+"""
+
+def capitalize(s):
+    """Capitalize the first letter of a string."""
+    ...
+```
+
+### Functions
+
+```starlark
+def create_target(name, srcs, deps=None, visibility=None):
+    """Create a build target with standard configuration.
+
+    Creates a target with sensible defaults for visibility
+    and common dependencies.
+
+    Args:
+        name: Target name (required).
+        srcs: Source files for the target.
+        deps: Dependencies (default: empty list).
+        visibility: Visibility specification
+            (default: package visibility).
+
+    Returns:
+        A configured target struct.
+
+    Raises:
+        ValueError: If name is empty.
+
+    Example:
+        target = create_target(
+            name = "mylib",
+            srcs = ["lib.star"],
+            deps = ["//base:core"],
+        )
+    """
+    ...
+```
+
+### Variables and Constants
+
+```starlark
+"""Configuration module."""
+
+# Public constant with inline comment documentation
+DEFAULT_TIMEOUT = 30  # Default timeout in seconds
+
+# Documented via module docstring
+SUPPORTED_PLATFORMS = [
+    "linux",
+    "darwin",
+    "windows",
+]
+"""List of supported platform identifiers."""
+```
+
+## Private Symbols
+
+By default, skydoc excludes symbols starting with `_`:
+
+```starlark
+def public_function():
+    """This will be documented."""
+    pass
+
+def _private_helper():
+    """This is excluded by default."""
+    pass
+```
+
+Include private symbols with `-private`:
+
+```bash
+skydoc -private lib.star
+```
+
+## CI Integration
+
+### Generate Documentation on Push
+
+```yaml
+# .github/workflows/docs.yml
+name: Generate Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.star'
+      - '**/*.bzl'
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install skydoc
+        run: go install github.com/albertocavalcante/sky/cmd/skydoc@latest
+
+      - name: Generate documentation
+        run: |
+          for file in lib/*.star; do
+            name=$(basename "$file" .star)
+            skydoc -o "docs/api/${name}.md" "$file"
+          done
+
+      - name: Commit docs
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add docs/
+          git diff --staged --quiet || git commit -m "docs: update API documentation"
+          git push
+```
+
+### Documentation Freshness Check
+
+```yaml
+- name: Check documentation is up to date
+  run: |
+    skydoc -o /tmp/lib.md lib/utils.star
+    diff docs/api/utils.md /tmp/lib.md || {
+      echo "Documentation is out of date. Run: skydoc -o docs/api/utils.md lib/utils.star"
+      exit 1
+    }
+```
+
+## Examples
+
+### Generate Full API Documentation
+
+```bash
+# Generate docs for all library files
+for file in lib/*.star; do
+  name=$(basename "$file" .star)
+  skydoc -o "docs/api/${name}.md" -title "$(basename $file)" "$file"
+done
+```
+
+### JSON for Static Site Generators
+
+```bash
+# Generate JSON for processing by a static site generator
+skydoc -format json lib.star > docs/data/lib.json
+```
+
+### Custom Titles and Options
+
+```bash
+# With custom title and no TOC
+skydoc -title "String Utilities API" -toc=false -o docs/strings.md lib/strings.star
+
+# Include internal documentation
+skydoc -private -title "Internal API" -o docs/internal.md lib/internal.star
+```
+
+### Batch Processing
+
+```bash
+#!/bin/bash
+# generate-docs.sh
+
+OUTPUT_DIR="docs/api"
+mkdir -p "$OUTPUT_DIR"
+
+for file in $(find . -name "*.star" -o -name "*.bzl" | grep -v test); do
+  name=$(basename "$file" | sed 's/\.[^.]*$//')
+  echo "Generating docs for $file -> $OUTPUT_DIR/${name}.md"
+  skydoc -o "$OUTPUT_DIR/${name}.md" "$file"
+done
+```
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Error (file not found, parse error) |
+| 2 | Usage error (invalid flags, missing arguments) |
+
+## Best Practices
+
+1. **Write docstrings for all public functions** - They serve as both documentation and in-editor help.
+
+2. **Use the standard sections** - `Args:`, `Returns:`, `Raises:` are recognized and formatted specially.
+
+3. **Keep the first line short** - It's used as a summary in listings and search results.
+
+4. **Include examples** - Concrete examples help users understand how to use your API.
+
+5. **Document default values** - Mention defaults in the Args section for optional parameters.
+
+```starlark
+def good_example(required_param, optional_param=None):
+    """Brief summary of what this function does.
+
+    More detailed explanation if needed, covering edge cases
+    and important behavior notes.
+
+    Args:
+        required_param: What this parameter represents.
+        optional_param: Description of optional behavior
+            (default: None, which means X).
+
+    Returns:
+        Description of the return value.
+
+    Example:
+        result = good_example("input")
+        result_with_option = good_example("input", optional_param="value")
+    """
+    ...
 ```
