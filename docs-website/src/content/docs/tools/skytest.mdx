@@ -1,12 +1,354 @@
 ---
 title: skytest
-description: skytest tool documentation
+description: Starlark test runner with built-in assertions
 ---
+
+import { Aside } from '@astrojs/starlight/components';
 
 # skytest
 
-Documentation coming soon.
+A Starlark test runner that discovers and executes test functions, provides a built-in assertion module, and supports multiple output formats including JUnit XML for CI integration.
+
+## Installation
 
 ```bash
-skytest --help
+go install github.com/albertocavalcante/sky/cmd/skytest@latest
+```
+
+## Usage
+
+```bash
+# Run tests in current directory
+skytest .
+
+# Run tests recursively
+skytest -r .
+
+# Run a specific test file
+skytest math_test.star
+
+# Run with verbose output
+skytest -v .
+
+# Output as JSON
+skytest -json tests/
+
+# Output as JUnit XML (for CI)
+skytest -junit tests/ > results.xml
+
+# Show test durations
+skytest -duration .
+
+# Custom test function prefix
+skytest -prefix="check_" .
+```
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `-r` | Search directories recursively |
+| `-v` | Verbose output |
+| `-json` | Output results as JSON |
+| `-junit` | Output results as JUnit XML |
+| `-prefix` | Test function prefix (default: `test_`) |
+| `-duration` | Show test durations |
+| `-coverage` | Collect coverage data (EXPERIMENTAL) |
+| `-coverprofile` | Coverage output file (default: `coverage.json`) |
+| `-version` | Print version and exit |
+
+## Test File Discovery
+
+skytest automatically discovers test files matching these patterns:
+
+| Pattern | Example |
+|---------|---------|
+| `*_test.star` | `math_test.star`, `utils_test.star` |
+| `test_*.star` | `test_math.star`, `test_utils.star` |
+
+## Writing Tests
+
+### Basic Test Structure
+
+```starlark
+# math_test.star
+
+def test_addition():
+    assert.eq(1 + 1, 2)
+
+def test_subtraction():
+    assert.eq(5 - 3, 2)
+
+def test_string_operations():
+    assert.eq("hello" + " world", "hello world")
+```
+
+### Setup and Teardown
+
+skytest supports per-file `setup()` and `teardown()` functions:
+
+```starlark
+# db_test.star
+
+_state = {}
+
+def setup():
+    """Called before each test in this file."""
+    _state["connection"] = "mock_db"
+
+def teardown():
+    """Called after each test in this file."""
+    _state.clear()
+
+def test_query():
+    assert.true(_state.get("connection") != None)
+```
+
+## Assert Module
+
+skytest provides a built-in `assert` module with the following functions:
+
+### Equality Assertions
+
+| Function | Description |
+|----------|-------------|
+| `assert.eq(a, b, msg=None)` | Assert `a == b` |
+| `assert.ne(a, b, msg=None)` | Assert `a != b` |
+
+```starlark
+def test_equality():
+    assert.eq(1 + 1, 2)
+    assert.ne("hello", "world")
+    assert.eq([1, 2], [1, 2], msg="lists should match")
+```
+
+### Boolean Assertions
+
+| Function | Description |
+|----------|-------------|
+| `assert.true(cond, msg=None)` | Assert `cond` is truthy |
+| `assert.false(cond, msg=None)` | Assert `cond` is falsy |
+
+```starlark
+def test_boolean():
+    assert.true(len([1, 2, 3]) > 0)
+    assert.false(None)
+    assert.true(1, msg="1 is truthy")
+```
+
+### Comparison Assertions
+
+| Function | Description |
+|----------|-------------|
+| `assert.lt(a, b, msg=None)` | Assert `a < b` |
+| `assert.le(a, b, msg=None)` | Assert `a <= b` |
+| `assert.gt(a, b, msg=None)` | Assert `a > b` |
+| `assert.ge(a, b, msg=None)` | Assert `a >= b` |
+
+```starlark
+def test_comparisons():
+    assert.lt(1, 2)
+    assert.le(2, 2)
+    assert.gt(5, 3)
+    assert.ge(5, 5)
+```
+
+### Container Assertions
+
+| Function | Description |
+|----------|-------------|
+| `assert.contains(container, item, msg=None)` | Assert `item` in `container` |
+
+```starlark
+def test_contains():
+    assert.contains([1, 2, 3], 2)
+    assert.contains({"a": 1, "b": 2}, "a")
+    assert.contains("hello world", "world")
+```
+
+### Error Assertions
+
+| Function | Description |
+|----------|-------------|
+| `assert.fails(fn, pattern=None)` | Assert `fn()` raises an error |
+
+```starlark
+def test_fails():
+    def bad_function():
+        fail("something went wrong")
+
+    assert.fails(bad_function)
+    assert.fails(bad_function, "went wrong")  # pattern matching
+```
+
+## Output Formats
+
+### Text Output (Default)
+
+```
+=== RUN   test_addition
+--- PASS: test_addition
+=== RUN   test_subtraction
+--- PASS: test_subtraction
+
+PASS
+2 passed, 0 failed in 0.001s
+```
+
+### JSON Output
+
+```bash
+skytest -json .
+```
+
+```json
+{
+  "files": [
+    {
+      "file": "math_test.star",
+      "tests": [
+        {"name": "test_addition", "passed": true, "duration": "100us"},
+        {"name": "test_subtraction", "passed": true, "duration": "50us"}
+      ]
+    }
+  ],
+  "passed": 2,
+  "failed": 0,
+  "duration": "1ms"
+}
+```
+
+### JUnit XML Output
+
+```bash
+skytest -junit . > results.xml
+```
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="2" failures="0" time="0.001">
+  <testsuite name="math_test.star" tests="2" failures="0">
+    <testcase name="test_addition" time="0.0001"/>
+    <testcase name="test_subtraction" time="0.00005"/>
+  </testsuite>
+</testsuites>
+```
+
+## CI Integration
+
+### GitHub Actions
+
+```yaml
+- name: Run Starlark tests
+  run: |
+    go install github.com/albertocavalcante/sky/cmd/skytest@latest
+    skytest -r .
+
+- name: Run tests with JUnit report
+  run: |
+    skytest -junit -r . > test-results.xml
+
+- name: Upload test results
+  uses: actions/upload-artifact@v3
+  with:
+    name: test-results
+    path: test-results.xml
+```
+
+### GitLab CI
+
+```yaml
+test:
+  script:
+    - go install github.com/albertocavalcante/sky/cmd/skytest@latest
+    - skytest -junit -r . > report.xml
+  artifacts:
+    reports:
+      junit: report.xml
+```
+
+### Jenkins
+
+```groovy
+stage('Test') {
+    steps {
+        sh 'skytest -junit -r . > test-results.xml'
+        junit 'test-results.xml'
+    }
+}
+```
+
+## Coverage (Experimental)
+
+<Aside type="caution">
+Coverage collection requires starlark-go-x with the OnExec hook, which is not yet available upstream. This feature is experimental.
+</Aside>
+
+```bash
+# Collect coverage during tests
+skytest -coverage -coverprofile=coverage.json .
+
+# Process coverage with skycov
+skycov coverage.json
+```
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | All tests passed |
+| 1 | One or more tests failed |
+| 2 | Error occurred (file not found, parse error, etc.) |
+
+## Examples
+
+### Complete Test File
+
+```starlark
+# utils_test.star
+"""Tests for utility functions."""
+
+def test_list_operations():
+    """Test basic list operations."""
+    items = [1, 2, 3]
+    assert.eq(len(items), 3)
+    assert.contains(items, 2)
+    assert.true(items[0] == 1)
+
+def test_dict_operations():
+    """Test dictionary operations."""
+    data = {"key": "value", "count": 42}
+    assert.eq(data["key"], "value")
+    assert.contains(data, "count")
+    assert.eq(data.get("missing", "default"), "default")
+
+def test_string_formatting():
+    """Test string operations."""
+    name = "world"
+    greeting = "Hello, %s!" % name
+    assert.eq(greeting, "Hello, world!")
+    assert.contains(greeting, "world")
+
+def test_error_handling():
+    """Test that errors are raised correctly."""
+    def divide_by_zero():
+        return 1 / 0
+
+    assert.fails(divide_by_zero)
+```
+
+### Running Specific Tests
+
+```bash
+# Run all tests in a directory
+skytest tests/
+
+# Run a specific test file
+skytest tests/math_test.star
+
+# Run tests matching a glob pattern
+skytest tests/*_test.star
+
+# Run tests recursively from project root
+skytest -r .
 ```

@@ -1,12 +1,175 @@
 ---
 title: skyfmt
-description: skyfmt tool documentation
+description: Starlark code formatter with support for multiple file types
 ---
+
+import { Aside } from '@astrojs/starlight/components';
 
 # skyfmt
 
-Documentation coming soon.
+A Starlark code formatter that wraps [buildtools](https://github.com/bazelbuild/buildtools) formatting with a modern CLI interface. Supports multiple Bazel/Starlark file types and provides check mode for CI integration.
+
+## Installation
 
 ```bash
-skyfmt --help
+go install github.com/albertocavalcante/sky/cmd/skyfmt@latest
+```
+
+## Usage
+
+```bash
+# Format a single file (output to stdout)
+skyfmt BUILD.bazel
+
+# Format and write changes back to files
+skyfmt -w .
+
+# Check if files need formatting (for CI)
+skyfmt --check .
+
+# Preview changes as diff
+skyfmt -d lib.bzl
+
+# Format with explicit file type
+skyfmt -type=bzl script.star
+
+# Format from stdin
+cat BUILD.bazel | skyfmt
+```
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `-w` | Write result to file instead of stdout |
+| `-d` | Display diff instead of formatted output |
+| `--check` | Exit with non-zero status if files need formatting |
+| `-type` | Explicit file type: `build`, `bzl`, `workspace`, `module`, `default` |
+| `-version` | Print version and exit |
+
+<Aside type="note">
+The `-w` and `-d` flags cannot be used together. Similarly, `-w` and `--check` are mutually exclusive.
+</Aside>
+
+## File Types
+
+skyfmt automatically detects file types based on filename, but you can override this with the `-type` flag:
+
+| Type | Files |
+|------|-------|
+| `build` | BUILD, BUILD.bazel |
+| `bzl` | .bzl extension files |
+| `workspace` | WORKSPACE, WORKSPACE.bazel |
+| `module` | MODULE.bazel |
+| `default` | Generic Starlark files (.star, etc.) |
+
+## Supported File Extensions
+
+skyfmt recognizes and formats a wide variety of Starlark files:
+
+| Extension | Description |
+|-----------|-------------|
+| `.bzl` | Bazel/Buck2 extensions |
+| `.bxl` | Buck2 BXL files |
+| `.star` | Generic Starlark |
+| `.starlark` | Generic Starlark |
+| `.sky` | Skycfg, Copybara |
+| `.skyi` | Type stub files |
+| `.axl` | Starlark config |
+| `.ipd` | Isopod (Kubernetes) |
+| `.plz` | Please Build |
+| `.pconf`, `.pinc`, `.mpconf` | Protoconf |
+
+Special files (no extension): `BUILD`, `BUILD.bazel`, `WORKSPACE`, `WORKSPACE.bazel`, `MODULE.bazel`, `BUCK`, `Tiltfile`
+
+## Directory Handling
+
+When given a directory, skyfmt recursively finds and formats all Starlark files:
+
+```bash
+# Format entire project
+skyfmt -w .
+
+# Check specific directory
+skyfmt --check ./internal/rules/
+```
+
+Hidden directories (starting with `.`) are automatically skipped.
+
+## CI Integration
+
+### GitHub Actions
+
+```yaml
+- name: Check Starlark formatting
+  run: |
+    go install github.com/albertocavalcante/sky/cmd/skyfmt@latest
+    skyfmt --check .
+```
+
+### Pre-commit
+
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: skyfmt
+        name: skyfmt
+        entry: skyfmt --check
+        language: system
+        files: \.(bzl|bazel|star)$
+        pass_filenames: true
+```
+
+### Makefile
+
+```makefile
+.PHONY: format format-check
+
+format:
+	skyfmt -w .
+
+format-check:
+	skyfmt --check .
+```
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success (no issues or all files already formatted) |
+| 1 | Files need formatting (with `--check` flag) |
+| 2 | Error occurred (parse error, file not found, etc.) |
+
+## Examples
+
+### Format and see diff
+
+```bash
+$ skyfmt -d BUILD.bazel
+--- BUILD.bazel
++++ BUILD.bazel
+@@ -1 +1 @@
+-load("@rules_go//go:def.bzl","go_library")
++load("@rules_go//go:def.bzl", "go_library")
+```
+
+### Check mode in CI
+
+```bash
+$ skyfmt --check .
+lib/utils.bzl
+rules/defs.bzl
+$ echo $?
+1
+```
+
+### Stdin/stdout pipeline
+
+```bash
+# Format and redirect
+cat BUILD.bazel | skyfmt > BUILD.bazel.formatted
+
+# Use with explicit type for stdin
+cat script.star | skyfmt -type=default
 ```

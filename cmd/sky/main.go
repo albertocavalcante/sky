@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -138,6 +139,8 @@ func runPlugin(args []string, stdout, stderr io.Writer) int {
 		return runPluginSearch(args[1:], stdout, stderr)
 	case "marketplace":
 		return runMarketplace(args[1:], stdout, stderr)
+	case "init":
+		return runPluginInit(args[1:], stdout, stderr)
 	default:
 		writef(stderr, "unknown plugin command %q\n", args[0])
 		printPluginUsage(stderr)
@@ -476,8 +479,7 @@ func runInstalledPlugin(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	if plugin == nil {
-		writef(stderr, "unknown command %q\n", args[0])
-		writeln(stderr, "install plugins with: sky plugin search <query>")
+		printUnknownCommandHelp(stderr, args[0])
 		return 2
 	}
 	runner := plugins.Runner{}
@@ -487,6 +489,111 @@ func runInstalledPlugin(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	return exitCode
+}
+
+// printUnknownCommandHelp prints a helpful error message for unknown commands.
+func printUnknownCommandHelp(w io.Writer, cmdName string) {
+	writef(w, "sky: unknown command %q\n\n", cmdName)
+
+	// Find similar core commands
+	suggestions := findSimilarCommands(cmdName)
+	if len(suggestions) > 0 {
+		writeln(w, "Did you mean one of these?")
+		for _, s := range suggestions {
+			writef(w, "  sky %-8s %s\n", s.name, s.desc)
+		}
+		writeln(w)
+	}
+
+	writeln(w, "To install a plugin:")
+	writef(w, "  sky plugin install %s\n", cmdName)
+	writef(w, "  sky plugin search %s\n", cmdName)
+}
+
+type commandSuggestion struct {
+	name string
+	desc string
+}
+
+// coreCommandDescriptions provides descriptions for suggestions.
+var coreCommandDescriptions = map[string]string{
+	"fmt":   "format Starlark files",
+	"lint":  "lint Starlark files",
+	"check": "static analysis",
+	"query": "query Starlark sources",
+	"test":  "run Starlark tests",
+	"doc":   "generate documentation",
+	"repl":  "interactive REPL",
+}
+
+// findSimilarCommands finds core commands similar to the input.
+func findSimilarCommands(input string) []commandSuggestion {
+	var suggestions []commandSuggestion
+	input = strings.ToLower(input)
+
+	for cmd := range coreCommands {
+		// Check for prefix match
+		if strings.HasPrefix(cmd, input) || strings.HasPrefix(input, cmd) {
+			suggestions = append(suggestions, commandSuggestion{
+				name: cmd,
+				desc: coreCommandDescriptions[cmd],
+			})
+			continue
+		}
+		// Check for Levenshtein distance <= 2
+		if levenshtein(input, cmd) <= 2 {
+			suggestions = append(suggestions, commandSuggestion{
+				name: cmd,
+				desc: coreCommandDescriptions[cmd],
+			})
+		}
+	}
+
+	// Sort by name
+	sort.Slice(suggestions, func(i, j int) bool {
+		return suggestions[i].name < suggestions[j].name
+	})
+
+	return suggestions
+}
+
+// levenshtein computes the Levenshtein distance between two strings.
+func levenshtein(a, b string) int {
+	if len(a) == 0 {
+		return len(b)
+	}
+	if len(b) == 0 {
+		return len(a)
+	}
+
+	if len(a) > len(b) {
+		a, b = b, a
+	}
+
+	prev := make([]int, len(a)+1)
+	curr := make([]int, len(a)+1)
+
+	for i := range prev {
+		prev[i] = i
+	}
+
+	for j := 1; j <= len(b); j++ {
+		curr[0] = j
+		for i := 1; i <= len(a); i++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			curr[i] = min(
+				prev[i]+1,      // deletion
+				curr[i-1]+1,    // insertion
+				prev[i-1]+cost, // substitution
+			)
+		}
+		prev, curr = curr, prev
+	}
+
+	return prev[len(a)]
 }
 
 func isHelp(arg string) bool {
@@ -529,10 +636,168 @@ func printUsage(w io.Writer) {
 	writeln(w, "run \"sky plugin --help\" for plugin commands")
 }
 
+func runPluginInit(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("init", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	wasm := fs.Bool("wasm", false, "create a WASM plugin template")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 1 {
+		writeln(stderr, "usage: sky plugin init <name> [--wasm]")
+		writeln(stderr)
+		writeln(stderr, "Creates a new plugin project with boilerplate code.")
+		return 2
+	}
+
+	name := fs.Arg(0)
+
+	// Validate plugin name
+	if err := plugins.ValidateName(name); err != nil {
+		writef(stderr, "sky: %v\n", err)
+		writeln(stderr, "Plugin names must start with a letter and contain only lowercase letters, digits, and hyphens.")
+		return 1
+	}
+
+	// Check if directory already exists
+	if _, err := os.Stat(name); err == nil {
+		writef(stderr, "sky: directory %q already exists\n", name)
+		return 1
+	}
+
+	// Create directory
+	if err := os.MkdirAll(name, 0755); err != nil {
+		writef(stderr, "sky: failed to create directory: %v\n", err)
+		return 1
+	}
+
+	// Write files
+	if err := writePluginTemplate(name, *wasm); err != nil {
+		writef(stderr, "sky: failed to create plugin files: %v\n", err)
+		// Clean up on failure
+		_ = os.RemoveAll(name)
+		return 1
+	}
+
+	writef(stdout, "Created plugin %q\n\n", name)
+	writeln(stdout, "Next steps:")
+	writef(stdout, "  cd %s\n", name)
+	if *wasm {
+		writeln(stdout, "  GOOS=wasip1 GOARCH=wasm go build -o plugin.wasm")
+		writef(stdout, "  sky plugin install --path ./plugin.wasm %s\n", name)
+	} else {
+		writeln(stdout, "  go build -o plugin")
+		writef(stdout, "  sky plugin install --path ./plugin %s\n", name)
+	}
+	writef(stdout, "  sky %s\n", name)
+
+	return 0
+}
+
+func writePluginTemplate(name string, wasm bool) error {
+	// Write main.go
+	mainGo := fmt.Sprintf(`package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+)
+
+const (
+	pluginName    = %q
+	pluginVersion = "0.1.0"
+	pluginSummary = "A Sky plugin"
+)
+
+func main() {
+	// Handle metadata request from sky
+	if os.Getenv("SKY_PLUGIN_MODE") == "metadata" {
+		json.NewEncoder(os.Stdout).Encode(map[string]any{
+			"api_version": 1,
+			"name":        pluginName,
+			"version":     pluginVersion,
+			"summary":     pluginSummary,
+			"commands": []map[string]string{
+				{"name": pluginName, "description": pluginSummary},
+			},
+		})
+		return
+	}
+
+	// Handle --version flag
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Printf("%%s %%s\n", pluginName, pluginVersion)
+		return
+	}
+
+	// Handle --help flag
+	if len(os.Args) > 1 && (os.Args[1] == "--help" || os.Args[1] == "-h") {
+		fmt.Printf("Usage: %%s [options]\n\n", pluginName)
+		fmt.Println("A Sky plugin.")
+		fmt.Println()
+		fmt.Println("Options:")
+		fmt.Println("  --help, -h      Show this help message")
+		fmt.Println("  --version, -v   Show version")
+		return
+	}
+
+	// Your plugin logic here
+	fmt.Println("Hello from", pluginName)
+}
+`, name)
+
+	if err := os.WriteFile(filepath.Join(name, "main.go"), []byte(mainGo), 0644); err != nil {
+		return err
+	}
+
+	// Write go.mod
+	goMod := fmt.Sprintf(`module %s
+
+go 1.21
+`, name)
+
+	if err := os.WriteFile(filepath.Join(name, "go.mod"), []byte(goMod), 0644); err != nil {
+		return err
+	}
+
+	// Write README.md
+	buildCmd := "go build -o plugin"
+	installCmd := fmt.Sprintf("sky plugin install --path ./plugin %s", name)
+	if wasm {
+		buildCmd = "GOOS=wasip1 GOARCH=wasm go build -o plugin.wasm"
+		installCmd = fmt.Sprintf("sky plugin install --path ./plugin.wasm %s", name)
+	}
+
+	readme := fmt.Sprintf(`# %s
+
+A Sky plugin.
+
+## Build
+
+`+"```bash\n%s\n```"+`
+
+## Install
+
+`+"```bash\n%s\n```"+`
+
+## Usage
+
+`+"```bash\nsky %s\n```"+`
+`, name, buildCmd, installCmd, name)
+
+	if err := os.WriteFile(filepath.Join(name, "README.md"), []byte(readme), 0644); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func printPluginUsage(w io.Writer) {
 	writeln(w, "usage: sky plugin <command> [args]")
 	writeln(w)
 	writeln(w, "commands:")
+	writeln(w, "  init <name>              create a new plugin project")
 	writeln(w, "  list                     list installed plugins")
 	writeln(w, "  install <name>           install a plugin")
 	writeln(w, "  inspect <name>           inspect plugin metadata")

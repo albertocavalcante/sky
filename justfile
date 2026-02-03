@@ -5,7 +5,11 @@
 default:
     @just --list
 
-# Build all CLI tools
+# ============================================================================
+# Development
+# ============================================================================
+
+# Build all CLI tools (via Bazel)
 build:
     bazel build //cmd/...
 
@@ -49,55 +53,81 @@ clean-all:
     bazel clean --expunge
 
 # ============================================================================
-# Cross-compilation targets
+# Distribution - Go Build (fast, no Bazel required)
 # ============================================================================
 
 # Output directory for binaries
 dist_dir := "dist"
 
-# Build sky (minimal) for current platform
-build-sky:
+# Build sky (minimal) for current platform using Go
+dist-sky:
+    @mkdir -p {{dist_dir}}
     go build -o {{dist_dir}}/sky ./cmd/sky
 
-# Build sky_full (embedded) for current platform
-build-sky-full:
+# Build sky_full (embedded) for current platform using Go
+dist-sky-full:
+    @mkdir -p {{dist_dir}}
     go build -tags=sky_full -o {{dist_dir}}/sky_full ./cmd/sky
 
-# Build sky_full for all supported platforms
-build-all: build-linux-amd64 build-linux-arm64 build-darwin-arm64 build-windows-amd64
+# Build sky_full for all supported platforms using Go
+dist-all: _dist-go-linux-amd64 _dist-go-linux-arm64 _dist-go-darwin-arm64 _dist-go-windows-amd64
     @echo "Built all platforms in {{dist_dir}}/"
+    @ls -lh {{dist_dir}}/
 
-# Linux AMD64
-build-linux-amd64:
+# Build minimal sky for all platforms using Go
+dist-all-minimal: _dist-go-minimal-linux-amd64 _dist-go-minimal-linux-arm64 _dist-go-minimal-darwin-arm64 _dist-go-minimal-windows-amd64
+    @echo "Built all minimal platforms in {{dist_dir}}/"
+    @ls -lh {{dist_dir}}/
+
+# Helper recipes for Go cross-compilation (full)
+_dist-go-linux-amd64:
+    @mkdir -p {{dist_dir}}
     GOOS=linux GOARCH=amd64 go build -tags=sky_full -o {{dist_dir}}/sky-linux-amd64 ./cmd/sky
 
-# Linux ARM64
-build-linux-arm64:
+_dist-go-linux-arm64:
+    @mkdir -p {{dist_dir}}
     GOOS=linux GOARCH=arm64 go build -tags=sky_full -o {{dist_dir}}/sky-linux-arm64 ./cmd/sky
 
-# macOS ARM64 (Apple Silicon)
-build-darwin-arm64:
+_dist-go-darwin-arm64:
+    @mkdir -p {{dist_dir}}
     GOOS=darwin GOARCH=arm64 go build -tags=sky_full -o {{dist_dir}}/sky-darwin-arm64 ./cmd/sky
 
-# Windows AMD64
-build-windows-amd64:
+_dist-go-windows-amd64:
+    @mkdir -p {{dist_dir}}
     GOOS=windows GOARCH=amd64 go build -tags=sky_full -o {{dist_dir}}/sky-windows-amd64.exe ./cmd/sky
 
-# Build minimal sky for all platforms
-build-all-minimal: build-linux-amd64-minimal build-linux-arm64-minimal build-darwin-arm64-minimal build-windows-amd64-minimal
-    @echo "Built all minimal platforms in {{dist_dir}}/"
-
-build-linux-amd64-minimal:
+# Helper recipes for Go cross-compilation (minimal)
+_dist-go-minimal-linux-amd64:
+    @mkdir -p {{dist_dir}}
     GOOS=linux GOARCH=amd64 go build -o {{dist_dir}}/sky-minimal-linux-amd64 ./cmd/sky
 
-build-linux-arm64-minimal:
+_dist-go-minimal-linux-arm64:
+    @mkdir -p {{dist_dir}}
     GOOS=linux GOARCH=arm64 go build -o {{dist_dir}}/sky-minimal-linux-arm64 ./cmd/sky
 
-build-darwin-arm64-minimal:
+_dist-go-minimal-darwin-arm64:
+    @mkdir -p {{dist_dir}}
     GOOS=darwin GOARCH=arm64 go build -o {{dist_dir}}/sky-minimal-darwin-arm64 ./cmd/sky
 
-build-windows-amd64-minimal:
+_dist-go-minimal-windows-amd64:
+    @mkdir -p {{dist_dir}}
     GOOS=windows GOARCH=amd64 go build -o {{dist_dir}}/sky-minimal-windows-amd64.exe ./cmd/sky
+
+# ============================================================================
+# Distribution - Bazel Build (hermetic, cached)
+# ============================================================================
+
+# Build sky (minimal) using Bazel
+bazel-sky:
+    bazel build //cmd/sky:sky
+    @mkdir -p {{dist_dir}}
+    cp bazel-bin/cmd/sky/sky_/sky {{dist_dir}}/sky-bazel
+
+# Build sky_full using Bazel
+bazel-sky-full:
+    bazel build //cmd/sky:sky_full
+    @mkdir -p {{dist_dir}}
+    cp bazel-bin/cmd/sky/sky_full_/sky_full {{dist_dir}}/sky_full-bazel
 
 # Clean dist directory
 clean-dist:
