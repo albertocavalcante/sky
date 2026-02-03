@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -192,10 +193,37 @@ func demoReport() *coverage.Report {
 }
 
 // loadCoverageData loads coverage from a JSON file.
+// The format is the JSON output from skytest --coverage.
 func loadCoverageData(path string) (*coverage.Report, error) {
-	// For now, this is a placeholder since we don't have real coverage data
-	// In the future, this would parse the JSON output from skytest --coverage
-	return nil, fmt.Errorf("loading %s: coverage data format not yet defined", path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", path, err)
+	}
+
+	// Parse the JSON format from skytest --coverage
+	var raw struct {
+		Files map[string]struct {
+			Lines map[string]int `json:"lines"`
+		} `json:"files"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+
+	report := coverage.NewReport()
+	for filePath, fileData := range raw.Files {
+		fc := report.AddFile(filePath)
+		for lineStr, hits := range fileData.Lines {
+			var line int
+			if _, err := fmt.Sscanf(lineStr, "%d", &line); err != nil {
+				continue
+			}
+			fc.Lines.Hits[line] = hits
+		}
+	}
+	report.Compute()
+
+	return report, nil
 }
 
 // Helper functions for writing output.
