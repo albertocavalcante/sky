@@ -26,6 +26,7 @@ var coreCommands = map[string]string{
 	"check": "skycheck",
 	"query": "skyquery",
 	"repl":  "skyrepl",
+	"test":  "skytest",
 }
 
 func main() {
@@ -488,8 +489,9 @@ func printUsage(w io.Writer) {
 	writeln(w, "starlark tools:")
 	writeln(w, "  fmt          format Starlark files")
 	writeln(w, "  lint         lint Starlark files")
-	writeln(w, "  check        type check Starlark files")
+	writeln(w, "  check        static analysis for Starlark files")
 	writeln(w, "  query        query Starlark sources")
+	writeln(w, "  test         run Starlark tests")
 	writeln(w, "  repl         interactive Starlark REPL")
 	writeln(w)
 	writeln(w, "management:")
