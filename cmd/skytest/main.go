@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/albertocavalcante/sky/internal/starlark/coverage"
 	"github.com/albertocavalcante/sky/internal/starlark/tester"
 	"github.com/albertocavalcante/sky/internal/version"
 )
@@ -32,6 +34,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		recursiveFlag bool
 		prefixFlag    string
 		durationFlag  bool
+		coverageFlag  bool
+		coverageOut   string
 	)
 
 	fs := flag.NewFlagSet("skytest", flag.ContinueOnError)
@@ -43,6 +47,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.BoolVar(&recursiveFlag, "r", false, "search directories recursively")
 	fs.StringVar(&prefixFlag, "prefix", "test_", "test function prefix")
 	fs.BoolVar(&durationFlag, "duration", false, "show test durations")
+	// EXPERIMENTAL: Coverage collection requires starlark-go-x with OnExec hook.
+	// Uncomment the replace directive in go.mod to enable.
+	// TODO(upstream): Remove experimental note once OnExec is merged.
+	fs.BoolVar(&coverageFlag, "coverage", false, "collect coverage data (EXPERIMENTAL)")
+	fs.StringVar(&coverageOut, "coverprofile", "coverage.json", "coverage output file")
 
 	fs.Usage = func() {
 		writeln(stderr, "Usage: skytest [flags] <paths...>")
@@ -57,6 +66,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		writeln(stderr, "  - Built-in assert module (assert.eq, assert.true, etc.)")
 		writeln(stderr, "  - Per-file setup() and teardown() functions")
 		writeln(stderr, "  - Multiple output formats (text, JSON, JUnit)")
+		writeln(stderr, "  - Coverage collection (EXPERIMENTAL, requires starlark-go-x)")
 		writeln(stderr)
 		writeln(stderr, "Flags:")
 		fs.PrintDefaults()
@@ -111,6 +121,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	opts := tester.DefaultOptions()
 	opts.TestPrefix = prefixFlag
 	opts.Verbose = verboseFlag
+	opts.Coverage = coverageFlag
 	runner := tester.New(opts)
 
 	// Select reporter
@@ -163,10 +174,62 @@ func run(args []string, stdout, stderr io.Writer) int {
 	// Report summary
 	reporter.ReportSummary(stdout, result)
 
+	// Write coverage output if enabled
+	// EXPERIMENTAL: Coverage collection requires starlark-go-x with OnExec hook.
+	// TODO(upstream): Remove experimental note once OnExec is merged.
+	if coverageFlag {
+		if err := writeCoverageReport(runner, coverageOut, stderr); err != nil {
+			writef(stderr, "skytest: coverage: %v\n", err)
+			// Don't fail the run for coverage errors, just warn
+		}
+	}
+
 	if result.HasFailures() {
 		return exitFailed
 	}
 	return exitOK
+}
+
+// writeCoverageReport writes the coverage data to a JSON file.
+// EXPERIMENTAL: Coverage data is only collected when starlark-go-x OnExec hook is enabled.
+func writeCoverageReport(runner *tester.Runner, outPath string, stderr io.Writer) error {
+	report := runner.CoverageReport()
+	if report == nil {
+		writeln(stderr, "skytest: coverage: no data collected (starlark-go-x OnExec hook not enabled)")
+		writeln(stderr, "         To enable, uncomment the replace directive in go.mod:")
+		writeln(stderr, "         replace go.starlark.net => ../starlark-go-x/coverage-hooks")
+		return nil
+	}
+
+	// Marshal to JSON
+	data, err := json.MarshalIndent(coverageJSON(report), "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling coverage: %w", err)
+	}
+
+	// Write to file
+	if err := os.WriteFile(outPath, data, 0o644); err != nil {
+		return fmt.Errorf("writing %s: %w", outPath, err)
+	}
+
+	writef(stderr, "skytest: coverage written to %s\n", outPath)
+	return nil
+}
+
+// coverageJSON converts a coverage.Report to a JSON-serializable structure.
+func coverageJSON(r *coverage.Report) map[string]any {
+	files := make(map[string]any)
+	for path, fc := range r.Files {
+		files[path] = map[string]any{
+			"lines": fc.Lines.Hits,
+		}
+	}
+	return map[string]any{
+		"files":        files,
+		"totalLines":   r.TotalLines,
+		"coveredLines": r.CoveredLines,
+		"percentage":   r.Percentage(),
+	}
 }
 
 // Helper functions for writing output.
