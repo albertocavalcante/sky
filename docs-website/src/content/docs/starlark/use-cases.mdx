@@ -1,0 +1,328 @@
+---
+title: Use Cases
+description: Real-world Starlark applications in Tilt, Kurtosis, and Buck2 BXL
+---
+
+import { Aside, Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+# Starlark Use Cases
+
+Beyond build systems, Starlark powers infrastructure tools, development environments, and CI/CD pipelines. This guide explores three compelling use cases.
+
+## Tilt: Kubernetes Development
+
+[Tilt](https://tilt.dev/) uses Starlark via `Tiltfile` to define local Kubernetes development workflows.
+
+### What Tilt Does
+
+- Watches source files for changes
+- Rebuilds containers incrementally
+- Deploys to local Kubernetes
+- Streams logs and provides UI
+
+### Example Tiltfile
+
+```starlark
+# Load extensions
+load('ext://restart_process', 'docker_build_with_restart')
+
+# Build the backend
+docker_build(
+    'backend-image',
+    context='./backend',
+    dockerfile='./backend/Dockerfile',
+    live_update=[
+        sync('./backend/src', '/app/src'),
+        run('pip install -r requirements.txt', trigger=['requirements.txt']),
+    ],
+)
+
+# Deploy Kubernetes manifests
+k8s_yaml(['k8s/backend.yaml', 'k8s/frontend.yaml'])
+
+# Configure resource grouping
+k8s_resource('backend', port_forwards='8080:8080', labels=['api'])
+k8s_resource('frontend', port_forwards='3000:3000', labels=['web'])
+```
+
+### Key Tilt Functions
+
+| Function | Purpose |
+|----------|---------|
+| `docker_build()` | Build container images |
+| `k8s_yaml()` | Apply Kubernetes manifests |
+| `k8s_resource()` | Configure deployments |
+| `local_resource()` | Run local commands |
+| `load()` | Import Tilt extensions |
+
+### Live Update
+
+Tilt's killer feature - sync changes without rebuilding:
+
+```starlark
+docker_build(
+    'my-app',
+    '.',
+    live_update=[
+        # Sync source files
+        sync('./src', '/app/src'),
+
+        # Run command on specific file changes
+        run('npm install', trigger=['package.json']),
+
+        # Restart process after sync
+        restart_container(),
+    ],
+)
+```
+
+<Aside type="tip">
+Tilt's [extension system](https://github.com/tilt-dev/tilt-extensions) provides reusable Starlark modules for common patterns like hot reloading, database migrations, and test runners.
+</Aside>
+
+## Kurtosis: Infrastructure as Code
+
+[Kurtosis](https://kurtosis.com/) uses Starlark to define reproducible development and test environments.
+
+### What Kurtosis Does
+
+- Spins up multi-container environments
+- Handles service dependencies
+- Provides network isolation
+- Supports local and cloud execution
+
+### Example Starlark Package
+
+```starlark
+# main.star
+def run(plan, args):
+    # Get password from args (never hardcode secrets)
+    db_password = args.get("db_password", "")
+    if not db_password:
+        fail("db_password argument is required")
+
+    # Start PostgreSQL
+    postgres = plan.add_service(
+        name = "postgres",
+        config = ServiceConfig(
+            image = "postgres:15",
+            ports = {
+                "postgres": PortSpec(5432),
+            },
+            env_vars = {
+                "POSTGRES_USER": "app",
+                "POSTGRES_PASSWORD": db_password,
+                "POSTGRES_DB": "myapp",
+            },
+        ),
+    )
+
+    # Wait for postgres to be ready
+    plan.wait(
+        service_name = "postgres",
+        recipe = ExecRecipe(command = ["pg_isready"]),
+        field = "code",
+        assertion = "==",
+        target_value = 0,
+    )
+
+    # Start the application
+    db_url = "postgres://app:{}@postgres:5432/myapp".format(db_password)
+    app = plan.add_service(
+        name = "app",
+        config = ServiceConfig(
+            image = args.get("app_image", "myapp:latest"),
+            ports = {
+                "http": PortSpec(8080),
+            },
+            env_vars = {
+                "DATABASE_URL": db_url,
+            },
+        ),
+    )
+
+    return {
+        "app_url": "http://{}:{}".format(app.ip_address, 8080),
+    }
+```
+
+### Key Kurtosis Functions
+
+| Function | Purpose |
+|----------|---------|
+| `plan.add_service()` | Deploy a container |
+| `plan.wait()` | Wait for conditions |
+| `plan.exec()` | Run commands in containers |
+| `plan.upload_files()` | Copy files to containers |
+| `plan.render_templates()` | Generate config files |
+
+### Parameterized Environments
+
+```starlark
+def run(plan, args):
+    # Accept parameters
+    replicas = args.get("replicas", 3)
+    debug = args.get("debug", False)
+
+    for i in range(replicas):
+        plan.add_service(
+            name = "worker-{}".format(i),
+            config = ServiceConfig(
+                image = "worker:latest",
+                env_vars = {
+                    "DEBUG": str(debug),
+                    "WORKER_ID": str(i),
+                },
+            ),
+        )
+```
+
+<Aside type="note">
+Kurtosis provides a [VS Code extension](https://marketplace.visualstudio.com/items?itemName=Kurtosis.kurtosis-extension) with Starlark completion, syntax highlighting, and package validation.
+</Aside>
+
+## Buck2 BXL: Build Graph Scripting
+
+[BXL](https://buck2.build/docs/bxl/bxl/) (Buck2 Extension Language) uses Starlark to query and script the build graph.
+
+### What BXL Does
+
+- Query targets and dependencies
+- Generate reports and documentation
+- Implement custom analysis
+- Automate build workflows
+
+### Example BXL Script
+
+```starlark
+# query_deps.bxl
+
+def _impl(ctx):
+    # Get target from command line
+    target = ctx.cli_args.target
+
+    # Query dependencies
+    deps = ctx.cquery().deps(target)
+
+    # Filter to specific kind
+    rust_deps = ctx.cquery().kind("rust_library", deps)
+
+    # Output results
+    ctx.output.print("Rust dependencies of {}:".format(target))
+    for dep in rust_deps:
+        ctx.output.print("  - {}".format(dep.label))
+
+    return None
+
+query_deps = bxl_main(
+    impl = _impl,
+    cli_args = {
+        "target": cli_args.target_label(),
+    },
+)
+```
+
+Run with:
+```bash
+buck2 bxl //tools:query_deps.bxl -- --target //my/package:target
+```
+
+### Key BXL Concepts
+
+| Concept | Description |
+|---------|-------------|
+| `ctx.cquery()` | Configured query (with platform) |
+| `ctx.uquery()` | Unconfigured query |
+| `ctx.analysis()` | Run analysis on targets |
+| `ctx.build()` | Build targets |
+| `ctx.output` | Write output (print, files) |
+
+### Build Graph Analysis
+
+```starlark
+def _analyze_impl(ctx):
+    target = ctx.cli_args.target
+
+    # Run analysis
+    analysis = ctx.analysis(target)
+    result = analysis.result
+
+    # Access providers
+    providers = result.providers()
+
+    # Get specific provider
+    if "DefaultInfo" in providers:
+        default_info = providers["DefaultInfo"]
+        ctx.output.print("Default outputs:")
+        for output in default_info.default_outputs:
+            ctx.output.print("  {}".format(output))
+
+    return None
+```
+
+### Generating Reports
+
+```starlark
+def _license_report_impl(ctx):
+    # Query all third-party dependencies
+    third_party = ctx.cquery().kind(".*", "//third-party/...")
+
+    # Build report
+    report = []
+    for target in third_party:
+        attrs = target.attrs
+        if hasattr(attrs, "license"):
+            report.append({
+                "name": str(target.label),
+                "license": attrs.license,
+            })
+
+    # Write JSON report
+    ctx.output.write_json("licenses.json", report)
+
+    return None
+```
+
+<Aside type="tip">
+BXL scripts have full access to Buck2's type system, including records and enums. Use them for type-safe build automation.
+</Aside>
+
+## Comparison
+
+<CardGrid>
+  <Card title="Tilt" icon="rocket">
+    **Best for:** Local Kubernetes development
+
+    - File watching and hot reload
+    - Container orchestration
+    - Developer experience focus
+  </Card>
+
+  <Card title="Kurtosis" icon="puzzle">
+    **Best for:** Test environments
+
+    - Multi-service setups
+    - Reproducible environments
+    - CI/CD integration
+  </Card>
+
+  <Card title="Buck2 BXL" icon="magnifier">
+    **Best for:** Build system scripting
+
+    - Dependency analysis
+    - Custom queries
+    - Build automation
+  </Card>
+</CardGrid>
+
+## Why Starlark?
+
+These tools chose Starlark because:
+
+1. **Deterministic** - Same input always produces same output
+2. **Hermetic** - No network or filesystem access by default
+3. **Familiar** - Python-like syntax, easy to learn
+4. **Sandboxed** - Safe to run untrusted code
+5. **Embeddable** - Easy to integrate into host applications
+
+Each tool extends Starlark with domain-specific functions while maintaining the core language guarantees.
