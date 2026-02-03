@@ -53,12 +53,17 @@ package main
 
 import (
     "fmt"
+    "log"
+
     "go.starlark.net/starlark"
 )
 
 func main() {
     thread := &starlark.Thread{Name: "main"}
-    globals, _ := starlark.ExecFile(thread, "config.star", nil, nil)
+    globals, err := starlark.ExecFile(thread, "config.star", nil, nil)
+    if err != nil {
+        log.Fatal(err)
+    }
 
     if v, ok := globals["message"]; ok {
         fmt.Println(v)

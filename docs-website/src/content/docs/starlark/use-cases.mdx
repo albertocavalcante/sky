@@ -96,6 +96,11 @@ Tilt's [extension system](https://github.com/tilt-dev/tilt-extensions) provides 
 ```starlark
 # main.star
 def run(plan, args):
+    # Get password from args (never hardcode secrets)
+    db_password = args.get("db_password", "")
+    if not db_password:
+        fail("db_password argument is required")
+
     # Start PostgreSQL
     postgres = plan.add_service(
         name = "postgres",
@@ -106,7 +111,7 @@ def run(plan, args):
             },
             env_vars = {
                 "POSTGRES_USER": "app",
-                "POSTGRES_PASSWORD": "secret",
+                "POSTGRES_PASSWORD": db_password,
                 "POSTGRES_DB": "myapp",
             },
         ),
@@ -122,6 +127,7 @@ def run(plan, args):
     )
 
     # Start the application
+    db_url = "postgres://app:{}@postgres:5432/myapp".format(db_password)
     app = plan.add_service(
         name = "app",
         config = ServiceConfig(
@@ -130,7 +136,7 @@ def run(plan, args):
                 "http": PortSpec(8080),
             },
             env_vars = {
-                "DATABASE_URL": "postgres://app:secret@postgres:5432/myapp",
+                "DATABASE_URL": db_url,
             },
         ),
     )
