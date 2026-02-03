@@ -16,10 +16,14 @@ require (
 	google.golang.org/protobuf v1.36.11
 )
 
-// EXPERIMENTAL: Coverage instrumentation via starlark-go-x OnExec hook.
-// This replaces upstream starlark-go with our fork that has the OnExec callback.
-// TODO(upstream): Remove once OnExec is merged to go.starlark.net
-replace go.starlark.net => ../../starlark-go-x/coverage-hooks
+// EXPERIMENTAL: Coverage instrumentation via starlark-go-x hooks.
+// This replaces upstream starlark-go with our fork that has coverage hooks:
+// - OnExec: line coverage
+// - OnBranch: branch coverage
+// - OnFunctionEnter/Exit: function coverage
+// - OnIteration: loop coverage
+// TODO(upstream): Remove once hooks are merged to go.starlark.net
+replace go.starlark.net => github.com/albertocavalcante/starlark-go-x v0.0.0-20260203191202-da5a35fe16a6
 
 require (
 	github.com/chzyer/readline v1.5.1 // indirect

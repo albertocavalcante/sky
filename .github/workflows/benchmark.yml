@@ -48,12 +48,10 @@ jobs:
           persist-credentials: false
           path: sky
 
-      # Clone starlark-go-x (required for go.mod replace directive)
+      # Clone starlark-go-x trunk for direct benchmarking
       - name: Clone starlark-go-x
         run: |
           git clone --depth=1 --branch trunk https://github.com/albertocavalcante/starlark-go-x.git starlark-go-x
-          # Also clone coverage-hooks branch for Sky's replace directive
-          git clone --depth=1 --branch coverage-hooks https://github.com/albertocavalcante/starlark-go-x.git starlark-go-x-coverage
 
       # actions/setup-go v6.2.0
       - name: Setup Go
@@ -67,13 +65,6 @@ jobs:
 
       - name: Verify Go version
         run: go version
-
-      # Fix replace directive to point to CI paths
-      - name: Fix go.mod replace directive
-        working-directory: sky
-        run: |
-          sed -i 's|../../starlark-go-x/coverage-hooks|../starlark-go-x-coverage|g' go.mod
-          cat go.mod | grep replace
 
       # ----------------------------------------------------------------------
       # Benchmark starlark-go-x trunk

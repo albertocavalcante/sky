@@ -1,3 +1,5 @@
+github.com/albertocavalcante/starlark-go-x v0.0.0-20260203191202-da5a35fe16a6 h1:lF2lZ4qSJu7+Sx99bP5fH1DPD7NHcUU8AkmgaRqXRsw=
+github.com/albertocavalcante/starlark-go-x v0.0.0-20260203191202-da5a35fe16a6/go.mod h1:YKMCv9b1WrfWmeqdV5MAuEHWsu5iC+fe6kYl2sQjdI8=
 github.com/bazelbuild/buildtools v0.0.0-20251231073631-eb7356da6895 h1:EWOZOFbxzZX5jTNN+ddRKOyrhVzEaUHyTHl8/2LHXkw=
 github.com/bazelbuild/buildtools v0.0.0-20251231073631-eb7356da6895/go.mod h1:PLNUetjLa77TCCziPsz0EI8a6CUxgC+1jgmWv0H25tg=
 github.com/chzyer/logex v1.2.1 h1:XHDu3E6q+gdHgsdTPH6ImJMIp436vR6MPtH8gP05QzM=
