@@ -1,0 +1,33 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "index",
+    srcs = [
+        "discovery.go",
+        "extract.go",
+        "index.go",
+        "types.go",
+    ],
+    importpath = "github.com/albertocavalcante/sky/internal/starlark/query/index",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/starlark/classifier",
+        "//internal/starlark/filekind",
+        "@com_github_bazelbuild_buildtools//build",
+    ],
+)
+
+go_test(
+    name = "index_test",
+    srcs = [
+        "discovery_test.go",
+        "extract_test.go",
+        "index_test.go",
+        "types_test.go",
+    ],
+    embed = [":index"],
+    deps = [
+        "//internal/starlark/filekind",
+        "@com_github_bazelbuild_buildtools//build",
+    ],
+)

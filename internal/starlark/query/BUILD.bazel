@@ -1,0 +1,30 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "query",
+    srcs = [
+        "ast.go",
+        "engine.go",
+        "funcs.go",
+        "parser.go",
+        "sets.go",
+    ],
+    importpath = "github.com/albertocavalcante/sky/internal/starlark/query",
+    visibility = ["//:__subpackages__"],
+    deps = ["//internal/starlark/query/index"],
+)
+
+go_test(
+    name = "query_test",
+    srcs = [
+        "engine_test.go",
+        "funcs_test.go",
+        "parser_test.go",
+        "sets_test.go",
+    ],
+    embed = [":query"],
+    deps = [
+        "//internal/starlark/filekind",
+        "//internal/starlark/query/index",
+    ],
+)
