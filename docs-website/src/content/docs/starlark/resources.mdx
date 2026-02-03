@@ -1,0 +1,116 @@
+---
+title: Starlark Resources
+description: Official documentation, tools, and community resources
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+# Starlark Resources
+
+Curated resources for learning and working with Starlark.
+
+## Official Resources
+
+<CardGrid>
+  <LinkCard
+    title="starlark-lang.org"
+    href="https://starlark-lang.org/"
+    description="Unofficial community site with playground"
+  />
+  <LinkCard
+    title="Language Specification"
+    href="https://github.com/bazelbuild/starlark/blob/master/spec.md"
+    description="Official Starlark language spec"
+  />
+  <LinkCard
+    title="Bazel Starlark Guide"
+    href="https://bazel.build/rules/language"
+    description="Starlark in the context of Bazel"
+  />
+</CardGrid>
+
+## Implementations
+
+| Implementation | Language | Maintainer |
+|----------------|----------|------------|
+| [starlark-go](https://github.com/google/starlark-go) | Go | Google |
+| [starlark-rust](https://github.com/facebook/starlark-rust) | Rust | Meta |
+| [starlark (Java)](https://github.com/bazelbuild/bazel/tree/master/src/main/java/net/starlark/java) | Java | Bazel team |
+| [starlark-go-x](https://github.com/albertocavalcante/starlark-go-x) | Go | Sky (enhanced fork) |
+
+## Developer Tools
+
+### Formatters & Linters
+
+| Tool | Description |
+|------|-------------|
+| **[Sky](https://github.com/albertocavalcante/sky)** | Full toolkit: lint, format, test, coverage |
+| [Buildifier](https://github.com/bazelbuild/buildtools) | Official formatter for BUILD files |
+| [Starpls](https://github.com/withered-magic/starpls) | Language server for IDE support |
+
+### Documentation
+
+| Tool | Description |
+|------|-------------|
+| **skydoc** (Sky) | Documentation generator |
+| [Stardoc](https://github.com/bazelbuild/stardoc) | Bazel's documentation generator |
+
+### Testing
+
+| Tool | Description |
+|------|-------------|
+| **skytest** (Sky) | Test runner with assertions and coverage |
+| [unittest.bzl](https://github.com/bazelbuild/bazel-skylib/blob/main/lib/unittest.bzl) | Bazel Skylib testing utilities |
+
+## Libraries
+
+### Go Extensions
+
+| Library | Description |
+|---------|-------------|
+| [Starlib](https://github.com/qri-io/starlib) | Standard library extensions |
+| [Starlet](https://github.com/1set/starlet) | Wrapper with module system |
+| [starlark-go-nethttp](https://github.com/nicholaswmin/starlark-go-nethttp) | HTTP utilities |
+| [starlark-re](https://github.com/nicholaswmin/starlark-re) | Regular expressions |
+
+### Configuration Tools
+
+| Tool | Description |
+|------|-------------|
+| [Skycfg](https://github.com/nicholaswmin/skycfg) | Protocol Buffer generation |
+| [ytt](https://carvel.dev/ytt/) | YAML templating with Starlark |
+
+## Learning Resources
+
+### Tutorials
+
+- [Starlark Language Overview](https://laurent.le-brun.eu/blog/an-overview-of-starlark) - Laurent Le Brun (2024)
+- [A practical introduction to Starlark](https://laurent.le-brun.eu/blog/a-practical-introduction-to-starlark) - Laurent Le Brun (2024)
+- [Embedding Starlark in Go](https://medium.com/learning-the-go-programming-language/embedding-starlark-in-go-programs-80a6e3ceb91e) - Vladimir Vivien (2023)
+
+### Talks
+
+- [The Starlark Configuration Language](https://www.youtube.com/watch?v=9P_YKVhncWI) - Alan Donovan, GothamGo 2017
+
+### Playgrounds
+
+- [Starlark Playground](https://starlark-lang.org/playground.html) - Browser-based REPL
+- **skyrepl** (Sky) - Local interactive REPL
+
+## Community
+
+- [awesome-starlark](https://github.com/laurentlb/awesome-starlark) - Curated resource list
+- [Bazel Slack](https://slack.bazel.build/) - `#starlark` channel
+- [r/bazel](https://reddit.com/r/bazel) - Reddit community
+
+## Projects Using Starlark
+
+| Project | Use Case |
+|---------|----------|
+| [Bazel](https://bazel.build/) | Build system |
+| [Buck2](https://buck2.build/) | Build system |
+| [Tilt](https://tilt.dev/) | Kubernetes development |
+| [Drone CI](https://drone.io/) | CI/CD pipelines |
+| [Kurtosis](https://kurtosis.com/) | Dev environments |
+| [Copybara](https://github.com/google/copybara) | Code transformation |
+| [Isopod](https://github.com/cruise-automation/isopod) | Kubernetes config |

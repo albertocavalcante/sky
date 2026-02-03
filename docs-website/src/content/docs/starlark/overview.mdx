@@ -1,0 +1,86 @@
+---
+title: What is Starlark?
+description: Introduction to the Starlark programming language
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+# Starlark
+
+**Starlark** is a configuration language designed by Google, originally for [Bazel](https://bazel.build/). It features Python-like syntax with deterministic evaluation, making it ideal for build systems and configuration.
+
+## Key Features
+
+<CardGrid>
+  <Card title="Deterministic" icon="approve-check">
+    Same inputs always produce same outputs. No randomness, no timestamps.
+  </Card>
+  <Card title="Hermetic" icon="seti:lock">
+    No filesystem, network, or system access. Safe for untrusted code.
+  </Card>
+  <Card title="Parallel" icon="rocket">
+    Modules load concurrently. Immutable data ensures thread safety.
+  </Card>
+  <Card title="Python-like" icon="seti:python">
+    Familiar syntax reduces learning curve for Python developers.
+  </Card>
+</CardGrid>
+
+## Quick Example
+
+```python
+# Define data
+people = {
+    "Alice": 22,
+    "Bob": 40,
+    "Charlie": 14,
+}
+
+# Define a function
+def greet(name):
+    """Return a greeting."""
+    return "Hello, {}!".format(name)
+
+# List comprehension
+adults = [name for name, age in people.items() if age >= 18]
+
+print(greet(", ".join(adults)))  # Hello, Alice, Bob!
+```
+
+## Why Starlark?
+
+| Use Case | Benefit |
+|----------|---------|
+| **Build systems** | Reproducible builds via determinism |
+| **Configuration** | Type-safe, programmable configs |
+| **Sandboxed scripting** | Safe execution of user code |
+| **CI/CD pipelines** | Consistent behavior across runs |
+
+## Who Uses Starlark?
+
+- **[Bazel](https://bazel.build/)** - Google's build system
+- **[Buck2](https://buck2.build/)** - Meta's build system
+- **[Tilt](https://tilt.dev/)** - Kubernetes development
+- **[Drone CI](https://drone.io/)** - Continuous integration
+- **[Kurtosis](https://kurtosis.com/)** - Development environments
+- **[ytt](https://carvel.dev/ytt/)** - YAML templating
+
+## Differences from Python
+
+While Starlark looks like Python, key differences ensure determinism:
+
+| Feature | Python | Starlark |
+|---------|--------|----------|
+| Mutation | Allowed | Frozen after creation |
+| Global state | Yes | No |
+| Recursion | Yes | No (prevents infinite loops) |
+| `while` loops | Yes | No (use `for` with ranges) |
+| `import` | Yes | Use `load()` instead |
+| Classes | Yes | No (use structs) |
+
+## Next Steps
+
+<CardGrid>
+  <LinkCard title="Language Basics" href="/sky/starlark/basics/" description="Learn Starlark syntax and features" />
+  <LinkCard title="Resources" href="/sky/starlark/resources/" description="Official docs, tools, and community" />
+</CardGrid>
