@@ -309,6 +309,60 @@ func TestLCOVReporter(t *testing.T) {
 	}
 }
 
+func TestHTMLReporter(t *testing.T) {
+	report := NewReport()
+	fc := report.AddFile("test.star")
+	fc.Lines.RecordHit(1)
+	fc.Lines.RecordHit(2)
+	fc.Lines.Hits[3] = 0 // uncovered line
+
+	var buf bytes.Buffer
+	r := &HTMLReporter{Title: "Test Coverage"}
+	if err := r.Write(&buf, report); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "<!DOCTYPE html>") {
+		t.Error("output should contain DOCTYPE")
+	}
+	if !strings.Contains(output, "<title>Test Coverage</title>") {
+		t.Error("output should contain title")
+	}
+	if !strings.Contains(output, "test.star") {
+		t.Error("output should contain filename")
+	}
+	if !strings.Contains(output, "line-covered") {
+		t.Error("output should contain covered line class")
+	}
+	if !strings.Contains(output, "line-uncovered") {
+		t.Error("output should contain uncovered line class")
+	}
+	if !strings.Contains(output, "66.7%") {
+		t.Errorf("output should contain coverage percentage, got: %s", output)
+	}
+}
+
+func TestHTMLReporterEscaping(t *testing.T) {
+	report := NewReport()
+	fc := report.AddFile("path/with<special>&chars.star")
+	fc.Lines.RecordHit(1)
+
+	var buf bytes.Buffer
+	r := &HTMLReporter{}
+	if err := r.Write(&buf, report); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+
+	output := buf.String()
+	if strings.Contains(output, "<special>") {
+		t.Error("output should escape < and > characters")
+	}
+	if !strings.Contains(output, "&lt;special&gt;") {
+		t.Error("output should contain escaped characters")
+	}
+}
+
 func TestFormatLineRanges(t *testing.T) {
 	tests := []struct {
 		lines []int

@@ -334,6 +334,228 @@ func (r *CoberturaReporter) Write(w io.Writer, report *Report) error {
 }
 
 // -----------------------------------------------------------------------------
+// HTML Reporter
+// -----------------------------------------------------------------------------
+
+// HTMLReporter outputs coverage as an HTML report.
+// Generates a single-file HTML report with embedded CSS.
+type HTMLReporter struct {
+	// Title is the report title (default: "Coverage Report").
+	Title string
+}
+
+// Write implements Reporter.
+func (r *HTMLReporter) Write(w io.Writer, report *Report) error {
+	report.Compute()
+
+	title := r.Title
+	if title == "" {
+		title = "Coverage Report"
+	}
+
+	// Write HTML header
+	writef(w, `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>%s</title>
+<style>
+:root {
+  --bg: #1a1a2e;
+  --bg-card: #16213e;
+  --text: #eee;
+  --text-muted: #888;
+  --covered: #4ade80;
+  --uncovered: #f87171;
+  --partial: #fbbf24;
+  --border: #333;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  padding: 2rem;
+}
+.container { max-width: 1200px; margin: 0 auto; }
+h1 { margin-bottom: 0.5rem; }
+.summary {
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+.stat { text-align: center; }
+.stat-value { font-size: 2rem; font-weight: bold; }
+.stat-label { color: var(--text-muted); font-size: 0.875rem; }
+.progress-bar {
+  width: 200px;
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+.progress-fill {
+  height: 100%%;
+  background: var(--covered);
+  transition: width 0.3s;
+}
+.files { margin-top: 1rem; }
+.file {
+  background: var(--bg-card);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+.file-header {
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.file-header:hover { background: rgba(255,255,255,0.05); }
+.file-name { font-family: monospace; font-weight: 500; }
+.file-stats { display: flex; gap: 1rem; align-items: center; }
+.badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.badge-good { background: rgba(74, 222, 128, 0.2); color: var(--covered); }
+.badge-warn { background: rgba(251, 191, 36, 0.2); color: var(--partial); }
+.badge-bad { background: rgba(248, 113, 113, 0.2); color: var(--uncovered); }
+.file-lines {
+  display: none;
+  font-family: monospace;
+  font-size: 0.875rem;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.file.open .file-lines { display: block; }
+.line {
+  display: flex;
+  padding: 0 1rem;
+  border-left: 3px solid transparent;
+}
+.line-num {
+  width: 50px;
+  text-align: right;
+  padding-right: 1rem;
+  color: var(--text-muted);
+  user-select: none;
+}
+.line-hits {
+  width: 40px;
+  text-align: right;
+  padding-right: 1rem;
+  color: var(--text-muted);
+}
+.line-covered { background: rgba(74, 222, 128, 0.1); border-left-color: var(--covered); }
+.line-uncovered { background: rgba(248, 113, 113, 0.1); border-left-color: var(--uncovered); }
+.timestamp { color: var(--text-muted); font-size: 0.75rem; margin-top: 2rem; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>%s</h1>
+`, title, title)
+
+	// Summary section
+	pct := report.Percentage()
+
+	writef(w, `<div class="summary">
+<div class="stat">
+  <div class="stat-value">%.1f%%</div>
+  <div class="stat-label">Line Coverage</div>
+  <div class="progress-bar"><div class="progress-fill" style="width: %.1f%%"></div></div>
+</div>
+<div class="stat">
+  <div class="stat-value">%d</div>
+  <div class="stat-label">Lines Covered</div>
+</div>
+<div class="stat">
+  <div class="stat-value">%d</div>
+  <div class="stat-label">Total Lines</div>
+</div>
+<div class="stat">
+  <div class="stat-value">%d</div>
+  <div class="stat-label">Files</div>
+</div>
+</div>
+`, pct, pct, report.CoveredLines, report.TotalLines, len(report.Files))
+
+	// Files section
+	writef(w, `<div class="files">
+`)
+
+	for _, path := range report.FilePaths() {
+		fc := report.Files[path]
+		filePct := fc.Lines.Percentage()
+		fileBadgeClass := "badge-good"
+		if filePct < 50 {
+			fileBadgeClass = "badge-bad"
+		} else if filePct < 80 {
+			fileBadgeClass = "badge-warn"
+		}
+
+		writef(w, `<div class="file">
+<div class="file-header" onclick="this.parentElement.classList.toggle('open')">
+  <span class="file-name">%s</span>
+  <div class="file-stats">
+    <span>%d/%d lines</span>
+    <span class="badge %s">%.1f%%</span>
+  </div>
+</div>
+<div class="file-lines">
+`, htmlEscape(path), fc.Lines.CoveredLines, fc.Lines.TotalLines, fileBadgeClass, filePct)
+
+		// Write line coverage
+		lines := fc.Lines.Lines()
+		for _, lineNum := range lines {
+			hits := fc.Lines.Hits[lineNum]
+			lineClass := "line-covered"
+			if hits == 0 {
+				lineClass = "line-uncovered"
+			}
+			writef(w, `<div class="line %s"><span class="line-num">%d</span><span class="line-hits">%dx</span></div>
+`, lineClass, lineNum, hits)
+		}
+
+		writef(w, `</div>
+</div>
+`)
+	}
+
+	// Footer
+	writef(w, `</div>
+<div class="timestamp">Generated: %s</div>
+</div>
+</body>
+</html>
+`, time.Now().Format(time.RFC1123))
+
+	return nil
+}
+
+// htmlEscape escapes HTML special characters.
+func htmlEscape(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	s = strings.ReplaceAll(s, "\"", "&quot;")
+	return s
+}
+
+// -----------------------------------------------------------------------------
 // LCOV Reporter
 // -----------------------------------------------------------------------------
 

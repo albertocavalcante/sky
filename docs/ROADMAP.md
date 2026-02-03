@@ -2,24 +2,19 @@
 
 ## Completed
 
-| Tool       | Status  | Description                                    |
-| ---------- | ------- | ---------------------------------------------- |
-| `skyfmt`   | ✅ Done | Deterministic formatting with diff/check modes |
-| `skylint`  | ✅ Done | Configurable linting with --fix support        |
-| `skyquery` | ✅ Done | AST queries, load graph analysis               |
-| `skycheck` | ✅ Done | Static analysis (undefined names, unused vars) |
-| `skydoc`   | ✅ Done | Documentation generator (markdown/JSON)        |
-| `skyrepl`  | ✅ Done | Interactive REPL with builtins                 |
-| `skytest`  | ✅ Done | Test runner with assertions                    |
-| `sky`      | ✅ Done | Plugin dispatcher and marketplace              |
+| Tool       | Status  | Description                                           |
+| ---------- | ------- | ----------------------------------------------------- |
+| `skyfmt`   | ✅ Done | Deterministic formatting with diff/check modes        |
+| `skylint`  | ✅ Done | Configurable linting with --fix support               |
+| `skyquery` | ✅ Done | AST queries, load graph analysis                      |
+| `skycheck` | ✅ Done | Static analysis (undefined names, unused vars)        |
+| `skydoc`   | ✅ Done | Documentation generator (markdown/JSON)               |
+| `skyrepl`  | ✅ Done | Interactive REPL with builtins                        |
+| `skytest`  | ✅ Done | Test runner with assertions                           |
+| `skycov`   | ✅ Done | Coverage reporter (text, JSON, HTML, Cobertura, LCOV) |
+| `sky`      | ✅ Done | Plugin dispatcher and marketplace                     |
 
 ## In Progress
-
-### Phase 1: Coverage & Testing (Current)
-
-- [ ] `skycov` - Coverage reporting tool
-  - CLI and output formatters (text, HTML, Cobertura, LCOV)
-  - Requires `starlark-go-x` instrumentation API
 
 ### Phase 2: IDE Experience
 
@@ -39,11 +34,11 @@
 
 Changes needed in our [starlark-go fork](https://github.com/albertocavalcante/starlark-go-x):
 
-| Change                       | Priority | Tools Affected  |
-| ---------------------------- | -------- | --------------- |
-| Coverage instrumentation API | P0       | skycov, skytest |
-| Finish type-hints parsing    | P1       | skycheck        |
-| Completion API               | P2       | skylsp, skyrepl |
+| Change                       | Priority | Tools Affected  | Notes                               |
+| ---------------------------- | -------- | --------------- | ----------------------------------- |
+| Coverage instrumentation API | P0       | skycov, skytest | skycov CLI ready, waiting for hooks |
+| Finish type-hints parsing    | P1       | skycheck        |                                     |
+| Completion API               | P2       | skylsp, skyrepl |                                     |
 
 ## Future Ideas
 

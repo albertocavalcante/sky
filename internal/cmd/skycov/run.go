@@ -39,7 +39,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 
 	fs := flag.NewFlagSet("skycov", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	fs.StringVar(&formatFlag, "format", "text", "output format: text, json, cobertura, lcov")
+	fs.StringVar(&formatFlag, "format", "text", "output format: text, json, html, cobertura, lcov")
 	fs.StringVar(&outputFlag, "o", "", "output file (default: stdout)")
 	fs.Float64Var(&minFlag, "min", 0, "minimum coverage percentage (fail if below)")
 	fs.StringVar(&sourceFlag, "source", "", "source directory for relative paths")
@@ -58,6 +58,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writeln(stderr, "Output Formats:")
 		writeln(stderr, "  text      Human-readable summary (default)")
 		writeln(stderr, "  json      JSON format for tooling")
+		writeln(stderr, "  html      HTML report with line coverage visualization")
 		writeln(stderr, "  cobertura Cobertura XML for CI (Jenkins, GitLab, etc.)")
 		writeln(stderr, "  lcov      LCOV tracefile for genhtml and IDEs")
 		writeln(stderr)
@@ -135,6 +136,8 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		reporter = &coverage.TextReporter{Verbose: verboseFlag, ShowMissing: verboseFlag}
 	case "json":
 		reporter = &coverage.JSONReporter{Pretty: true}
+	case "html":
+		reporter = &coverage.HTMLReporter{}
 	case "cobertura":
 		reporter = &coverage.CoberturaReporter{SourceDir: sourceFlag}
 	case "lcov":
