@@ -216,19 +216,32 @@ func writeCoverageReport(runner *tester.Runner, outPath string, stderr io.Writer
 	return nil
 }
 
+// coverageJSONOutput represents the top-level JSON coverage output.
+type coverageJSONOutput struct {
+	Files        map[string]coverageFileJSON `json:"files"`
+	TotalLines   int                         `json:"totalLines"`
+	CoveredLines int                         `json:"coveredLines"`
+	Percentage   float64                     `json:"percentage"`
+}
+
+// coverageFileJSON represents per-file coverage data in JSON output.
+type coverageFileJSON struct {
+	Lines map[int]int `json:"lines"`
+}
+
 // coverageJSON converts a coverage.Report to a JSON-serializable structure.
-func coverageJSON(r *coverage.Report) map[string]any {
-	files := make(map[string]any)
+func coverageJSON(r *coverage.Report) coverageJSONOutput {
+	files := make(map[string]coverageFileJSON)
 	for path, fc := range r.Files {
-		files[path] = map[string]any{
-			"lines": fc.Lines.Hits,
+		files[path] = coverageFileJSON{
+			Lines: fc.Lines.Hits,
 		}
 	}
-	return map[string]any{
-		"files":        files,
-		"totalLines":   r.TotalLines,
-		"coveredLines": r.CoveredLines,
-		"percentage":   r.Percentage(),
+	return coverageJSONOutput{
+		Files:        files,
+		TotalLines:   r.TotalLines,
+		CoveredLines: r.CoveredLines,
+		Percentage:   r.Percentage(),
 	}
 }
 
