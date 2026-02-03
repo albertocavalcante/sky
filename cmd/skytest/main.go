@@ -217,10 +217,11 @@ func writeCoverageReport(runner *tester.Runner, outPath string, stderr io.Writer
 }
 
 // coverageJSONOutput represents the top-level JSON coverage output.
+// Uses snake_case keys for consistency with internal/starlark/coverage/reporter.go.
 type coverageJSONOutput struct {
 	Files        map[string]coverageFileJSON `json:"files"`
-	TotalLines   int                         `json:"totalLines"`
-	CoveredLines int                         `json:"coveredLines"`
+	TotalLines   int                         `json:"total_lines"`
+	CoveredLines int                         `json:"covered_lines"`
 	Percentage   float64                     `json:"percentage"`
 }
 
