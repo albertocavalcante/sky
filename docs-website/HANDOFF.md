@@ -33,16 +33,16 @@ The Sky documentation website is live with:
 
 ### Tools Section (`/tools/`)
 
-| Tool     | Status                                                  |
-| -------- | ------------------------------------------------------- |
-| skylint  | ✅ Fully documented (40+ rules, categories, config, CI) |
-| skyfmt   | Stub                                                    |
-| skytest  | Stub                                                    |
-| skycov   | Stub                                                    |
-| skydoc   | Stub                                                    |
-| skyrepl  | Stub                                                    |
-| skyquery | Stub                                                    |
-| skycheck | Stub                                                    |
+| Tool     | Status                                                   |
+| -------- | -------------------------------------------------------- |
+| skylint  | ✅ Fully documented (40+ rules, categories, config, CI)  |
+| skyfmt   | ✅ Fully documented (file types, extensions, CI)         |
+| skytest  | ✅ Fully documented (assert module, reporters, coverage) |
+| skycov   | ✅ Fully documented (formats, CI integration)            |
+| skydoc   | ✅ Fully documented (docstring format, output types)     |
+| skyrepl  | ✅ Fully documented (built-in modules, scripts)          |
+| skyquery | ✅ Fully documented (query language, patterns)           |
+| skycheck | ✅ Fully documented (undefined names, unused vars)       |
 
 ### Code Fixes (PRs #20, #28)
 
@@ -72,35 +72,43 @@ bun run build  # Production build to ./dist/
 - **Base URL**: `/sky/`
 - Enable GitHub Pages in repo settings after first workflow run
 
+## Completed Recently
+
+- **Plugin Architecture** - Phase 1 & 2 complete (PR #29)
+  - Embedded tool support with build tags
+  - `go build -tags=sky_full ./cmd/sky` for bundled binary
+- **Build Targets** - Cross-compilation support (PR #30)
+  - Bazel targets: `//cmd/sky:sky`, `//cmd/sky:sky_full`
+  - `just build-all` for linux/darwin/windows
+- **Tool Documentation** - All 8 tools fully documented
+
 ## Pending Work
 
 ### High Priority
 
-1. **Plugin Architecture** - RFC at `docs/RFC-plugin-architecture.md`
-   - Plugin-first CLI with two distribution modes (bundled vs modular)
-   - Keep tools independently `go install`-able
-   - Phase 1: Export `Run()` from each tool in `cmd/*/run.go`
+1. **Plugin CLI Polish** (RFC Phase 3)
+   - Better error: "lint not found, install with: sky plugin install lint"
+   - `sky plugin init` scaffolding command
+   - Plugin update notifications
 
-2. **Document remaining tools** - skyfmt, skytest, skycov, skydoc, skyrepl, skyquery, skycheck need full documentation like skylint
-
-3. **starlark-go-x section** - The `/starlark-go-x/` pages exist but need expansion:
+2. **starlark-go-x section** - Pages exist but need expansion:
    - `/starlark-go-x/overview/`
    - `/starlark-go-x/type-annotations/`
    - `/starlark-go-x/onexec-hook/`
 
 ### Medium Priority
 
-4. **Getting Started guide** - Add a quick-start tutorial for new users
+3. **Getting Started guide** - Quick-start tutorial for new users
 
-5. **API reference** - Auto-generate from Go source if possible
+4. **API reference** - Auto-generate from Go source if possible
 
-6. **Examples section** - Real-world Starlark examples
+5. **Examples section** - Real-world Starlark examples
 
 ### Low Priority
 
-7. **Search improvements** - Pagefind is configured but could use tuning
+6. **Search improvements** - Pagefind is configured but could use tuning
 
-8. **Dark mode** - Starlight supports it, just needs enabling
+7. **Dark mode** - Starlight supports it, just needs enabling
 
 ## Technical Notes
 
