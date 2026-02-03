@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"html/template"
 	"io"
 	"path/filepath"
 	"strings"
@@ -344,6 +345,34 @@ type HTMLReporter struct {
 	Title string
 }
 
+// htmlTemplateData is the data passed to the HTML template.
+type htmlTemplateData struct {
+	Title        string
+	Percentage   float64
+	CoveredLines int
+	TotalLines   int
+	FileCount    int
+	Files        []htmlFileData
+	Timestamp    string
+}
+
+// htmlFileData is per-file data for the HTML template.
+type htmlFileData struct {
+	Path         string
+	Percentage   float64
+	CoveredLines int
+	TotalLines   int
+	BadgeClass   string
+	Lines        []htmlLineData
+}
+
+// htmlLineData is per-line data for the HTML template.
+type htmlLineData struct {
+	Number int
+	Hits   int
+	Class  string
+}
+
 // Write implements Reporter.
 func (r *HTMLReporter) Write(w io.Writer, report *Report) error {
 	report.Compute()
@@ -353,13 +382,60 @@ func (r *HTMLReporter) Write(w io.Writer, report *Report) error {
 		title = "Coverage Report"
 	}
 
-	// Write HTML header
-	writef(w, `<!DOCTYPE html>
+	// Build template data
+	data := htmlTemplateData{
+		Title:        title,
+		Percentage:   report.Percentage(),
+		CoveredLines: report.CoveredLines,
+		TotalLines:   report.TotalLines,
+		FileCount:    len(report.Files),
+		Timestamp:    time.Now().Format(time.RFC1123),
+	}
+
+	for _, path := range report.FilePaths() {
+		fc := report.Files[path]
+		filePct := fc.Lines.Percentage()
+
+		badgeClass := "badge-good"
+		if filePct < 50 {
+			badgeClass = "badge-bad"
+		} else if filePct < 80 {
+			badgeClass = "badge-warn"
+		}
+
+		fileData := htmlFileData{
+			Path:         path,
+			Percentage:   filePct,
+			CoveredLines: fc.Lines.CoveredLines,
+			TotalLines:   fc.Lines.TotalLines,
+			BadgeClass:   badgeClass,
+		}
+
+		for _, lineNum := range fc.Lines.Lines() {
+			hits := fc.Lines.Hits[lineNum]
+			lineClass := "line-covered"
+			if hits == 0 {
+				lineClass = "line-uncovered"
+			}
+			fileData.Lines = append(fileData.Lines, htmlLineData{
+				Number: lineNum,
+				Hits:   hits,
+				Class:  lineClass,
+			})
+		}
+
+		data.Files = append(data.Files, fileData)
+	}
+
+	return htmlTemplate.Execute(w, data)
+}
+
+var htmlTemplate = template.Must(template.New("coverage").Parse(`<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>%s</title>
+<title>{{.Title}}</title>
 <style>
 :root {
   --bg: #1a1a2e;
@@ -402,7 +478,7 @@ h1 { margin-bottom: 0.5rem; }
   margin-top: 0.5rem;
 }
 .progress-fill {
-  height: 100%%;
+  height: 100%;
   background: var(--covered);
   transition: width 0.3s;
 }
@@ -466,94 +542,49 @@ h1 { margin-bottom: 0.5rem; }
 </head>
 <body>
 <div class="container">
-<h1>%s</h1>
-`, title, title)
-
-	// Summary section
-	pct := report.Percentage()
-
-	writef(w, `<div class="summary">
-<div class="stat">
-  <div class="stat-value">%.1f%%</div>
-  <div class="stat-label">Line Coverage</div>
-  <div class="progress-bar"><div class="progress-fill" style="width: %.1f%%"></div></div>
-</div>
-<div class="stat">
-  <div class="stat-value">%d</div>
-  <div class="stat-label">Lines Covered</div>
-</div>
-<div class="stat">
-  <div class="stat-value">%d</div>
-  <div class="stat-label">Total Lines</div>
-</div>
-<div class="stat">
-  <div class="stat-value">%d</div>
-  <div class="stat-label">Files</div>
-</div>
-</div>
-`, pct, pct, report.CoveredLines, report.TotalLines, len(report.Files))
-
-	// Files section
-	writef(w, `<div class="files">
-`)
-
-	for _, path := range report.FilePaths() {
-		fc := report.Files[path]
-		filePct := fc.Lines.Percentage()
-		fileBadgeClass := "badge-good"
-		if filePct < 50 {
-			fileBadgeClass = "badge-bad"
-		} else if filePct < 80 {
-			fileBadgeClass = "badge-warn"
-		}
-
-		writef(w, `<div class="file">
-<div class="file-header" onclick="this.parentElement.classList.toggle('open')">
-  <span class="file-name">%s</span>
-  <div class="file-stats">
-    <span>%d/%d lines</span>
-    <span class="badge %s">%.1f%%</span>
+<h1>{{.Title}}</h1>
+<div class="summary">
+  <div class="stat">
+    <div class="stat-value">{{printf "%.1f" .Percentage}}%</div>
+    <div class="stat-label">Line Coverage</div>
+    <div class="progress-bar"><div class="progress-fill" style="width: {{printf "%.1f" .Percentage}}%"></div></div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">{{.CoveredLines}}</div>
+    <div class="stat-label">Lines Covered</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">{{.TotalLines}}</div>
+    <div class="stat-label">Total Lines</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">{{.FileCount}}</div>
+    <div class="stat-label">Files</div>
   </div>
 </div>
-<div class="file-lines">
-`, htmlEscape(path), fc.Lines.CoveredLines, fc.Lines.TotalLines, fileBadgeClass, filePct)
-
-		// Write line coverage
-		lines := fc.Lines.Lines()
-		for _, lineNum := range lines {
-			hits := fc.Lines.Hits[lineNum]
-			lineClass := "line-covered"
-			if hits == 0 {
-				lineClass = "line-uncovered"
-			}
-			writef(w, `<div class="line %s"><span class="line-num">%d</span><span class="line-hits">%dx</span></div>
-`, lineClass, lineNum, hits)
-		}
-
-		writef(w, `</div>
+<div class="files">
+{{range .Files}}
+  <div class="file">
+    <div class="file-header" onclick="this.parentElement.classList.toggle('open')">
+      <span class="file-name">{{.Path}}</span>
+      <div class="file-stats">
+        <span>{{.CoveredLines}}/{{.TotalLines}} lines</span>
+        <span class="badge {{.BadgeClass}}">{{printf "%.1f" .Percentage}}%</span>
+      </div>
+    </div>
+    <div class="file-lines">
+{{range .Lines}}
+      <div class="line {{.Class}}"><span class="line-num">{{.Number}}</span><span class="line-hits">{{.Hits}}x</span></div>
+{{end}}
+    </div>
+  </div>
+{{end}}
 </div>
-`)
-	}
-
-	// Footer
-	writef(w, `</div>
-<div class="timestamp">Generated: %s</div>
+<div class="timestamp">Generated: {{.Timestamp}}</div>
 </div>
 </body>
 </html>
-`, time.Now().Format(time.RFC1123))
-
-	return nil
-}
-
-// htmlEscape escapes HTML special characters.
-func htmlEscape(s string) string {
-	s = strings.ReplaceAll(s, "&", "&amp;")
-	s = strings.ReplaceAll(s, "<", "&lt;")
-	s = strings.ReplaceAll(s, ">", "&gt;")
-	s = strings.ReplaceAll(s, "\"", "&quot;")
-	return s
-}
+`))
 
 // -----------------------------------------------------------------------------
 // LCOV Reporter
