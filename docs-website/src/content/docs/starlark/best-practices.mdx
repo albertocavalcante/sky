@@ -15,7 +15,7 @@ Starlark uses garbage collection, but GC only runs between top-level statementsâ
 
 ### Avoid Allocations in Loops
 
-```python
+```starlark
 # Bad: allocates memory on every iteration
 for target in huge_target_list:
     result = memory_intensive_function(x, y)
@@ -29,7 +29,7 @@ for target in huge_target_list:
 
 ### Process Data Incrementally
 
-```python
+```starlark
 # Bad: stores all targets in memory
 targets = generate_all_targets(n)
 for target in targets:
@@ -45,7 +45,7 @@ for i in range(n):
 
 These methods allocate a new list on every call:
 
-```python
+```starlark
 # Bad: allocates a new list each iteration if called in loop
 for key, value in config.items():  # Allocates!
     process(key, value)
@@ -58,7 +58,7 @@ for key, value in items:
 
 ### Avoid Large Data Structures
 
-```python
+```starlark
 # Bad: creates a billion-element list
 million = [1 for i in range(1 << 20)]
 billion = million * (1 << 10)  # 1GB+ memory!
@@ -73,7 +73,7 @@ def process_range(start, end):
 
 ### Use Early Returns
 
-```python
+```starlark
 # Bad: processes all items even when one fails
 def validate_all(items):
     errors = []
@@ -92,7 +92,7 @@ def validate_all(items):
 
 ### Prefer Dictionaries for Lookups
 
-```python
+```starlark
 # Bad: O(n) lookup
 def find_by_name(items, name):
     for item in items:
@@ -108,7 +108,7 @@ def find_by_name(name):
 
 ### Cache Repeated Computations
 
-```python
+```starlark
 # Bad: recomputes on every call
 def get_config():
     return expensive_computation()
@@ -129,7 +129,7 @@ for target in targets:
 
 Build files (BUCK, BUILD.bazel) should be declarative:
 
-```python
+```starlark
 # Good: simple, declarative
 python_library(
     name = "mylib",
@@ -147,7 +147,7 @@ python_library(
 
 Complex logic belongs in separate `.bzl` files:
 
-```python
+```starlark
 # macros.bzl
 def my_python_library(name, srcs, deps = []):
     """Wrapper with team defaults."""
@@ -159,7 +159,7 @@ def my_python_library(name, srcs, deps = []):
     )
 ```
 
-```python
+```starlark
 # BUCK or BUILD.bazel
 load("//tools:macros.bzl", "my_python_library")
 
@@ -171,7 +171,7 @@ my_python_library(
 
 ### Use Descriptive Names
 
-```python
+```starlark
 # Bad
 def f(x, y):
     return x + y
@@ -185,7 +185,7 @@ def calculate_total_size(file_sizes, overhead_bytes):
 
 ### Use print() Strategically
 
-```python
+```starlark
 def process_targets(targets):
     print("Processing {} targets".format(len(targets)))
     for i, target in enumerate(targets):
@@ -196,8 +196,12 @@ def process_targets(targets):
 
 ### Validate Inputs Early
 
-```python
-def create_library(name, srcs, deps = []):
+```starlark
+def create_library(name, srcs, deps = None):
+    # Initialize mutable default
+    if deps == None:
+        deps = []
+
     # Validate early
     if not name:
         fail("name is required")

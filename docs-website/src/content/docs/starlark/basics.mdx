@@ -13,7 +13,7 @@ A quick tour of Starlark syntax and features.
 
 ### Primitives
 
-```python
+```starlark
 # Numbers
 count = 42
 pi = 3.14159
@@ -35,7 +35,7 @@ empty = None
 
 ### Collections
 
-```python
+```starlark
 # Lists (mutable until frozen)
 fruits = ["apple", "banana", "cherry"]
 fruits.append("date")
@@ -58,7 +58,7 @@ unique = {x: True for x in [1, 2, 2, 3]}.keys()  # [1, 2, 3]
 
 ### Basic Functions
 
-```python
+```starlark
 def add(x, y):
     return x + y
 
@@ -67,7 +67,7 @@ result = add(2, 3)  # 5
 
 ### Named Arguments
 
-```python
+```starlark
 def greet(name, greeting="Hello"):
     return "{}, {}!".format(greeting, name)
 
@@ -78,7 +78,7 @@ greet(greeting="Hey", name="You")  # Hey, You!
 
 ### Variadic Functions
 
-```python
+```starlark
 # *args - positional arguments
 def sum_all(*numbers):
     total = 0
@@ -99,7 +99,7 @@ configure(debug=True, verbose=False)  # {"debug": True, "verbose": False}
 
 ### Conditionals
 
-```python
+```starlark
 def classify(age):
     if age < 13:
         return "child"
@@ -111,7 +111,7 @@ def classify(age):
 
 ### For Loops
 
-```python
+```starlark
 # Iterate over list
 for fruit in ["apple", "banana"]:
     print(fruit)
@@ -135,7 +135,7 @@ Starlark has no `while` loops to prevent infinite execution. Use `for` with `ran
 
 ## Comprehensions
 
-```python
+```starlark
 # List comprehension
 squares = [x * x for x in range(5)]  # [0, 1, 4, 9, 16]
 
@@ -149,7 +149,7 @@ word_lengths = {word: len(word) for word in ["hello", "world"]}
 
 ## String Operations
 
-```python
+```starlark
 name = "Starlark"
 
 # Methods
@@ -169,7 +169,7 @@ name.replace("ark", "fish")  # "Starlfish"
 
 ## Loading Modules
 
-```python
+```starlark
 # Load symbols from another file
 load("//lib:utils.star", "helper", "CONSTANT")
 
@@ -190,7 +190,7 @@ Unlike Python's `import`, Starlark's `load()` executes at parse time and only im
 
 Starlark doesn't have classes, but you can use structs for structured data:
 
-```python
+```starlark
 # Create a struct constructor
 def make_person(name, age):
     return struct(
@@ -208,7 +208,7 @@ print(alice.is_adult)  # True
 
 In Bazel rules, providers are the standard way to pass information:
 
-```python
+```starlark
 MyInfo = provider(fields = ["value", "files"])
 
 def _my_rule_impl(ctx):

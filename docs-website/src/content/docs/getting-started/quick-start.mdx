@@ -15,7 +15,7 @@ go install github.com/albertocavalcante/sky/cmd/...@latest
 
 ## 2. Create a Starlark File
 
-```python title="hello.star"
+```starlark title="hello.star"
 def greet(name):
     """Greet someone by name."""
     return "Hello, " + name + "!"
@@ -38,7 +38,7 @@ skylint hello.star
 
 ## 5. Create a Test
 
-```python title="hello_test.star"
+```starlark title="hello_test.star"
 load("hello.star", "greet")
 
 def test_greet():
