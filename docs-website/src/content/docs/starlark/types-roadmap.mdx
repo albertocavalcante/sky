@@ -1,0 +1,263 @@
+---
+title: Type System Roadmap
+description: Evolution of Starlark's type system across implementations
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+# Type System Roadmap
+
+Starlark's type system is evolving. This page tracks the current state and future direction across implementations.
+
+## Current State
+
+### starlark-rust (Most Advanced)
+
+Meta's Rust implementation has the most complete type system:
+
+```starlark
+# Full type annotations
+def process(items: list[str], count: int) -> dict[str, int]:
+    result = {}
+    for item in items[:count]:
+        result[item] = len(item)
+    return result
+
+# Record types
+Config = record(
+    name = str,
+    value = int,
+    tags = field(list[str], []),
+)
+
+# Enum types
+Status = enum("pending", "active", "done")
+
+# Union types
+def handle(input: str | int) -> str:
+    return str(input)
+```
+
+**Available now:**
+- ✅ Function parameter and return types
+- ✅ Generic types (`list[T]`, `dict[K, V]`)
+- ✅ Union types (`A | B`)
+- ✅ `record` for structured data
+- ✅ `enum` for constrained values
+- ✅ `typing` module (`Any`, `Callable`, `Iterable`)
+
+**Experimental:**
+- ⚠️ Static type checking (compile-time)
+- ⚠️ Type inference
+
+### starlark-go (Basic Support)
+
+Google's Go implementation supports basic annotations:
+
+```starlark
+# Basic type hints (documentation only in most cases)
+def add(x: int, y: int) -> int:
+    return x + y
+
+# No record/enum support
+# Use dicts instead
+config = {"name": "test", "value": 42}
+```
+
+**Available now:**
+- ✅ Basic type annotations (syntax support)
+- ✅ Some runtime type checking
+
+**Not available:**
+- ❌ `record` type
+- ❌ `enum` type
+- ❌ Union types
+- ❌ Generic type checking
+
+### starlark-java (Work in Progress)
+
+Bazel's Java implementation is actively developing static types:
+
+```starlark
+# Proposed (not yet implemented)
+def my_rule_impl(ctx: ctx) -> list[Provider]:
+    ...
+```
+
+**Tracking:** [bazelbuild/bazel#27370](https://github.com/bazelbuild/bazel/issues/27370)
+
+## Specification Process
+
+<Steps>
+
+1. **Proposal**
+
+   New type features are proposed on [bazelbuild/starlark](https://github.com/bazelbuild/starlark)
+
+2. **Discussion**
+
+   Maintainers from all implementations discuss feasibility and design
+
+3. **Specification Update**
+
+   Accepted features are added to the [spec](https://github.com/bazelbuild/starlark/blob/master/spec.md)
+
+4. **Implementation**
+
+   Each implementation adds support at their own pace
+
+</Steps>
+
+<Aside type="note">
+Type annotations were requested in starlark-go [#610](https://github.com/google/starlark-go/issues/610) but redirected to the spec repo [#106](https://github.com/bazelbuild/starlark/issues/106) for cross-implementation design.
+</Aside>
+
+## Future Directions
+
+### Static Type Checking
+
+The biggest upcoming change is compile-time type verification:
+
+```starlark
+# With static types, this error is caught before execution
+def greet(name: str) -> str:
+    return "Hello, " + name
+
+greet(42)  # Error: expected str, got int
+```
+
+**Benefits:**
+- Catch errors earlier in development
+- Better IDE support (completion, refactoring)
+- Documentation through types
+- Performance optimizations
+
+**Challenges:**
+- Maintaining Starlark's simplicity
+- Backwards compatibility with untyped code
+- Cross-implementation consistency
+
+### Gradual Typing
+
+The likely path forward is gradual typing:
+
+```starlark
+# Fully typed function
+def typed_function(x: int) -> int:
+    return x * 2
+
+# Untyped function (still valid)
+def untyped_function(x):
+    return x * 2
+
+# Mixed: typed functions can call untyped ones
+result = typed_function(untyped_function(5))
+```
+
+This allows:
+- Incremental adoption
+- Legacy code compatibility
+- Opt-in strictness
+
+### Protocol Types
+
+Similar to Python's protocols for structural typing:
+
+```starlark
+# Hypothetical future syntax
+Printable = protocol(
+    to_string = typing.Callable[[], str],
+)
+
+def print_all(items: list[Printable]) -> None:
+    for item in items:
+        print(item.to_string())
+```
+
+### Type Aliases
+
+For complex type definitions:
+
+```starlark
+# Hypothetical future syntax
+StringMap = dict[str, str]
+Callback = typing.Callable[[int], str]
+
+def process(data: StringMap, handler: Callback) -> None:
+    ...
+```
+
+## Writing Future-Proof Code
+
+### Do: Use Available Types
+
+```starlark
+# Good: Types work across implementations
+def calculate(values: list[int]) -> int:
+    total = 0
+    for v in values:
+        total += v
+    return total
+```
+
+### Do: Encapsulate Implementation-Specific Features
+
+```starlark
+# If using starlark-rust records, isolate them
+# config_types.star (starlark-rust only)
+Config = record(name=str, value=int)
+
+def make_config(name: str, value: int) -> Config:
+    return Config(name=name, value=value)
+```
+
+### Don't: Mix Untyped and Typed Inconsistently
+
+```starlark
+# Avoid: Partial typing is confusing
+def process(data, count: int):  # data untyped, count typed
+    ...
+
+# Better: All typed or all untyped
+def process(data: dict[str, str], count: int) -> list[str]:
+    ...
+```
+
+### Don't: Depend on Runtime Type Checking
+
+```starlark
+# Avoid: Relying on type errors at runtime
+def risky(x: int) -> int:
+    return x * 2
+
+try:
+    risky("not an int")  # May not error in all implementations
+except:
+    ...
+
+# Better: Explicit validation
+def safe(x) -> int:
+    if type(x) != "int":
+        fail("expected int, got " + type(x))
+    return x * 2
+```
+
+## Implementation Timeline
+
+| Feature | starlark-rust | starlark-go | starlark-java |
+|---------|---------------|-------------|---------------|
+| Basic annotations | ✅ Now | ✅ Now | ✅ Now |
+| Runtime checking | ✅ Now | ⚠️ Partial | ⚠️ Partial |
+| Records/Enums | ✅ Now | ❌ N/A | ❌ N/A |
+| Static checking | ⚠️ Experimental | ❓ Unknown | 🔜 In Progress |
+
+<Aside type="caution">
+Timeline estimates are unofficial. Check implementation repositories for current status.
+</Aside>
+
+## Resources
+
+- [Starlark Specification](https://github.com/bazelbuild/starlark/blob/master/spec.md)
+- [Type Discussion #106](https://github.com/bazelbuild/starlark/issues/106)
+- [Bazel Static Types #27370](https://github.com/bazelbuild/bazel/issues/27370)
+- [starlark-rust Types](https://github.com/facebook/starlark-rust/blob/main/docs/types.md)

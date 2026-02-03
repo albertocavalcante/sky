@@ -1,0 +1,424 @@
+---
+title: Tooling & IDE Support
+description: Language servers, debuggers, and IDE integrations for Starlark
+---
+
+import { Aside, Tabs, TabItem, Card, CardGrid, Steps } from '@astrojs/starlight/components';
+
+# Starlark Tooling
+
+Developer tools for writing, debugging, and maintaining Starlark code.
+
+## Language Servers (LSP)
+
+Language servers provide IDE features like completion, diagnostics, and navigation.
+
+### Starpls
+
+[Starpls](https://github.com/withered-magic/starpls) is a standalone Starlark language server.
+
+**Features:**
+- Code completion
+- Go to definition
+- Find references
+- Hover documentation
+- Diagnostics
+
+**Installation:**
+
+<Tabs>
+  <TabItem label="Homebrew">
+```bash
+brew install starpls
+```
+  </TabItem>
+  <TabItem label="Cargo">
+```bash
+cargo install starpls
+```
+  </TabItem>
+  <TabItem label="Binary">
+Download from [GitHub Releases](https://github.com/withered-magic/starpls/releases)
+  </TabItem>
+</Tabs>
+
+**VS Code Setup:**
+
+1. Install the [Starpls extension](https://marketplace.visualstudio.com/items?itemName=withered-magic.starpls-vscode)
+2. Configure in settings:
+
+```json
+{
+  "starpls.server.path": "/path/to/starpls"
+}
+```
+
+### Buck2 LSP
+
+Buck2 includes a built-in language server for its Starlark dialect.
+
+```bash
+buck2 lsp
+```
+
+**Features:**
+- Full Buck2 API completion
+- Target navigation
+- Provider documentation
+- BXL support
+
+**VS Code Setup:**
+
+```json
+{
+  "starlark.lsp.path": "buck2",
+  "starlark.lsp.args": ["lsp"]
+}
+```
+
+### Bazel Starlark LSP
+
+For Bazel, use [bazel-lsp](https://github.com/ApollosProject/starlark-lsp) or configure Starpls with Bazel builtins.
+
+## Debugging (DAP)
+
+### Buck2 DAP
+
+Buck2 provides Debug Adapter Protocol support for stepping through Starlark:
+
+```bash
+buck2 starlark debug-attach
+```
+
+**Features:**
+- Breakpoints
+- Step in/out/over
+- Variable inspection
+- Call stack viewing
+
+**VS Code launch.json:**
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "buck2-starlark",
+      "request": "attach",
+      "name": "Attach to Buck2 Starlark",
+      "port": 4567
+    }
+  ]
+}
+```
+
+<Aside type="note">
+DAP support is primarily available in starlark-rust. Other implementations may require print-based debugging.
+</Aside>
+
+## IDE Extensions
+
+### Visual Studio Code
+
+<CardGrid>
+  <Card title="Starpls" icon="seti:code">
+    General Starlark support
+
+    [Install](https://marketplace.visualstudio.com/items?itemName=withered-magic.starpls-vscode)
+  </Card>
+
+  <Card title="Bazel" icon="seti:bazel">
+    Bazel BUILD file support
+
+    [Install](https://marketplace.visualstudio.com/items?itemName=BazelBuild.vscode-bazel)
+  </Card>
+
+  <Card title="Buck2" icon="seti:code">
+    Buck2 integration
+
+    [Install](https://marketplace.visualstudio.com/items?itemName=nicholasyang.buck2)
+  </Card>
+
+  <Card title="Kurtosis" icon="seti:code">
+    Kurtosis Starlark
+
+    [Install](https://marketplace.visualstudio.com/items?itemName=Kurtosis.kurtosis-extension)
+  </Card>
+</CardGrid>
+
+### JetBrains IDEs
+
+| Plugin | IDE | Features |
+|--------|-----|----------|
+| [Bazel](https://plugins.jetbrains.com/plugin/8609-bazel) | IntelliJ, CLion | BUILD syntax, completion |
+| [Buck](https://plugins.jetbrains.com/plugin/7826-buck-for-idea) | IntelliJ | Buck file support |
+
+### Neovim
+
+Using nvim-lspconfig:
+
+```lua
+require('lspconfig').starpls.setup({
+  cmd = { 'starpls' },
+  filetypes = { 'starlark', 'bzl', 'star' },
+})
+```
+
+Or with Mason:
+
+```lua
+require('mason-lspconfig').setup({
+  ensure_installed = { 'starpls' },
+})
+```
+
+## Formatters
+
+### Buildifier
+
+The official formatter for Bazel BUILD files:
+
+```bash
+# Install
+go install github.com/bazelbuild/buildtools/buildifier@latest
+
+# Format
+buildifier -r .
+
+# Check only
+buildifier -mode=check -r .
+```
+
+**Configuration (.buildifier.json):**
+
+```json
+{
+  "version": "6.0.0",
+  "lint": "warn",
+  "warnings": ["attr-cfg", "attr-license"]
+}
+```
+
+### Sky Formatter
+
+Sky includes a Starlark formatter:
+
+```bash
+sky fmt path/to/file.star
+sky fmt --check .  # Check without modifying
+```
+
+## Linters
+
+### Buildifier Lint
+
+Buildifier includes lint checks:
+
+```bash
+buildifier -lint=warn path/to/BUILD.bazel
+```
+
+Common warnings:
+- `load-on-top` - Load statements should be first
+- `same-origin-load` - Combine loads from same file
+- `unused-variable` - Remove unused variables
+
+### Sky Lint
+
+Sky provides additional Starlark-specific checks:
+
+```bash
+sky lint path/to/file.star
+```
+
+Checks include:
+- Unused imports and variables
+- Naming conventions
+- Performance issues
+- Security concerns
+
+## Testing
+
+### Skytest
+
+Sky's test runner:
+
+```bash
+sky test path/to/test.star
+```
+
+**Test file format:**
+
+```starlark
+# test_math.star
+
+load("math.star", "add", "multiply")
+
+def test_add():
+    assert_eq(add(1, 2), 3)
+    assert_eq(add(-1, 1), 0)
+
+def test_multiply():
+    assert_eq(multiply(2, 3), 6)
+    assert_eq(multiply(0, 5), 0)
+```
+
+### unittest.bzl
+
+Bazel Skylib testing for Bazel rules:
+
+```starlark
+load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
+
+def _add_test_impl(ctx):
+    env = unittest.begin(ctx)
+    asserts.equals(env, 3, add(1, 2))
+    return unittest.end(env)
+
+add_test = unittest.make(_add_test_impl)
+```
+
+## REPL
+
+### Sky REPL
+
+Interactive Starlark shell:
+
+```bash
+sky repl
+```
+
+```
+>>> x = [1, 2, 3]
+>>> [i * 2 for i in x]
+[2, 4, 6]
+>>> def greet(name):
+...     return "Hello, " + name
+...
+>>> greet("World")
+"Hello, World"
+```
+
+### starlark-go REPL
+
+```bash
+go run go.starlark.net/cmd/starlark
+```
+
+### Buck2 REPL
+
+```bash
+buck2 starlark repl
+```
+
+## Documentation Generators
+
+### Stardoc
+
+Bazel's documentation generator:
+
+```starlark
+# BUILD.bazel
+load("@io_bazel_stardoc//stardoc:stardoc.bzl", "stardoc")
+
+stardoc(
+    name = "my_rules_docs",
+    input = "my_rules.bzl",
+    out = "my_rules.md",
+)
+```
+
+### Sky Doc
+
+Sky's documentation generator:
+
+```bash
+sky doc path/to/module.star -o docs/
+```
+
+Generates markdown from docstrings:
+
+```starlark
+def build_target(name, srcs, deps = []):
+    """Creates a build target.
+
+    Args:
+        name: Target name (must be unique)
+        srcs: Source files to compile
+        deps: Optional dependencies
+
+    Returns:
+        A target object
+    """
+    ...
+```
+
+## Recommended Setup
+
+<Steps>
+
+1. **Install Starpls**
+
+   ```bash
+   brew install starpls
+   ```
+
+2. **Configure VS Code**
+
+   Install Starpls extension and configure:
+   ```json
+   {
+     "starpls.server.path": "starpls",
+     "files.associations": {
+       "*.star": "starlark",
+       "*.bzl": "starlark",
+       "BUILD": "starlark",
+       "WORKSPACE": "starlark"
+     }
+   }
+   ```
+
+3. **Install Buildifier**
+
+   ```bash
+   go install github.com/bazelbuild/buildtools/buildifier@latest
+   ```
+
+4. **Configure Format on Save**
+
+   ```json
+   {
+     "[starlark]": {
+       "editor.formatOnSave": true,
+       "editor.defaultFormatter": "BazelBuild.vscode-bazel"
+     }
+   }
+   ```
+
+5. **Set Up Pre-commit Hook**
+
+   ```yaml
+   # .pre-commit-config.yaml
+   repos:
+     - repo: https://github.com/keith/pre-commit-buildifier
+       rev: 6.4.0
+       hooks:
+         - id: buildifier
+         - id: buildifier-lint
+   ```
+
+</Steps>
+
+## Tooling Comparison
+
+| Tool | starlark-rust | starlark-go | starlark-java |
+|------|---------------|-------------|---------------|
+| LSP | ✅ Built-in | ⚠️ Starpls | ⚠️ Starpls |
+| DAP | ✅ Built-in | ❌ | ❌ |
+| REPL | ✅ | ✅ | ❌ |
+| Formatter | ✅ Buildifier | ✅ Buildifier | ✅ Buildifier |
+| Linter | ✅ Buildifier | ✅ Buildifier | ✅ Buildifier |
+
+<Aside type="tip">
+For the best development experience, use starlark-rust with Buck2 or combine Starpls with Buildifier for other implementations.
+</Aside>

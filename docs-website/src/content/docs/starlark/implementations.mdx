@@ -1,0 +1,189 @@
+---
+title: Implementations
+description: Compare Starlark implementations across Go, Rust, and Java
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+# Starlark Implementations
+
+Starlark has three major implementations, each with different strengths. This guide helps you choose the right one for your project.
+
+## Feature Comparison
+
+| Feature | starlark-go | starlark-rust (Buck2) | starlark-java (Bazel) |
+|---------|-------------|----------------------|----------------------|
+| **Language** | Go | Rust | Java |
+| **Maintainer** | Google | Meta | Bazel team |
+| **Type annotations** | ✅ Basic | ✅ Full | ✅ via Java |
+| **`record` type** | ❌ | ✅ | ❌ |
+| **`enum` type** | ❌ | ✅ | ❌ |
+| **Union types** | ❌ | ✅ | ❌ |
+| **LSP support** | ❌ | ✅ | ❌ |
+| **DAP debugging** | ❌ | ✅ | ❌ |
+| **Static analysis** | ⚠️ Limited | ✅ Experimental | ⚠️ WIP |
+| **REPL** | ✅ | ✅ | ❌ |
+| **Profiling** | ✅ | ✅ | ✅ |
+
+## starlark-go
+
+Google's reference implementation in Go. Best for embedding in Go applications.
+
+```bash
+go get go.starlark.net/starlark
+```
+
+### Strengths
+
+- **Simple API** - Easy to embed in Go projects
+- **Stable** - Well-tested, production-ready
+- **Lightweight** - Small binary size
+- **Good documentation** - Clear examples and guides
+
+### Limitations
+
+- No advanced type features (records, enums)
+- No built-in LSP or debugging
+- Limited static analysis
+
+### Example: Embedding
+
+```go
+package main
+
+import (
+    "fmt"
+    "go.starlark.net/starlark"
+)
+
+func main() {
+    thread := &starlark.Thread{Name: "main"}
+    globals, _ := starlark.ExecFile(thread, "config.star", nil, nil)
+
+    if v, ok := globals["message"]; ok {
+        fmt.Println(v)
+    }
+}
+```
+
+<Aside type="tip">
+For Go projects needing advanced features, see [starlark-go-x](https://github.com/albertocavalcante/starlark-go-x) - an enhanced fork with additional builtins.
+</Aside>
+
+## starlark-rust
+
+Meta's implementation in Rust. Powers Buck2 and has the most advanced type system.
+
+```bash
+# Add to Cargo.toml
+starlark = "0.12"
+```
+
+### Strengths
+
+- **Rich type system** - Records, enums, union types
+- **Developer tools** - Built-in LSP and DAP
+- **Performance** - Optimized for large codebases
+- **Static analysis** - Experimental type checking
+
+### Limitations
+
+- More complex API than Go version
+- Rust ecosystem required
+- Heavier dependency
+
+### Example: Type-safe Code
+
+```starlark
+# Works in starlark-rust
+BuildConfig = record(
+    name = str,
+    srcs = list[str],
+    deps = field(list[str], []),
+)
+
+Status = enum("debug", "release")
+
+def build(config: BuildConfig, mode: Status) -> str:
+    return "{}-{}".format(config.name, mode.value)
+```
+
+### LSP Features
+
+The starlark-rust LSP provides:
+- Code completion
+- Go to definition
+- Hover documentation
+- Diagnostics
+- Signature help
+
+## starlark-java
+
+Bazel's native implementation. Tightly integrated with the Bazel build system.
+
+### Strengths
+
+- **Bazel integration** - Native to Bazel's rule system
+- **Java interop** - Easy to add Java-based builtins
+- **Mature** - Powers Bazel's entire rule ecosystem
+
+### Limitations
+
+- Primarily designed for Bazel
+- JVM dependency
+- Less portable than Go/Rust versions
+
+### Type System
+
+Bazel is working on static types (Issue [#27370](https://github.com/bazelbuild/bazel/issues/27370)):
+
+```starlark
+# Proposed syntax for Bazel static types
+def my_rule_impl(ctx: ctx) -> list[Provider]:
+    ...
+```
+
+<Aside type="note">
+Java annotations can expose type information to IDE tooling, providing some type checking benefits even without full static types.
+</Aside>
+
+## Choosing an Implementation
+
+### Use starlark-go when:
+
+- Building a Go application
+- Need simple embedding
+- Want minimal dependencies
+- Targeting lightweight deployments
+
+### Use starlark-rust when:
+
+- Building with Rust or need best performance
+- Need advanced type features (records, enums)
+- Want built-in LSP/DAP support
+- Building a build system like Buck2
+
+### Use starlark-java when:
+
+- Working within Bazel ecosystem
+- Need Java interoperability
+- Building Bazel rules or extensions
+
+## Specification Compliance
+
+All implementations follow the [Starlark specification](https://github.com/bazelbuild/starlark/blob/master/spec.md). Language changes are decided at the spec level, not by individual implementations.
+
+<Aside type="caution">
+Features like `record` and `enum` are implementation-specific extensions, not part of the core spec. Code using them is not portable across implementations.
+</Aside>
+
+## Feature Request Process
+
+To propose new Starlark language features:
+
+1. Open an issue on [bazelbuild/starlark](https://github.com/bazelbuild/starlark)
+2. Discuss with maintainers from all implementations
+3. If accepted, update the specification
+4. Implementations add support
+
+Example: Type annotations were requested via starlark-go [#610](https://github.com/google/starlark-go/issues/610), but redirected to the spec repo [#106](https://github.com/bazelbuild/starlark/issues/106) for cross-implementation discussion.
