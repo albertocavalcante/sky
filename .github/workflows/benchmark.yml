@@ -6,7 +6,6 @@ on:
       - main
       - trunk
     paths:
-      - "starlark-go-x/**"
       - "internal/starlark/**"
       - ".github/workflows/benchmark.yml"
   pull_request:
@@ -14,8 +13,8 @@ on:
       - main
       - trunk
     paths:
-      - "starlark-go-x/**"
       - "internal/starlark/**"
+      - ".github/workflows/benchmark.yml"
   workflow_dispatch:
     inputs:
       compare_upstream:
@@ -47,6 +46,14 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+          path: sky
+
+      # Clone starlark-go-x (required for go.mod replace directive)
+      - name: Clone starlark-go-x
+        run: |
+          git clone --depth=1 --branch trunk https://github.com/albertocavalcante/starlark-go-x.git starlark-go-x
+          # Also clone coverage-hooks branch for Sky's replace directive
+          git clone --depth=1 --branch coverage-hooks https://github.com/albertocavalcante/starlark-go-x.git starlark-go-x-coverage
 
       # actions/setup-go v6.2.0
       - name: Setup Go
@@ -55,23 +62,31 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
           cache-dependency-path: |
-            go.sum
-            starlark-go-x/trunk/go.sum
+            sky/go.sum
+            starlark-go-x/go.sum
 
       - name: Verify Go version
         run: go version
+
+      # Fix replace directive to point to CI paths
+      - name: Fix go.mod replace directive
+        working-directory: sky
+        run: |
+          sed -i 's|../../starlark-go-x/coverage-hooks|../starlark-go-x-coverage|g' go.mod
+          cat go.mod | grep replace
 
       # ----------------------------------------------------------------------
       # Benchmark starlark-go-x trunk
       # ----------------------------------------------------------------------
       - name: Run starlark-go-x benchmarks
-        working-directory: starlark-go-x/trunk
+        working-directory: starlark-go-x
         run: |
-          echo "=== Benchmarking starlark-go-x (hooks=nil) ==="
+          echo "=== Benchmarking starlark-go-x trunk (hooks=nil) ==="
           go test -bench=. -benchmem -count=${{ env.BENCHMARK_COUNT }} ./starlark/... | tee ${{ runner.temp }}/starlark-bench.txt
           go test -bench=. -benchmem -count=${{ env.BENCHMARK_COUNT }} ./syntax/... | tee -a ${{ runner.temp }}/starlark-bench.txt
 
       - name: Run Sky internal benchmarks
+        working-directory: sky
         run: |
           echo "=== Benchmarking Sky internal/starlark ==="
           go test -bench=. -benchmem -count=${{ env.BENCHMARK_COUNT }} ./internal/starlark/... | tee ${{ runner.temp }}/sky-bench.txt
@@ -115,7 +130,7 @@ jobs:
       contents: read
 
     steps:
-      # actions/checkout v6.0.1
+      # actions/checkout v6.0.1 (not needed for compare, but keep for consistency)
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
         with:
           fetch-depth: 1
@@ -146,12 +161,16 @@ jobs:
           go test -bench=. -benchmem -count=${{ env.BENCHMARK_COUNT }} ./syntax/... | tee -a ${{ runner.temp }}/upstream.txt
 
       # ----------------------------------------------------------------------
-      # Benchmark starlark-go-x
+      # Clone and benchmark starlark-go-x
       # ----------------------------------------------------------------------
-      - name: Benchmark starlark-go-x
-        working-directory: starlark-go-x/trunk
+      - name: Clone starlark-go-x
         run: |
-          echo "=== Benchmarking starlark-go-x (hooks=nil) ==="
+          git clone --depth=1 --branch trunk https://github.com/albertocavalcante/starlark-go-x.git ${{ runner.temp }}/starlark-go-x
+
+      - name: Benchmark starlark-go-x
+        working-directory: ${{ runner.temp }}/starlark-go-x
+        run: |
+          echo "=== Benchmarking starlark-go-x trunk (hooks=nil) ==="
           go test -bench=. -benchmem -count=${{ env.BENCHMARK_COUNT }} ./starlark/... | tee ${{ runner.temp }}/starlark-go-x.txt
           go test -bench=. -benchmem -count=${{ env.BENCHMARK_COUNT }} ./syntax/... | tee -a ${{ runner.temp }}/starlark-go-x.txt
 
@@ -204,6 +223,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Clone starlark-go-x for benchmarking
+      - name: Clone starlark-go-x
+        run: |
+          git clone --depth=1 --branch trunk https://github.com/albertocavalcante/starlark-go-x.git ${{ runner.temp }}/starlark-go-x
+
       # actions/setup-go v6.2.0
       - name: Setup Go
         uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
@@ -212,10 +236,10 @@ jobs:
           cache: true
           cache-dependency-path: |
             go.sum
-            starlark-go-x/trunk/go.sum
+            ${{ runner.temp }}/starlark-go-x/go.sum
 
       - name: Run benchmarks
-        working-directory: starlark-go-x/trunk
+        working-directory: ${{ runner.temp }}/starlark-go-x
         run: |
           go test -bench=. -benchmem -count=${{ env.BENCHMARK_COUNT }} ./starlark/... | tee ${{ runner.temp }}/bench.txt
 
