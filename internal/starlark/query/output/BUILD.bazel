@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "output",
+    srcs = ["format.go"],
+    importpath = "github.com/albertocavalcante/sky/internal/starlark/query/output",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "output_test",
+    srcs = ["format_test.go"],
+    embed = [":output"],
+)
