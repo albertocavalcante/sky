@@ -16,11 +16,10 @@ require (
 	google.golang.org/protobuf v1.36.11
 )
 
-// EXPERIMENTAL: Uncomment to enable coverage instrumentation via starlark-go-x OnExec hook.
+// EXPERIMENTAL: Coverage instrumentation via starlark-go-x OnExec hook.
 // This replaces upstream starlark-go with our fork that has the OnExec callback.
-// Once uncommented, also uncomment the hook in internal/starlark/tester/coverage_hook.go
 // TODO(upstream): Remove once OnExec is merged to go.starlark.net
-// replace go.starlark.net => ../../starlark-go-x/coverage-hooks
+replace go.starlark.net => ../../starlark-go-x/coverage-hooks
 
 require (
 	github.com/chzyer/readline v1.5.1 // indirect
