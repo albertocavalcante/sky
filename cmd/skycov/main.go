@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 
 	"github.com/albertocavalcante/sky/internal/starlark/coverage"
 	"github.com/albertocavalcante/sky/internal/version"
@@ -214,8 +215,8 @@ func loadCoverageData(path string) (*coverage.Report, error) {
 	for filePath, fileData := range raw.Files {
 		fc := report.AddFile(filePath)
 		for lineStr, hits := range fileData.Lines {
-			var line int
-			if _, err := fmt.Sscanf(lineStr, "%d", &line); err != nil {
+			line, err := strconv.Atoi(lineStr)
+			if err != nil {
 				continue
 			}
 			fc.Lines.Hits[line] = hits
