@@ -10,6 +10,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/tetratelabs/wazero v1.11.0
 	github.com/timakin/bodyclose v0.0.0-20241222091800-1db5c5ca4d67
+	go.starlark.net v0.0.0-20260102030733-3fee463870c9
 	golang.org/x/tools v0.40.0
 	google.golang.org/protobuf v1.36.11
 )

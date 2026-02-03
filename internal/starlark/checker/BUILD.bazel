@@ -1,0 +1,18 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "checker",
+    srcs = ["checker.go"],
+    importpath = "github.com/albertocavalcante/sky/internal/starlark/checker",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@net_starlark_go//resolve",
+        "@net_starlark_go//syntax",
+    ],
+)
+
+go_test(
+    name = "checker_test",
+    srcs = ["checker_test.go"],
+    embed = [":checker"],
+)
