@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/albertocavalcante/sky/internal/starlark/coverage"
+
 	"go.starlark.net/starlark"
 	"go.starlark.net/syntax"
 )
@@ -106,6 +108,15 @@ type Options struct {
 
 	// Verbose enables verbose output.
 	Verbose bool
+
+	// Coverage enables coverage collection.
+	// EXPERIMENTAL: Requires starlark-go-x with OnExec hook.
+	// TODO(upstream): Remove experimental note once OnExec is merged upstream.
+	Coverage bool
+
+	// CoverageCollector is the collector to use for coverage.
+	// If nil and Coverage is true, a default collector is created.
+	CoverageCollector *coverage.DefaultCollector
 }
 
 // DefaultOptions returns sensible defaults.
@@ -118,7 +129,8 @@ func DefaultOptions() Options {
 
 // Runner executes Starlark tests.
 type Runner struct {
-	opts Options
+	opts     Options
+	coverage *coverage.DefaultCollector
 }
 
 // New creates a new test runner.
@@ -129,7 +141,28 @@ func New(opts Options) *Runner {
 	if opts.Predeclared == nil {
 		opts.Predeclared = make(starlark.StringDict)
 	}
-	return &Runner{opts: opts}
+
+	r := &Runner{opts: opts}
+
+	// Set up coverage collector if enabled
+	if opts.Coverage {
+		if opts.CoverageCollector != nil {
+			r.coverage = opts.CoverageCollector
+		} else {
+			r.coverage = coverage.NewCollector()
+		}
+	}
+
+	return r
+}
+
+// CoverageReport returns the coverage report if coverage is enabled.
+// Returns nil if coverage is disabled.
+func (r *Runner) CoverageReport() *coverage.Report {
+	if r.coverage == nil {
+		return nil
+	}
+	return r.coverage.Report()
 }
 
 // RunFile runs all tests in a single file.
@@ -142,6 +175,12 @@ func (r *Runner) RunFile(filename string, src []byte) (*FileResult, error) {
 
 	// Parse and execute the file
 	thread := &starlark.Thread{Name: filename}
+
+	// EXPERIMENTAL: Enable coverage collection via OnExec hook.
+	// This only works when starlark-go-x replace directive is enabled in go.mod.
+	// TODO(upstream): Simplify once OnExec is merged upstream.
+	r.setupCoverageHook(thread)
+
 	globals, err := starlark.ExecFile(thread, filename, src, predeclared)
 	if err != nil {
 		return nil, fmt.Errorf("executing %s: %w", filename, err)
@@ -211,6 +250,9 @@ func (r *Runner) runSingleTest(
 
 	// Create a fresh thread for this test
 	testThread := &starlark.Thread{Name: name}
+
+	// EXPERIMENTAL: Enable coverage collection for this test thread
+	r.setupCoverageHook(testThread)
 
 	// Run setup if present
 	if setupFn != nil {
