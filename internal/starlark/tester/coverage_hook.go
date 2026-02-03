@@ -27,16 +27,11 @@ func (r *Runner) setupCoverageHook(thread *starlark.Thread) {
 		return
 	}
 
-	// EXPERIMENTAL: Uncomment the following block when using starlark-go-x.
-	// Also uncomment the replace directive in go.mod.
-	// The OnExec callback is invoked before each bytecode instruction.
+	// EXPERIMENTAL: The OnExec callback is invoked before each bytecode instruction.
 	// We use PositionAt(pc) to map the program counter to source location.
-	// TODO(upstream): Remove comments once OnExec is merged to go.starlark.net
-	//
-	// thread.OnExec = func(fn *starlark.Function, pc uint32) {
-	// 	pos := fn.PositionAt(pc)
-	// 	r.coverage.BeforeExec(pos.Filename(), int(pos.Line))
-	// }
-
-	_ = thread // silence unused warning when hook is disabled
+	// TODO(upstream): Remove experimental note once OnExec is merged to go.starlark.net
+	thread.OnExec = func(fn *starlark.Function, pc uint32) {
+		pos := fn.PositionAt(pc)
+		r.coverage.BeforeExec(pos.Filename(), int(pos.Line))
+	}
 }
