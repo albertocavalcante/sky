@@ -18,6 +18,16 @@ export default defineConfig({
 			description: 'A comprehensive toolkit for Starlark development',
 			favicon: '/favicon.svg',
 			lastUpdated: true,
+			defaultLocale: 'root',
+			locales: {
+				root: {
+					label: 'English',
+					lang: 'en',
+				},
+				// Future locales:
+				// pt: { label: 'Português', lang: 'pt' },
+				// es: { label: 'Español', lang: 'es' },
+			},
 			tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 3 },
 			expressiveCode: {
 				themes: ['github-dark', 'github-light'],
