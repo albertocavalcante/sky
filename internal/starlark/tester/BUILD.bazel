@@ -1,0 +1,24 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "tester",
+    srcs = [
+        "assertions.go",
+        "discovery.go",
+        "reporter.go",
+        "tester.go",
+    ],
+    importpath = "github.com/albertocavalcante/sky/internal/starlark/tester",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@net_starlark_go//starlark",
+        "@net_starlark_go//starlarkstruct",
+        "@net_starlark_go//syntax",
+    ],
+)
+
+go_test(
+    name = "tester_test",
+    srcs = ["tester_test.go"],
+    embed = [":tester"],
+)
