@@ -4,25 +4,37 @@
 **Author:** Sky Team
 **Created:** 2026-02-03
 
+## Core Philosophy
+
+**Starlark is the first-class citizen.**
+
+Sky treats Starlark as a language in its own right. Bazel, Buck2, Tilt, and other
+build systems are **dialects** — implementations that extend Starlark with their
+own builtins and conventions.
+
+`skyquery` queries **Starlark code structures**, not "Bazel targets." Dialect-specific
+concepts (like Bazel's targets or Buck2's rules) are layered on top as optional
+extensions.
+
 ## Overview
 
-`skyquery` is a tool for querying and introspecting Starlark source files without
-requiring a build system. It provides `bazel query`-like functionality that works
-directly on source files, making it useful for:
+`skyquery` is a tool for querying and introspecting Starlark source files. It provides:
 
-- Exploring unfamiliar codebases
-- Understanding dependency relationships
-- Finding targets matching specific criteria
-- Extracting structured data from BUILD files
-- CI/CD pipelines that need target information without invoking Bazel
+1. **Universal queries** — Work on any Starlark code (functions, loads, calls, etc.)
+2. **Dialect extensions** — Optional layers for Bazel, Buck2, etc.
+3. **No runtime required** — Pure static analysis of source files
 
-## Design Principles
+### Use Cases
 
-1. **Source-only analysis** - Works directly on files, no build system required
-2. **Fast** - Designed for interactive use and large codebases
-3. **Familiar syntax** - Query language inspired by `bazel query`
-4. **Composable** - Output can be piped to other tools
-5. **Incremental** - Support for caching parsed files (future)
+| Use Case                         | Example                                     |
+| -------------------------------- | ------------------------------------------- |
+| Find all function definitions    | `skyquery 'defs(//...)'`                    |
+| Find all load statements         | `skyquery 'loads(//...)'`                   |
+| What files load a module?        | `skyquery 'loadedby("//lib:utils.sky")'`    |
+| Find all calls to a function     | `skyquery 'calls(http_archive, //...)'`     |
+| Extract string literals          | `skyquery 'strings(//config.star)'`         |
+| **[Bazel dialect]** List targets | `skyquery --dialect=bazel 'targets(//...)'` |
+| **[Buck2 dialect]** List rules   | `skyquery --dialect=buck2 'rules(//...)'`   |
 
 ## Architecture
 
@@ -30,393 +42,360 @@ directly on source files, making it useful for:
 ┌─────────────────────────────────────────────────────────────┐
 │                         skyquery                             │
 ├─────────────────────────────────────────────────────────────┤
-│  CLI Layer (cmd/skyquery)                                   │
-│  - Argument parsing                                          │
-│  - Output formatting (text, json, label)                     │
+│  CLI (cmd/skyquery)                                          │
 ├─────────────────────────────────────────────────────────────┤
-│  Query Engine (internal/starlark/query)                      │
-│  - Query parser                                              │
-│  - Query evaluator                                           │
-│  - Result aggregation                                        │
+│  Dialect Extensions (optional)                               │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐            │
+│  │   Bazel     │ │   Buck2     │ │   Tilt      │  ...       │
+│  │  targets()  │ │   rules()   │ │ resources() │            │
+│  └─────────────┘ └─────────────┘ └─────────────┘            │
 ├─────────────────────────────────────────────────────────────┤
-│  Index (internal/starlark/query/index)                       │
+│  Core Query Engine (internal/starlark/query)                 │
+│  - defs(), loads(), calls(), strings(), etc.                │
+│  - Set operations                                            │
+│  - Pattern matching                                          │
+├─────────────────────────────────────────────────────────────┤
+│  Starlark Index (internal/starlark/query/index)              │
 │  - File discovery                                            │
-│  - Target extraction                                         │
-│  - Dependency graph                                          │
+│  - AST extraction                                            │
+│  - Symbol table                                              │
 ├─────────────────────────────────────────────────────────────┤
 │  Parser (buildtools/build)                                   │
-│  - AST parsing (existing)                                    │
-│  - File classification (existing)                            │
+│  Classifier (internal/starlark/classifier)                   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ## Data Model
 
-### Target
+### File
 
-A target is a rule invocation in a BUILD file:
+A Starlark source file:
 
 ```go
-type Target struct {
-    // Label is the full label (//pkg:name)
-    Label    Label
-    // Kind is the rule type (go_library, cc_binary, etc.)
-    Kind     string
-    // File is the source file path
-    File     string
-    // Line is the line number in the source file
-    Line     int
-    // Attrs contains parsed attributes
-    Attrs    map[string]Attr
+type File struct {
+    Path     string           // Relative path from workspace
+    Kind     filekind.Kind    // BUILD, bzl, star, BUCK, etc.
+    Dialect  dialect.Dialect  // bazel, buck2, starlark, etc.
+    Defs     []Def            // Function definitions
+    Loads    []Load           // Load statements
+    Calls    []Call           // Top-level function calls
+    Assigns  []Assign         // Top-level assignments
 }
 ```
 
-### Label
-
-A label uniquely identifies a target:
+### Def (Function Definition)
 
 ```go
-type Label struct {
-    // Repo is the repository name (empty for main repo)
-    Repo     string
-    // Pkg is the package path (e.g., "internal/starlark/query")
-    Pkg      string
-    // Name is the target name
+type Def struct {
     Name     string
-}
-
-// String returns the canonical label string
-func (l Label) String() string {
-    if l.Repo != "" {
-        return fmt.Sprintf("@%s//%s:%s", l.Repo, l.Pkg, l.Name)
-    }
-    return fmt.Sprintf("//%s:%s", l.Pkg, l.Name)
+    File     string
+    Line     int
+    Params   []Param
+    Docstring string
 }
 ```
 
-### Attribute Types
+### Load (Import Statement)
 
 ```go
-type Attr interface {
-    Kind() AttrKind
+type Load struct {
+    Module   string            // "//lib:utils.bzl" or "@repo//pkg:file.star"
+    Symbols  map[string]string // local_name -> exported_name
+    File     string
+    Line     int
 }
+```
 
-type AttrKind int
+### Call (Function Call)
 
-const (
-    AttrString AttrKind = iota  // "foo"
-    AttrInt                      // 42
-    AttrBool                     // True/False
-    AttrList                     // [a, b, c]
-    AttrDict                     // {"a": 1}
-    AttrLabel                    // "//pkg:target" or ":target"
-    AttrLabelList                // ["//a:b", "//c:d"]
-    AttrGlob                     // glob(["*.go"])
-    AttrSelect                   // select({...})
-    AttrExpr                     // Other expressions (opaque)
-)
+```go
+type Call struct {
+    Function string            // Function name being called
+    Args     []Arg             // Arguments (positional and keyword)
+    File     string
+    Line     int
+}
+```
+
+### Assign (Assignment)
+
+```go
+type Assign struct {
+    Name     string
+    File     string
+    Line     int
+    Value    Expr              // The assigned expression
+}
 ```
 
 ## Query Language
 
-### Basic Expressions
+### Core Queries (All Starlark)
 
-| Expression                  | Description                | Example                           |
-| --------------------------- | -------------------------- | --------------------------------- |
-| `//pkg:target`              | Literal target             | `//cmd/sky:sky`                   |
-| `//pkg:*`                   | All targets in package     | `//internal/...:*`                |
-| `//pkg/...`                 | All packages recursively   | `//internal/...`                  |
-| `kind(pattern, expr)`       | Filter by rule kind        | `kind(go_library, //...)`         |
-| `deps(expr)`                | Direct dependencies        | `deps(//cmd/sky:sky)`             |
-| `rdeps(universe, expr)`     | Reverse dependencies       | `rdeps(//..., //lib:foo)`         |
-| `attr(name, pattern, expr)` | Filter by attribute        | `attr(visibility, public, //...)` |
-| `filter(pattern, expr)`     | Filter labels by regex     | `filter(".*_test", //...)`        |
-| `labels(attr, expr)`        | Extract label-valued attrs | `labels(deps, //cmd/sky:sky)`     |
+These work on **any** Starlark file regardless of dialect:
+
+| Query                | Description                 | Example                        |
+| -------------------- | --------------------------- | ------------------------------ |
+| `files(pattern)`     | Find files matching pattern | `files(//...)`                 |
+| `defs(expr)`         | Function definitions        | `defs(//lib/...)`              |
+| `loads(expr)`        | Load statements             | `loads(//...)`                 |
+| `loadedby(module)`   | Files that load a module    | `loadedby("//lib:utils.star")` |
+| `calls(fn, expr)`    | Calls to a function         | `calls(print, //...)`          |
+| `assigns(expr)`      | Top-level assignments       | `assigns(//config.star)`       |
+| `strings(expr)`      | String literals             | `strings(//...)`               |
+| `refs(symbol, expr)` | References to a symbol      | `refs(my_func, //...)`         |
+
+### Pattern Expressions
+
+| Pattern               | Description            | Example              |
+| --------------------- | ---------------------- | -------------------- |
+| `//path/to/file.star` | Specific file          | `//lib/utils.star`   |
+| `//pkg:file.bzl`      | File with label syntax | `//tools:macros.bzl` |
+| `//pkg/...`           | All files recursively  | `//internal/...`     |
+| `*.star`              | Glob in current dir    | `*.star`             |
+| `**/*.bzl`            | Recursive glob         | `**/*.bzl`           |
+
+### Filter Functions
+
+| Function              | Description             | Example                          |
+| --------------------- | ----------------------- | -------------------------------- |
+| `kind(pattern, expr)` | Filter by file kind     | `kind(bzl, //...)`               |
+| `dialect(d, expr)`    | Filter by dialect       | `dialect(bazel, //...)`          |
+| `filter(regex, expr)` | Filter by name/path     | `filter(".*_test", defs(//...))` |
+| `hasarg(name, expr)`  | Calls with specific arg | `hasarg(deps, calls(*, //...))`  |
 
 ### Set Operations
 
-| Operator                   | Description  | Example                                |
-| -------------------------- | ------------ | -------------------------------------- |
-| `a + b` or `a union b`     | Union        | `//a/... + //b/...`                    |
-| `a - b` or `a except b`    | Difference   | `//... - //vendor/...`                 |
-| `a ^ b` or `a intersect b` | Intersection | `kind(go_test, //...) ^ deps(//cmd:x)` |
+| Operator | Description  |
+| -------- | ------------ |
+| `a + b`  | Union        |
+| `a - b`  | Difference   |
+| `a ^ b`  | Intersection |
 
-### Functions
+## Dialect Extensions
 
-#### `kind(pattern, expr)`
+Dialects add **domain-specific queries** that understand the semantics of that
+build system. These are opt-in via `--dialect` flag.
 
-Returns targets whose rule kind matches the pattern.
+### Bazel Dialect (`--dialect=bazel`)
 
-```bash
-# All go_library targets
-skyquery 'kind(go_library, //...)'
+Understands BUILD, WORKSPACE, MODULE.bazel, and .bzl files.
 
-# All test targets (regex)
-skyquery 'kind(".*_test", //...)'
-```
+| Query                       | Description                        |
+| --------------------------- | ---------------------------------- |
+| `targets(expr)`             | Rule instantiations in BUILD files |
+| `deps(target)`              | Dependencies (from deps attr)      |
+| `rdeps(universe, target)`   | Reverse dependencies               |
+| `attr(name, pattern, expr)` | Filter by attribute                |
+| `labels(attr, expr)`        | Extract label-valued attributes    |
+| `providers(expr)`           | Provider definitions in .bzl       |
+| `rules(expr)`               | Rule definitions in .bzl           |
+| `macros(expr)`              | Macro definitions in .bzl          |
 
-#### `deps(expr [, depth])`
+### Buck2 Dialect (`--dialect=buck2`)
 
-Returns the dependencies of targets in expr.
+Understands BUCK files and .bxl files.
 
-```bash
-# Direct deps only
-skyquery 'deps(//cmd/sky:sky, 1)'
+| Query                   | Description                       |
+| ----------------------- | --------------------------------- |
+| `rules(expr)`           | Rule instantiations in BUCK files |
+| `deps(rule)`            | Dependencies                      |
+| `rdeps(universe, rule)` | Reverse dependencies              |
+| `bxl_main(expr)`        | BXL main functions                |
 
-# All transitive deps
-skyquery 'deps(//cmd/sky:sky)'
-```
+### Generic/Pure Starlark (`--dialect=starlark`)
 
-#### `rdeps(universe, expr [, depth])`
-
-Returns targets in universe that depend on expr.
-
-```bash
-# What depends on //lib:utils?
-skyquery 'rdeps(//..., //lib:utils)'
-```
-
-#### `attr(name, pattern, expr)`
-
-Returns targets where attribute `name` matches `pattern`.
-
-```bash
-# Targets with testonly = True
-skyquery 'attr(testonly, True, //...)'
-
-# Targets with specific tag
-skyquery 'attr(tags, "manual", //...)'
-```
-
-#### `labels(attr, expr)`
-
-Extracts labels from the specified attribute.
-
-```bash
-# All deps of a target
-skyquery 'labels(deps, //cmd/sky:sky)'
-
-# All srcs
-skyquery 'labels(srcs, //pkg:lib)'
-```
-
-#### `filter(pattern, expr)`
-
-Filters targets by label pattern (regex).
-
-```bash
-# All targets ending in _test
-skyquery 'filter(".*_test$", //...)'
-```
-
-#### `allpaths(from, to)`
-
-Returns all paths between two sets of targets.
-
-```bash
-skyquery 'allpaths(//cmd/sky:sky, //lib:core)'
-```
-
-#### `somepath(from, to)`
-
-Returns a single path between two targets (if one exists).
-
-```bash
-skyquery 'somepath(//cmd/sky:sky, //lib:core)'
-```
+Default. No build-system-specific queries. Just core Starlark analysis.
 
 ## CLI Interface
 
-### Basic Usage
+### Usage
 
 ```bash
-# Query all targets in a package
-skyquery '//pkg:*'
+# Core queries (any Starlark)
+skyquery 'defs(//...)'                    # All function definitions
+skyquery 'loads(//lib/...)'               # All loads in lib/
+skyquery 'calls(load, //...)'             # All load() calls
+skyquery 'loadedby("//lib:common.star")' # What loads common.star?
 
-# Query with output format
-skyquery --output=json '//cmd/...'
+# With dialect for build-system-specific queries
+skyquery --dialect=bazel 'targets(//cmd/...)'
+skyquery --dialect=buck2 'rules(//...)'
 
-# Query from specific directory
-skyquery --workspace=/path/to/repo '//...'
+# Output formats
+skyquery --output=json 'defs(//...)'
+skyquery --output=location 'calls(http_archive, //...)'
+
+# Filtering
+skyquery 'filter("^_", defs(//...))' # Private functions (start with _)
 ```
 
 ### Flags
 
-| Flag                | Description                                                    | Default           |
-| ------------------- | -------------------------------------------------------------- | ----------------- |
-| `--output`          | Output format: `label`, `label_kind`, `json`, `proto`, `graph` | `label`           |
-| `--workspace`       | Workspace root directory                                       | Current directory |
-| `--keep_going`      | Continue on errors                                             | `false`           |
-| `--order_output`    | Sort output: `no`, `auto`, `full`                              | `auto`            |
-| `--noimplicit_deps` | Exclude implicit dependencies                                  | `false`           |
+| Flag           | Description                                   | Default           |
+| -------------- | --------------------------------------------- | ----------------- |
+| `--dialect`    | Dialect: `starlark`, `bazel`, `buck2`, `tilt` | auto-detect       |
+| `--output`     | Format: `name`, `location`, `json`, `count`   | `name`            |
+| `--workspace`  | Workspace root                                | Current directory |
+| `--keep_going` | Continue on parse errors                      | `false`           |
 
 ### Output Formats
 
-#### `label` (default)
-
-One label per line:
+#### `name` (default)
 
 ```
-//cmd/sky:sky
-//cmd/skylint:skylint
-//internal/starlark/query:query
+my_function
+other_function
+_private_helper
 ```
 
-#### `label_kind`
-
-Label with rule kind:
+#### `location`
 
 ```
-go_binary //cmd/sky:sky
-go_binary //cmd/skylint:skylint
-go_library //internal/starlark/query:query
+//lib/utils.star:15: my_function
+//lib/utils.star:42: other_function
+//lib/internal.star:8: _private_helper
 ```
 
 #### `json`
 
-Structured JSON output:
-
 ```json
 {
-  "targets": [
+  "results": [
     {
-      "label": "//cmd/sky:sky",
-      "kind": "go_binary",
-      "file": "cmd/sky/BUILD.bazel",
-      "line": 3,
-      "attrs": {
-        "name": "sky",
-        "srcs": ["main.go"],
-        "deps": ["//internal/cli:cli"]
-      }
+      "type": "def",
+      "name": "my_function",
+      "file": "lib/utils.star",
+      "line": 15,
+      "params": ["ctx", "deps"]
     }
   ]
 }
 ```
 
-#### `graph`
+#### `count`
 
-DOT format for visualization:
-
-```dot
-digraph {
-  "//cmd/sky:sky" -> "//internal/cli:cli"
-  "//cmd/sky:sky" -> "//internal/version:version"
-}
+```
+3
 ```
 
 ## Implementation Phases
 
-### Phase 1: MVP (Target: PR #11)
+### Phase 1: Core Starlark Queries (MVP)
 
-Core functionality:
+- [ ] File discovery and pattern matching (`//...`, globs)
+- [ ] `files()` - enumerate files
+- [ ] `defs()` - extract function definitions
+- [ ] `loads()` - extract load statements
+- [ ] `calls()` - extract function calls
+- [ ] `filter()` - regex filtering
+- [ ] Output formats: `name`, `location`, `json`
 
-- [ ] Package/target enumeration (`//pkg:*`, `//pkg/...`)
-- [ ] Literal label resolution
-- [ ] `kind()` function
-- [ ] `filter()` function
-- [ ] Output formats: `label`, `label_kind`, `json`
+### Phase 2: Load Graph
 
-### Phase 2: Dependencies
+- [ ] `loadedby()` - reverse load lookup
+- [ ] Load graph construction
+- [ ] Cycle detection
+- [ ] `allloads()` - transitive loads
 
-- [ ] `deps()` with depth control
-- [ ] `rdeps()` with universe
-- [ ] `labels()` attribute extraction
-- [ ] Basic dependency graph building
+### Phase 3: Bazel Dialect
 
-### Phase 3: Advanced Queries
+- [ ] `targets()` - BUILD file targets
+- [ ] `deps()` / `rdeps()` - dependency queries
+- [ ] `attr()` - attribute filtering
+- [ ] `labels()` - label extraction
 
-- [ ] `attr()` function
-- [ ] Set operations (`+`, `-`, `^`)
-- [ ] `allpaths()` / `somepath()`
-- [ ] `graph` output format
+### Phase 4: Additional Dialects
 
-### Phase 4: Performance
-
-- [ ] File caching
-- [ ] Parallel parsing
-- [ ] Incremental updates
-- [ ] Memory optimization for large repos
+- [ ] Buck2 dialect
+- [ ] Tilt dialect
+- [ ] Plugin system for custom dialects
 
 ## Package Structure
 
 ```
 internal/starlark/query/
 ├── BUILD.bazel
-├── query.go           # Main entry point
-├── engine.go          # Query evaluation engine
+├── query.go           # Public API
+├── engine.go          # Query evaluation
 ├── parser.go          # Query language parser
-├── parser_test.go
-├── ast.go             # Query AST types
-├── target.go          # Target and Label types
-├── target_test.go
-├── index/
-│   ├── BUILD.bazel
-│   ├── index.go       # Package/target index
-│   ├── index_test.go
-│   ├── extract.go     # Target extraction from AST
-│   └── extract_test.go
-└── output/
-    ├── BUILD.bazel
-    ├── format.go      # Output formatting
-    └── format_test.go
+├── ast.go             # Query AST
+├── core/              # Core Starlark queries
+│   ├── defs.go        # defs() implementation
+│   ├── loads.go       # loads() implementation
+│   ├── calls.go       # calls() implementation
+│   └── ...
+├── index/             # File indexing
+│   ├── index.go
+│   ├── file.go
+│   └── extract.go
+├── dialect/           # Dialect extensions
+│   ├── dialect.go     # Interface
+│   ├── bazel/         # Bazel-specific queries
+│   ├── buck2/         # Buck2-specific queries
+│   └── starlark/      # Pure Starlark (default)
+└── output/            # Output formatting
+    └── format.go
 ```
 
 ## Examples
 
-### Find all binaries
+### Find all public functions
 
 ```bash
-skyquery 'kind(go_binary, //...)'
+skyquery 'filter("^[^_]", defs(//...))'
 ```
 
-### Find tests for a library
+### What files load a utility module?
 
 ```bash
-skyquery 'kind(go_test, //pkg/...)'
+skyquery 'loadedby("//lib:strings.star")'
 ```
 
-### What depends on a library?
+### Find all http_archive calls (Bazel)
 
 ```bash
-skyquery 'rdeps(//..., //internal/starlark/query:query)'
+skyquery 'calls(http_archive, //WORKSPACE)'
 ```
 
-### Find targets with specific visibility
+### List all rule definitions in .bzl files
 
 ```bash
-skyquery 'attr(visibility, "//visibility:public", //...)'
+skyquery --dialect=bazel 'rules(kind(bzl, //...))'
 ```
 
-### Exclude vendor from search
+### Find functions with more than 5 parameters
 
 ```bash
-skyquery '//... - //vendor/...'
+skyquery --output=json 'defs(//...)' | jq '.results[] | select(.params | length > 5)'
 ```
 
-### List all external dependencies
+### Count targets per package (Bazel)
 
 ```bash
-skyquery 'labels(deps, //...) ^ filter("^@", //...)'
+for pkg in $(skyquery 'files(//...)' | xargs dirname | sort -u); do
+  echo "$pkg: $(skyquery --output=count --dialect=bazel "targets(//$pkg:*)")"
+done
 ```
 
-## Error Handling
+## Design Decisions
 
-- **Parse errors**: Report file and location, continue with `--keep_going`
-- **Missing files**: Warn and skip
-- **Invalid queries**: Report syntax error with position
-- **Cycles**: Detect and report (not an error for deps)
+### Why Starlark-first?
 
-## Future Considerations
+1. **Broader applicability** — Works with any Starlark codebase, not just Bazel
+2. **Simpler core** — Build-system concepts are extensions, not fundamentals
+3. **Future-proof** — New dialects can be added without changing core
+4. **Educational** — Helps users understand Starlark vs dialect-specific concepts
 
-1. **Language Server Protocol (LSP)** - Expose query as LSP for IDE integration
-2. **Watch mode** - Re-run query on file changes
-3. **Custom output templates** - User-defined output formats
-4. **Query macros** - Named/saved queries
-5. **Remote caching** - Share parsed index across machines
+### Why not just wrap `bazel query`?
+
+1. **No Bazel required** — Works without installing/configuring Bazel
+2. **Faster for simple queries** — No need to load entire build graph
+3. **Works on incomplete projects** — Doesn't require valid WORKSPACE
+4. **Cross-dialect** — Same tool for Bazel, Buck2, etc.
 
 ## References
 
-- [Bazel Query Reference](https://bazel.build/query/language)
-- [Bazel Query How-To](https://bazel.build/query/guide)
-- [buildtools/build package](https://pkg.go.dev/github.com/bazelbuild/buildtools/build)
+- [Starlark Language Spec](https://github.com/bazelbuild/starlark/blob/master/spec.md)
+- [Sky Dialect System](../internal/starlark/dialect/)
+- [Sky File Classifier](../internal/starlark/classifier/)
