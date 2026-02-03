@@ -96,6 +96,19 @@ export default defineConfig({
 					],
 				},
 				{
+					label: 'Plugins',
+					items: [
+						{ label: 'Overview', slug: 'plugins/index' },
+						{ label: 'Quick Start', slug: 'plugins/quick-start' },
+						{ label: 'Protocol', slug: 'plugins/protocol' },
+						{ label: 'Native Plugins', slug: 'plugins/native' },
+						{ label: 'WASM Plugins', slug: 'plugins/wasm' },
+						{ label: 'SDK Reference', slug: 'plugins/sdk' },
+						{ label: 'Testing', slug: 'plugins/testing' },
+						{ label: 'Publishing', slug: 'plugins/publishing' },
+					],
+				},
+				{
 					label: 'Coverage',
 					items: [
 						{ label: 'Getting Started', slug: 'coverage/getting-started' },

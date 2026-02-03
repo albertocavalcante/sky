@@ -1,0 +1,11 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "testing",
+    srcs = [
+        "capture.go",
+        "env.go",
+    ],
+    importpath = "github.com/albertocavalcante/sky/pkg/skyplugin/testing",
+    visibility = ["//visibility:public"],
+)

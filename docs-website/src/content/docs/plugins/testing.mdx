@@ -1,0 +1,384 @@
+---
+title: Testing Plugins
+description: Strategies for testing Sky plugins
+---
+
+import { Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Testing ensures your plugin works correctly before distribution.
+This guide covers unit testing, integration testing, and the SDK's
+testing utilities.
+
+## Testing Strategies
+
+1. **Unit Tests**: Test individual functions in isolation
+2. **Integration Tests**: Test the full plugin flow
+3. **Metadata Tests**: Verify metadata output
+4. **CLI Tests**: Test argument parsing and output
+
+## Unit Testing
+
+Test your core logic separately from the plugin harness:
+
+```go
+// analyzer/analyzer.go
+package analyzer
+
+func CountWords(text string) int {
+    // Implementation
+}
+
+// analyzer/analyzer_test.go
+package analyzer
+
+import "testing"
+
+func TestCountWords(t *testing.T) {
+    tests := []struct {
+        input string
+        want  int
+    }{
+        {"hello world", 2},
+        {"", 0},
+        {"one", 1},
+        {"  multiple   spaces  ", 2},
+    }
+
+    for _, tc := range tests {
+        got := CountWords(tc.input)
+        if got != tc.want {
+            t.Errorf("CountWords(%q) = %d, want %d",
+                tc.input, got, tc.want)
+        }
+    }
+}
+```
+
+## Using the Testing Package
+
+The `pkg/skyplugin/testing` package provides utilities for testing plugins.
+
+### MockEnv
+
+Set up the plugin environment for tests:
+
+```go
+import (
+    "testing"
+
+    skytesting "github.com/albertocavalcante/sky/pkg/skyplugin/testing"
+)
+
+func TestPlugin(t *testing.T) {
+    cleanup := skytesting.MockEnv("exec", "my-plugin")
+    defer cleanup()
+
+    // Now os.Getenv("SKY_PLUGIN") == "1"
+    // and os.Getenv("SKY_PLUGIN_MODE") == "exec"
+}
+```
+
+### MockEnvFull
+
+Configure all environment variables:
+
+```go
+cleanup := skytesting.MockEnvFull(skytesting.EnvConfig{
+    Mode:          "exec",
+    Name:          "my-plugin",
+    WorkspaceRoot: "/test/workspace",
+    ConfigDir:     "/test/config",
+    OutputFormat:  "json",
+    NoColor:       true,
+    Verbose:       2,
+})
+defer cleanup()
+```
+
+### CaptureOutput
+
+Capture stdout and stderr:
+
+```go
+func TestOutput(t *testing.T) {
+    cleanup := skytesting.MockEnv("exec", "my-plugin")
+    defer cleanup()
+
+    result := skytesting.CaptureOutput(func() {
+        run([]string{"--name", "Test"})
+    })
+
+    if result.ExitCode != 0 {
+        t.Errorf("exit code = %d, want 0", result.ExitCode)
+    }
+
+    if !strings.Contains(result.Stdout, "Hello, Test!") {
+        t.Errorf("stdout = %q, want greeting", result.Stdout)
+    }
+}
+```
+
+## Testing Metadata Output
+
+Verify your metadata is correct:
+
+```go
+func TestMetadata(t *testing.T) {
+    cleanup := skytesting.MockEnv("metadata", "my-plugin")
+    defer cleanup()
+
+    result := skytesting.CaptureOutput(func() {
+        main()
+    })
+
+    if result.ExitCode != 0 {
+        t.Fatalf("metadata mode failed: %s", result.Stderr)
+    }
+
+    var meta map[string]any
+    if err := json.Unmarshal([]byte(result.Stdout), &meta); err != nil {
+        t.Fatalf("invalid JSON: %v", err)
+    }
+
+    if meta["api_version"].(float64) != 1 {
+        t.Error("api_version should be 1")
+    }
+
+    if meta["name"].(string) != "my-plugin" {
+        t.Error("name mismatch")
+    }
+}
+```
+
+## Testing CLI Arguments
+
+Test different argument combinations:
+
+```go
+func TestCLI(t *testing.T) {
+    tests := []struct {
+        name     string
+        args     []string
+        wantCode int
+        wantOut  string
+    }{
+        {
+            name:     "default",
+            args:     []string{},
+            wantCode: 0,
+            wantOut:  "Hello, World!",
+        },
+        {
+            name:     "custom name",
+            args:     []string{"--name", "Test"},
+            wantCode: 0,
+            wantOut:  "Hello, Test!",
+        },
+        {
+            name:     "help flag",
+            args:     []string{"--help"},
+            wantCode: 0,
+            wantOut:  "Usage:",
+        },
+        {
+            name:     "invalid flag",
+            args:     []string{"--invalid"},
+            wantCode: 2,
+        },
+    }
+
+    for _, tc := range tests {
+        t.Run(tc.name, func(t *testing.T) {
+            cleanup := skytesting.MockEnv("exec", "my-plugin")
+            defer cleanup()
+
+            result := skytesting.CaptureOutput(func() {
+                code := run(tc.args)
+                os.Exit(code)
+            })
+
+            if result.ExitCode != tc.wantCode {
+                t.Errorf("exit = %d, want %d",
+                    result.ExitCode, tc.wantCode)
+            }
+
+            if tc.wantOut != "" &&
+               !strings.Contains(result.Stdout, tc.wantOut) {
+                t.Errorf("stdout = %q, want %q",
+                    result.Stdout, tc.wantOut)
+            }
+        })
+    }
+}
+```
+
+## Testing JSON Output
+
+Test JSON output format:
+
+```go
+func TestJSONOutput(t *testing.T) {
+    cleanup := skytesting.MockEnvFull(skytesting.EnvConfig{
+        Mode:         "exec",
+        Name:         "my-plugin",
+        OutputFormat: "json",
+    })
+    defer cleanup()
+
+    result := skytesting.CaptureOutput(func() {
+        run([]string{"analyze", "testdata/sample.bzl"})
+    })
+
+    var output struct {
+        Files  []string `json:"files"`
+        Count  int      `json:"count"`
+        Errors []string `json:"errors"`
+    }
+
+    if err := json.Unmarshal([]byte(result.Stdout), &output); err != nil {
+        t.Fatalf("invalid JSON: %v", err)
+    }
+
+    if output.Count == 0 {
+        t.Error("expected non-zero count")
+    }
+}
+```
+
+## Integration Testing
+
+Test the full plugin flow:
+
+```go
+func TestIntegration(t *testing.T) {
+    // Create test directory
+    tmpDir := t.TempDir()
+    testFile := filepath.Join(tmpDir, "test.bzl")
+    os.WriteFile(testFile, []byte(`
+def greet(name):
+    return "Hello, " + name
+`), 0644)
+
+    cleanup := skytesting.MockEnvFull(skytesting.EnvConfig{
+        Mode:          "exec",
+        Name:          "star-counter",
+        WorkspaceRoot: tmpDir,
+    })
+    defer cleanup()
+
+    result := skytesting.CaptureOutput(func() {
+        os.Args = []string{"star-counter", testFile}
+        main()
+    })
+
+    if result.ExitCode != 0 {
+        t.Errorf("failed: %s", result.Stderr)
+    }
+
+    if !strings.Contains(result.Stdout, "1") {
+        t.Errorf("expected to find 1 def")
+    }
+}
+```
+
+## Test Data
+
+Keep test files in a `testdata/` directory:
+
+```
+my-plugin/
+├── main.go
+├── main_test.go
+└── testdata/
+    ├── valid.bzl
+    ├── invalid.bzl
+    └── expected_output.json
+```
+
+Load test files:
+
+```go
+func TestAnalyze(t *testing.T) {
+    input, _ := os.ReadFile("testdata/valid.bzl")
+    expected, _ := os.ReadFile("testdata/expected_output.json")
+
+    result := analyze(string(input))
+
+    got, _ := json.Marshal(result)
+    if !bytes.Equal(got, expected) {
+        t.Errorf("output mismatch")
+    }
+}
+```
+
+## Golden Files
+
+Use golden files for complex output:
+
+```go
+var update = flag.Bool("update", false, "update golden files")
+
+func TestGolden(t *testing.T) {
+    cleanup := skytesting.MockEnv("exec", "my-plugin")
+    defer cleanup()
+
+    result := skytesting.CaptureOutput(func() {
+        run([]string{"analyze", "testdata/input.bzl"})
+    })
+
+    golden := "testdata/output.golden"
+
+    if *update {
+        os.WriteFile(golden, []byte(result.Stdout), 0644)
+        return
+    }
+
+    expected, _ := os.ReadFile(golden)
+    if result.Stdout != string(expected) {
+        t.Errorf("output differs from golden file")
+    }
+}
+```
+
+Update golden files:
+
+```bash
+go test -update
+```
+
+## Running Tests
+
+```bash
+# Run all tests
+go test ./...
+
+# With verbose output
+go test -v ./...
+
+# With coverage
+go test -cover ./...
+
+# Generate coverage report
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
+```
+
+## CI Integration
+
+Example GitHub Actions workflow:
+
+```yaml
+name: Test
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - run: go test -v ./...
+      - run: go build -o plugin
+```

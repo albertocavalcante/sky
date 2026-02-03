@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "custom-lint_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/albertocavalcante/sky/examples/plugins/custom-lint",
+    visibility = ["//visibility:private"],
+    deps = ["//examples/plugins/custom-lint/rules"],
+)
+
+go_binary(
+    name = "custom-lint",
+    embed = [":custom-lint_lib"],
+    visibility = ["//visibility:public"],
+)

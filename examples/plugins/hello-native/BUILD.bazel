@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "hello-native_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/albertocavalcante/sky/examples/plugins/hello-native",
+    visibility = ["//visibility:private"],
+)
+
+go_binary(
+    name = "hello-native",
+    embed = [":hello-native_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "hello-native_test",
+    srcs = ["main_test.go"],
+    embed = [":hello-native_lib"],
+)

@@ -1,0 +1,280 @@
+---
+title: Native Plugins
+description: Build feature-rich native Go plugins for Sky
+---
+
+import { Steps, Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Native plugins are compiled executables that run directly on the host system.
+They have full access to system resources and are ideal for feature-rich tools.
+
+## Advantages
+
+- **Full System Access**: Read/write files, make network requests, spawn processes
+- **No Memory Limits**: Use as much memory as the system provides
+- **Maximum Performance**: Native code runs at full speed
+- **Rich Ecosystem**: Use any Go library
+
+## When to Use Native Plugins
+
+Native plugins are the best choice when you need:
+
+- Filesystem operations (reading/writing files)
+- Network requests (API calls, downloads)
+- External process execution
+- High memory usage
+- Maximum performance
+
+## Creating a Native Plugin
+
+<Steps>
+
+1. **Initialize the project**
+
+   ```bash
+   sky plugin init my-tool
+   cd my-tool
+   ```
+
+2. **Implement your logic**
+
+   Edit `main.go` to add your functionality.
+
+3. **Build the plugin**
+
+   ```bash
+   go build -o plugin
+   ```
+
+4. **Install and test**
+
+   ```bash
+   sky plugin install --path ./plugin my-tool
+   sky my-tool --help
+   ```
+
+</Steps>
+
+## Project Structure
+
+A typical native plugin project:
+
+```
+my-tool/
+├── main.go           # Entry point
+├── go.mod            # Go module
+├── go.sum            # Dependencies
+├── internal/         # Internal packages
+│   └── analyzer/
+│       └── analyzer.go
+├── BUILD.bazel       # Optional: Bazel build
+└── README.md
+```
+
+## Complete Example
+
+Here's a complete native plugin that analyzes Starlark files:
+
+```go
+package main
+
+import (
+    "encoding/json"
+    "flag"
+    "fmt"
+    "os"
+    "path/filepath"
+)
+
+const (
+    pluginName    = "star-analyzer"
+    pluginVersion = "1.0.0"
+    pluginSummary = "Analyzes Starlark files"
+)
+
+func main() {
+    if os.Getenv("SKY_PLUGIN") != "1" {
+        fmt.Fprintf(os.Stderr, "Run via: sky %s\n", pluginName)
+        os.Exit(1)
+    }
+
+    if os.Getenv("SKY_PLUGIN_MODE") == "metadata" {
+        outputMetadata()
+        return
+    }
+
+    os.Exit(run(os.Args[1:]))
+}
+
+func outputMetadata() {
+    json.NewEncoder(os.Stdout).Encode(map[string]any{
+        "api_version": 1,
+        "name":        pluginName,
+        "version":     pluginVersion,
+        "summary":     pluginSummary,
+    })
+}
+
+func run(args []string) int {
+    fs := flag.NewFlagSet(pluginName, flag.ContinueOnError)
+    recursive := fs.Bool("r", false, "recursive scan")
+    jsonOut := fs.Bool("json", false, "JSON output")
+
+    if err := fs.Parse(args); err != nil {
+        return 2
+    }
+
+    paths := fs.Args()
+    if len(paths) == 0 {
+        paths = []string{"."}
+    }
+
+    var files []string
+    for _, path := range paths {
+        found, _ := findStarlarkFiles(path, *recursive)
+        files = append(files, found...)
+    }
+
+    if *jsonOut {
+        json.NewEncoder(os.Stdout).Encode(map[string]any{
+            "files": files,
+            "count": len(files),
+        })
+    } else {
+        for _, f := range files {
+            fmt.Println(f)
+        }
+        fmt.Printf("\nFound %d Starlark files\n", len(files))
+    }
+
+    return 0
+}
+
+func findStarlarkFiles(root string, recursive bool) ([]string, error) {
+    var files []string
+
+    walkFn := func(path string, info os.FileInfo, err error) error {
+        if err != nil {
+            return err
+        }
+        if info.IsDir() && !recursive && path != root {
+            return filepath.SkipDir
+        }
+        if isStarlarkFile(path) {
+            files = append(files, path)
+        }
+        return nil
+    }
+
+    filepath.Walk(root, walkFn)
+    return files, nil
+}
+
+func isStarlarkFile(path string) bool {
+    ext := filepath.Ext(path)
+    base := filepath.Base(path)
+    return ext == ".star" || ext == ".bzl" ||
+           base == "BUILD" || base == "BUILD.bazel"
+}
+```
+
+## Using External Libraries
+
+Native plugins can use any Go library. For Starlark analysis, the
+[buildtools](https://github.com/bazelbuild/buildtools) library is popular:
+
+```bash
+go get github.com/bazelbuild/buildtools@latest
+```
+
+```go
+import "github.com/bazelbuild/buildtools/build"
+
+func analyzeFile(path string) error {
+    content, err := os.ReadFile(path)
+    if err != nil {
+        return err
+    }
+
+    file, err := build.ParseDefault(path, content)
+    if err != nil {
+        return err
+    }
+
+    // Walk the AST
+    build.Walk(file, func(expr build.Expr, stack []build.Expr) {
+        // Analyze nodes
+    })
+
+    return nil
+}
+```
+
+## Respecting Environment Variables
+
+Good plugins respect the environment variables set by Sky:
+
+```go
+func outputResult(result any, textFn func() string) {
+    if os.Getenv("SKY_OUTPUT_FORMAT") == "json" {
+        json.NewEncoder(os.Stdout).Encode(result)
+    } else {
+        fmt.Println(textFn())
+    }
+}
+
+func verbose(level int, msg string) {
+    v, _ := strconv.Atoi(os.Getenv("SKY_VERBOSE"))
+    if v >= level {
+        fmt.Fprintln(os.Stderr, msg)
+    }
+}
+```
+
+## Cross-Compilation
+
+Build for multiple platforms:
+
+```bash
+# Linux AMD64
+GOOS=linux GOARCH=amd64 go build -o plugin-linux-amd64
+
+# Linux ARM64
+GOOS=linux GOARCH=arm64 go build -o plugin-linux-arm64
+
+# macOS ARM64
+GOOS=darwin GOARCH=arm64 go build -o plugin-darwin-arm64
+
+# Windows
+GOOS=windows GOARCH=amd64 go build -o plugin-windows-amd64.exe
+```
+
+## Best Practices
+
+<Aside type="tip" title="Recommendations">
+1. **Always validate SKY_PLUGIN** - Ensure your plugin only runs through Sky
+2. **Support --help and --version** - Standard CLI conventions
+3. **Respect SKY_OUTPUT_FORMAT** - Support both text and JSON output
+4. **Use exit codes correctly** - 0 for success, 1 for errors, 2 for usage errors
+5. **Handle interrupts gracefully** - Catch SIGINT/SIGTERM
+</Aside>
+
+## Testing
+
+Test your plugin logic separately from the plugin harness:
+
+```go
+// main_test.go
+func TestRun(t *testing.T) {
+    // Set up test environment
+    os.Setenv("SKY_PLUGIN", "1")
+    defer os.Unsetenv("SKY_PLUGIN")
+
+    code := run([]string{"-r", "testdata"})
+    if code != 0 {
+        t.Errorf("expected exit code 0, got %d", code)
+    }
+}
+```
+
+See [Testing Plugins](/sky/plugins/testing/) for more testing strategies.

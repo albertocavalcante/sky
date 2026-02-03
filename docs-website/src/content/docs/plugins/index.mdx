@@ -1,0 +1,81 @@
+---
+title: Plugins
+description: Extend Sky with custom plugins
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Sky is **plugin-first**. Core commands stay minimal; most features ship as plugins.
+If a command is not built into `sky`, it attempts to resolve and run an installed
+plugin with the same name.
+
+## Plugin Types
+
+<CardGrid>
+  <Card title="Native Plugins" icon="rocket">
+    Compiled executables with full system access. Ideal for:
+    - Filesystem operations
+    - Network requests
+    - Heavy computation
+  </Card>
+  <Card title="WASM Plugins" icon="puzzle">
+    WebAssembly modules that run in a sandbox. Ideal for:
+    - Cross-platform portability
+    - Security-sensitive environments
+    - URL-based distribution
+  </Card>
+</CardGrid>
+
+## Quick Start
+
+Create your first plugin in seconds:
+
+```bash
+# Create a native plugin
+sky plugin init my-plugin
+cd my-plugin
+go build -o plugin
+sky plugin install --path ./plugin my-plugin
+sky my-plugin
+```
+
+<LinkCard
+  title="Quick Start Tutorial"
+  description="Build your first plugin in 5 minutes"
+  href="/sky/plugins/quick-start/"
+/>
+
+## What Can Plugins Do?
+
+Plugins can do anything a standalone CLI tool can do:
+
+- **Analyze Starlark files** - Parse and check code using buildtools
+- **Custom lint rules** - Enforce project-specific coding standards
+- **Code generation** - Generate boilerplate from templates
+- **Project scaffolding** - Initialize new projects
+- **Integration** - Connect with external services
+
+## Documentation
+
+<CardGrid>
+  <LinkCard title="Quick Start" href="/sky/plugins/quick-start/" />
+  <LinkCard title="Plugin Protocol" href="/sky/plugins/protocol/" />
+  <LinkCard title="Native Plugins" href="/sky/plugins/native/" />
+  <LinkCard title="WASM Plugins" href="/sky/plugins/wasm/" />
+  <LinkCard title="SDK Reference" href="/sky/plugins/sdk/" />
+  <LinkCard title="Testing Plugins" href="/sky/plugins/testing/" />
+  <LinkCard title="Publishing" href="/sky/plugins/publishing/" />
+</CardGrid>
+
+## Example Plugins
+
+The Sky repository includes example plugins to learn from:
+
+| Example | Description |
+|---------|-------------|
+| `hello-native` | Minimal native Go plugin |
+| `hello-wasm` | Minimal WASM plugin |
+| `star-counter` | Starlark file analyzer |
+| `custom-lint` | Custom lint rules |
+
+Browse them at `examples/plugins/` in the repository.

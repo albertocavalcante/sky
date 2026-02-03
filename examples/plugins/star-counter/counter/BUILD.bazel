@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "counter",
+    srcs = ["counter.go"],
+    importpath = "github.com/albertocavalcante/sky/examples/plugins/star-counter/counter",
+    visibility = ["//examples/plugins/star-counter:__subpackages__"],
+    deps = ["@com_github_bazelbuild_buildtools//build"],
+)
+
+go_test(
+    name = "counter_test",
+    srcs = ["counter_test.go"],
+    embed = [":counter"],
+)

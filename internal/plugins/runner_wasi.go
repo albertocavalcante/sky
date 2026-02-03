@@ -27,12 +27,17 @@ func runWasm(ctx context.Context, plugin Plugin, mode string, args []string, std
 	argv := append([]string{plugin.Name}, args...)
 	config := wazero.NewModuleConfig().
 		WithArgs(argv...).
-		WithEnv(EnvPlugin, "1").
-		WithEnv(EnvPluginMode, mode).
-		WithEnv(EnvPluginName, plugin.Name).
 		WithStdin(stdin).
 		WithStdout(stdout).
 		WithStderr(stderr)
+
+	// Add plugin environment variables
+	for _, kv := range pluginEnv(plugin.Name, mode) {
+		parts := splitEnvVar(kv)
+		if len(parts) == 2 {
+			config = config.WithEnv(parts[0], parts[1])
+		}
+	}
 
 	_, err = runtime.InstantiateWithConfig(ctx, wasmBytes, config)
 	if err == nil {

@@ -25,10 +25,17 @@ _EMBEDDED_TOOL_DEPS = [
 # Minimal build - no embedded tools
 go_library(
     name = "sky_lib",
-    srcs = _COMMON_SRCS + ["embedded_minimal.go"],
+    srcs = [
+        "embedded.go",
+        "embedded_minimal.go",
+        "main.go",
+    ],
     importpath = "github.com/albertocavalcante/sky/cmd/sky",
     visibility = ["//visibility:private"],
-    deps = _COMMON_DEPS,
+    deps = [
+        "//internal/plugins",
+        "//internal/version",
+    ],
 )
 
 go_binary(

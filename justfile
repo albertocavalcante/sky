@@ -132,3 +132,43 @@ bazel-sky-full:
 # Clean dist directory
 clean-dist:
     rm -rf {{dist_dir}}
+
+# ============================================================================
+# Example Plugins
+# ============================================================================
+
+# Build hello-native example plugin
+example-hello-native:
+    cd examples/plugins/hello-native && go build -o plugin
+
+# Build hello-wasm example plugin
+example-hello-wasm:
+    cd examples/plugins/hello-wasm && GOOS=wasip1 GOARCH=wasm go build -o plugin.wasm
+
+# Build star-counter example plugin (requires go mod tidy first)
+example-star-counter:
+    cd examples/plugins/star-counter && go mod tidy && go build -o plugin
+
+# Build custom-lint example plugin (requires go mod tidy first)
+example-custom-lint:
+    cd examples/plugins/custom-lint && go mod tidy && go build -o plugin
+
+# Build all example plugins
+examples: example-hello-native example-star-counter example-custom-lint
+    @echo "Built all native example plugins"
+
+# Test hello-native example
+test-example-hello-native:
+    cd examples/plugins/hello-native && go test ./...
+
+# Test star-counter example
+test-example-star-counter:
+    cd examples/plugins/star-counter && go mod tidy && go test ./...
+
+# Test custom-lint example
+test-example-custom-lint:
+    cd examples/plugins/custom-lint && go mod tidy && go test ./...
+
+# Test all example plugins
+test-examples: test-example-hello-native test-example-star-counter test-example-custom-lint
+    @echo "All example plugin tests passed"

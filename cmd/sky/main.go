@@ -695,11 +695,113 @@ func runPluginInit(args []string, stdout, stderr io.Writer) int {
 }
 
 func writePluginTemplate(name string, wasm bool) error {
-	// Write main.go
-	mainGo := fmt.Sprintf(`package main
+	var mainGo string
+
+	if wasm {
+		// WASM-specific template
+		mainGo = fmt.Sprintf(`//go:build wasip1
+
+// Package main implements a WASM Sky plugin.
+//
+// WASM plugins run in a sandboxed environment with limited capabilities:
+//   - No direct filesystem access
+//   - No network access
+//   - Limited memory (~16MB default)
+//
+// Build with:
+//
+//	GOOS=wasip1 GOARCH=wasm go build -o plugin.wasm
+//
+// Or with TinyGo for smaller binaries:
+//
+//	tinygo build -o plugin.wasm -target=wasip1 .
+package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
+)
+
+const (
+	pluginName    = %q
+	pluginVersion = "0.1.0"
+	pluginSummary = "A Sky WASM plugin"
+)
+
+func main() {
+	// Verify we're running as a Sky plugin
+	if os.Getenv("SKY_PLUGIN") != "1" {
+		fmt.Fprintf(os.Stderr, "This is a Sky plugin. Run it with: sky %%s\n", pluginName)
+		os.Exit(1)
+	}
+
+	// Handle metadata request from sky
+	if os.Getenv("SKY_PLUGIN_MODE") == "metadata" {
+		json.NewEncoder(os.Stdout).Encode(map[string]any{
+			"api_version": 1,
+			"name":        pluginName,
+			"version":     pluginVersion,
+			"summary":     pluginSummary,
+			"commands": []map[string]string{
+				{"name": pluginName, "summary": pluginSummary},
+			},
+		})
+		return
+	}
+
+	// Run the plugin
+	run()
+}
+
+func run() {
+	args := os.Args[1:]
+
+	// Simple argument parsing (no flag package for TinyGo compatibility)
+	for _, arg := range args {
+		switch arg {
+		case "-h", "--help":
+			printHelp()
+			return
+		case "-v", "--version":
+			fmt.Printf("%%s %%s\n", pluginName, pluginVersion)
+			return
+		}
+	}
+
+	// Your plugin logic here
+	fmt.Println("Hello from WASM plugin:", pluginName)
+
+	// Access workspace info via environment variables
+	if root := os.Getenv("SKY_WORKSPACE_ROOT"); root != "" {
+		fmt.Println("Workspace:", root)
+	}
+
+	// Note: WASM plugins cannot access the filesystem directly
+	fmt.Println("(Running in WASM sandbox)")
+}
+
+func printHelp() {
+	fmt.Printf("Usage: %%s [options]\n\n", pluginName)
+	fmt.Println("A Sky WASM plugin.")
+	fmt.Println()
+	fmt.Println("Options:")
+	fmt.Println("  -h, --help      Show this help message")
+	fmt.Println("  -v, --version   Show version")
+	fmt.Println()
+	fmt.Println("Environment Variables (set by Sky):")
+	fmt.Println("  SKY_WORKSPACE_ROOT  Workspace root directory")
+	fmt.Println("  SKY_CONFIG_DIR      Sky configuration directory")
+	fmt.Println("  SKY_OUTPUT_FORMAT   Preferred output format (text/json)")
+}
+`, name)
+	} else {
+		// Native template
+		mainGo = fmt.Sprintf(`package main
+
+import (
+	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 )
@@ -711,6 +813,12 @@ const (
 )
 
 func main() {
+	// Verify we're running as a Sky plugin
+	if os.Getenv("SKY_PLUGIN") != "1" {
+		fmt.Fprintf(os.Stderr, "This is a Sky plugin. Run it with: sky %%s\n", pluginName)
+		os.Exit(1)
+	}
+
 	// Handle metadata request from sky
 	if os.Getenv("SKY_PLUGIN_MODE") == "metadata" {
 		json.NewEncoder(os.Stdout).Encode(map[string]any{
@@ -719,33 +827,44 @@ func main() {
 			"version":     pluginVersion,
 			"summary":     pluginSummary,
 			"commands": []map[string]string{
-				{"name": pluginName, "description": pluginSummary},
+				{"name": pluginName, "summary": pluginSummary},
 			},
 		})
 		return
 	}
 
-	// Handle --version flag
-	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
-		fmt.Printf("%%s %%s\n", pluginName, pluginVersion)
-		return
+	// Run the plugin
+	os.Exit(run(os.Args[1:]))
+}
+
+func run(args []string) int {
+	fs := flag.NewFlagSet(pluginName, flag.ContinueOnError)
+	showVersion := fs.Bool("version", false, "show version")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
+		return 2
 	}
 
-	// Handle --help flag
-	if len(os.Args) > 1 && (os.Args[1] == "--help" || os.Args[1] == "-h") {
-		fmt.Printf("Usage: %%s [options]\n\n", pluginName)
-		fmt.Println("A Sky plugin.")
-		fmt.Println()
-		fmt.Println("Options:")
-		fmt.Println("  --help, -h      Show this help message")
-		fmt.Println("  --version, -v   Show version")
-		return
+	if *showVersion {
+		fmt.Printf("%%s %%s\n", pluginName, pluginVersion)
+		return 0
 	}
 
 	// Your plugin logic here
 	fmt.Println("Hello from", pluginName)
+
+	// Access workspace info via environment variables
+	if root := os.Getenv("SKY_WORKSPACE_ROOT"); root != "" {
+		fmt.Println("Workspace:", root)
+	}
+
+	return 0
 }
 `, name)
+	}
 
 	if err := os.WriteFile(filepath.Join(name, "main.go"), []byte(mainGo), 0644); err != nil {
 		return err
@@ -762,29 +881,84 @@ go 1.21
 	}
 
 	// Write README.md
-	buildCmd := "go build -o plugin"
-	installCmd := fmt.Sprintf("sky plugin install --path ./plugin %s", name)
+	var readme string
 	if wasm {
-		buildCmd = "GOOS=wasip1 GOARCH=wasm go build -o plugin.wasm"
-		installCmd = fmt.Sprintf("sky plugin install --path ./plugin.wasm %s", name)
-	}
+		readme = fmt.Sprintf(`# %s
 
-	readme := fmt.Sprintf(`# %s
+A Sky WASM plugin.
+
+## Build
+
+### With Go (larger binary, full compatibility)
+
+`+"```bash\nGOOS=wasip1 GOARCH=wasm go build -o plugin.wasm\n```"+`
+
+### With TinyGo (smaller binary)
+
+`+"```bash\ntinygo build -o plugin.wasm -target=wasip1 .\n```"+`
+
+## Install
+
+`+"```bash\nsky plugin install --path ./plugin.wasm %s\n```"+`
+
+## Usage
+
+`+"```bash\nsky %s\n```"+`
+
+## WASI Limitations
+
+WASM plugins run in a sandboxed environment:
+
+- **No filesystem access** - Use environment variables for paths
+- **No network access** - All I/O through stdin/stdout
+- **Limited memory** - Default ~16MB
+
+For filesystem-heavy operations, consider a native plugin.
+
+## Environment Variables
+
+These are set by Sky when running your plugin:
+
+| Variable | Description |
+|----------|-------------|
+| `+"`SKY_PLUGIN`"+` | Always "1" when running as a plugin |
+| `+"`SKY_PLUGIN_MODE`"+` | "exec" or "metadata" |
+| `+"`SKY_PLUGIN_NAME`"+` | The plugin's registered name |
+| `+"`SKY_WORKSPACE_ROOT`"+` | Workspace root directory |
+| `+"`SKY_CONFIG_DIR`"+` | Sky configuration directory |
+| `+"`SKY_OUTPUT_FORMAT`"+` | "text" or "json" |
+`, name, name, name)
+	} else {
+		readme = fmt.Sprintf(`# %s
 
 A Sky plugin.
 
 ## Build
 
-`+"```bash\n%s\n```"+`
+`+"```bash\ngo build -o plugin\n```"+`
 
 ## Install
 
-`+"```bash\n%s\n```"+`
+`+"```bash\nsky plugin install --path ./plugin %s\n```"+`
 
 ## Usage
 
 `+"```bash\nsky %s\n```"+`
-`, name, buildCmd, installCmd, name)
+
+## Environment Variables
+
+These are set by Sky when running your plugin:
+
+| Variable | Description |
+|----------|-------------|
+| `+"`SKY_PLUGIN`"+` | Always "1" when running as a plugin |
+| `+"`SKY_PLUGIN_MODE`"+` | "exec" or "metadata" |
+| `+"`SKY_PLUGIN_NAME`"+` | The plugin's registered name |
+| `+"`SKY_WORKSPACE_ROOT`"+` | Workspace root directory |
+| `+"`SKY_CONFIG_DIR`"+` | Sky configuration directory |
+| `+"`SKY_OUTPUT_FORMAT`"+` | "text" or "json" |
+`, name, name, name)
+	}
 
 	if err := os.WriteFile(filepath.Join(name, "README.md"), []byte(readme), 0644); err != nil {
 		return err

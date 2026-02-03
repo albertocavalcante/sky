@@ -1,0 +1,191 @@
+---
+title: Quick Start
+description: Build your first Sky plugin in 5 minutes
+---
+
+import { Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+This guide walks you through creating, building, and installing your first Sky plugin.
+
+## Prerequisites
+
+- Go 1.21 or later
+- Sky CLI installed (`go install github.com/albertocavalcante/sky/cmd/sky@latest`)
+
+## Create Your Plugin
+
+<Steps>
+
+1. **Initialize the plugin project**
+
+   ```bash
+   sky plugin init hello
+   cd hello
+   ```
+
+   This creates a directory with boilerplate code:
+   - `main.go` - Plugin source code
+   - `go.mod` - Go module file
+   - `README.md` - Documentation template
+
+2. **Build the plugin**
+
+   ```bash
+   go build -o plugin
+   ```
+
+3. **Install the plugin**
+
+   ```bash
+   sky plugin install --path ./plugin hello
+   ```
+
+4. **Run your plugin**
+
+   ```bash
+   sky hello
+   ```
+
+   You should see:
+   ```
+   Hello from hello
+   Workspace: /path/to/your/directory
+   ```
+
+</Steps>
+
+## Understanding the Code
+
+Open `main.go` to see the plugin structure:
+
+```go
+package main
+
+import (
+    "encoding/json"
+    "flag"
+    "fmt"
+    "os"
+)
+
+const (
+    pluginName    = "hello"
+    pluginVersion = "0.1.0"
+    pluginSummary = "A Sky plugin"
+)
+
+func main() {
+    // 1. Verify we're running as a Sky plugin
+    if os.Getenv("SKY_PLUGIN") != "1" {
+        fmt.Fprintf(os.Stderr, "Run via: sky %s\n", pluginName)
+        os.Exit(1)
+    }
+
+    // 2. Handle metadata mode
+    if os.Getenv("SKY_PLUGIN_MODE") == "metadata" {
+        json.NewEncoder(os.Stdout).Encode(map[string]any{
+            "api_version": 1,
+            "name":        pluginName,
+            "version":     pluginVersion,
+            "summary":     pluginSummary,
+            "commands": []map[string]string{
+                {"name": pluginName, "summary": pluginSummary},
+            },
+        })
+        return
+    }
+
+    // 3. Run the plugin
+    os.Exit(run(os.Args[1:]))
+}
+```
+
+### Key Concepts
+
+1. **Plugin Detection**: Check `SKY_PLUGIN=1` to verify the plugin is run by Sky
+2. **Metadata Mode**: When `SKY_PLUGIN_MODE=metadata`, output JSON describing your plugin
+3. **Execution Mode**: Otherwise, run your plugin's main logic
+
+## Add Custom Logic
+
+Let's modify the plugin to do something useful. Edit `main.go`:
+
+```go
+func run(args []string) int {
+    fs := flag.NewFlagSet(pluginName, flag.ContinueOnError)
+    name := fs.String("name", "World", "name to greet")
+    count := fs.Int("count", 1, "number of times to greet")
+
+    if err := fs.Parse(args); err != nil {
+        return 2
+    }
+
+    for i := 0; i < *count; i++ {
+        fmt.Printf("Hello, %s!\n", *name)
+    }
+
+    return 0
+}
+```
+
+Rebuild and test:
+
+```bash
+go build -o plugin
+sky plugin install --path ./plugin hello
+sky hello --name "Sky User" --count 3
+```
+
+Output:
+```
+Hello, Sky User!
+Hello, Sky User!
+Hello, Sky User!
+```
+
+## Using the SDK
+
+For larger plugins, use the SDK to reduce boilerplate:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/albertocavalcante/sky/pkg/skyplugin"
+)
+
+func main() {
+    skyplugin.Serve(skyplugin.Plugin{
+        Metadata: skyplugin.Metadata{
+            APIVersion: 1,
+            Name:       "hello",
+            Version:    "1.0.0",
+            Summary:    "A greeting plugin",
+        },
+        Run: func(ctx context.Context, args []string) error {
+            fmt.Println("Hello from Sky!")
+
+            // Access workspace root
+            fmt.Println("Workspace:", skyplugin.WorkspaceRoot())
+
+            return nil
+        },
+    })
+}
+```
+
+Update your `go.mod`:
+
+```bash
+go get github.com/albertocavalcante/sky/pkg/skyplugin
+```
+
+## Next Steps
+
+- [Plugin Protocol](/sky/plugins/protocol/) - Learn the full protocol specification
+- [Native Plugins](/sky/plugins/native/) - Build feature-rich native plugins
+- [WASM Plugins](/sky/plugins/wasm/) - Build portable WASM plugins
+- [SDK Reference](/sky/plugins/sdk/) - Explore the SDK API

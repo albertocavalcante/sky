@@ -1,0 +1,305 @@
+---
+title: Publishing Plugins
+description: Distribute your plugins via marketplaces
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+Once your plugin is ready, you can distribute it through marketplaces
+or direct URLs.
+
+## Distribution Methods
+
+1. **Marketplace**: Register with a plugin marketplace for discovery
+2. **Direct URL**: Host the binary and share the URL
+3. **Local Path**: Distribute as a file for local installation
+
+## Preparing for Release
+
+<Steps>
+
+1. **Test thoroughly**
+
+   ```bash
+   go test ./...
+   ```
+
+2. **Set version**
+
+   Update the version in your plugin's metadata:
+
+   ```go
+   const pluginVersion = "1.0.0"
+   ```
+
+3. **Build for all platforms**
+
+   <Aside type="tip">
+   For WASM plugins, a single build works on all platforms.
+   </Aside>
+
+   For native plugins:
+
+   ```bash
+   # Linux
+   GOOS=linux GOARCH=amd64 go build -o dist/plugin-linux-amd64
+   GOOS=linux GOARCH=arm64 go build -o dist/plugin-linux-arm64
+
+   # macOS
+   GOOS=darwin GOARCH=amd64 go build -o dist/plugin-darwin-amd64
+   GOOS=darwin GOARCH=arm64 go build -o dist/plugin-darwin-arm64
+
+   # Windows
+   GOOS=windows GOARCH=amd64 go build -o dist/plugin-windows-amd64.exe
+   ```
+
+4. **Generate checksums**
+
+   ```bash
+   cd dist
+   sha256sum * > checksums.txt
+   ```
+
+</Steps>
+
+## Marketplace Registration
+
+### Marketplace Index Format
+
+Marketplaces use a JSON index format:
+
+```json
+{
+  "name": "my-marketplace",
+  "updated_at": "2025-01-01T00:00:00Z",
+  "plugins": [
+    {
+      "name": "my-plugin",
+      "version": "1.0.0",
+      "description": "A useful plugin",
+      "url": "https://example.com/plugins/my-plugin",
+      "sha256": "abc123...",
+      "type": "exe"
+    }
+  ]
+}
+```
+
+### Plugin Entry Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Plugin name (lowercase, alphanumeric, dashes) |
+| `version` | Yes | Semantic version |
+| `description` | Yes | Brief description |
+| `url` | Yes | Download URL |
+| `sha256` | Recommended | SHA256 checksum of the binary |
+| `type` | No | `"exe"` (default) or `"wasm"` |
+
+### Platform-Specific URLs
+
+For native plugins, include platform variants:
+
+```json
+{
+  "name": "my-plugin",
+  "version": "1.0.0",
+  "description": "A cross-platform plugin",
+  "platforms": {
+    "linux-amd64": {
+      "url": "https://example.com/my-plugin-linux-amd64",
+      "sha256": "..."
+    },
+    "linux-arm64": {
+      "url": "https://example.com/my-plugin-linux-arm64",
+      "sha256": "..."
+    },
+    "darwin-arm64": {
+      "url": "https://example.com/my-plugin-darwin-arm64",
+      "sha256": "..."
+    },
+    "windows-amd64": {
+      "url": "https://example.com/my-plugin-windows-amd64.exe",
+      "sha256": "..."
+    }
+  }
+}
+```
+
+## Hosting Options
+
+### GitHub Releases
+
+1. Create a GitHub repository
+2. Build binaries for all platforms
+3. Create a release with the binaries attached
+4. Use raw URLs for the marketplace
+
+Example URL:
+```
+https://github.com/user/my-plugin/releases/download/v1.0.0/plugin-linux-amd64
+```
+
+### Static File Hosting
+
+Any static file host works:
+- Amazon S3
+- Google Cloud Storage
+- Cloudflare R2
+- Your own web server
+
+Ensure files are served with appropriate headers:
+- `Content-Type: application/octet-stream`
+- HTTPS for secure downloads
+
+## Direct Installation
+
+Users can install directly from URLs:
+
+```bash
+sky plugin install --url https://example.com/my-plugin my-plugin
+```
+
+For verified downloads:
+
+```bash
+sky plugin install \
+  --url https://example.com/my-plugin \
+  --sha256 abc123... \
+  my-plugin
+```
+
+## Version Management
+
+### Semantic Versioning
+
+Follow semantic versioning (semver):
+
+- **MAJOR**: Breaking changes
+- **MINOR**: New features (backward compatible)
+- **PATCH**: Bug fixes
+
+```
+1.0.0 → 1.0.1 (bug fix)
+1.0.1 → 1.1.0 (new feature)
+1.1.0 → 2.0.0 (breaking change)
+```
+
+### Changelog
+
+Maintain a CHANGELOG.md:
+
+```markdown
+# Changelog
+
+## [1.1.0] - 2025-01-15
+### Added
+- JSON output format support
+- Recursive directory scanning
+
+### Fixed
+- Handle empty files without error
+
+## [1.0.0] - 2025-01-01
+### Added
+- Initial release
+```
+
+## Security Considerations
+
+### Sign Your Releases
+
+Consider signing releases with GPG:
+
+```bash
+gpg --armor --detach-sign dist/plugin-linux-amd64
+```
+
+Provide signatures alongside binaries.
+
+### Provide Checksums
+
+Always provide SHA256 checksums:
+
+```bash
+sha256sum plugin-linux-amd64 > plugin-linux-amd64.sha256
+```
+
+Users can verify:
+
+```bash
+sha256sum -c plugin-linux-amd64.sha256
+```
+
+### HTTPS Only
+
+Always use HTTPS URLs for plugin downloads.
+
+## Self-Hosted Marketplace
+
+To create your own marketplace:
+
+1. Create a JSON index file
+2. Host it at a stable URL
+3. Users add your marketplace:
+
+```bash
+sky plugin marketplace add my-org https://plugins.example.com/index.json
+```
+
+### Example Index
+
+```json
+{
+  "name": "my-org",
+  "updated_at": "2025-01-01T00:00:00Z",
+  "plugins": [
+    {
+      "name": "star-analyzer",
+      "version": "2.0.0",
+      "description": "Advanced Starlark analyzer",
+      "url": "https://plugins.example.com/star-analyzer-2.0.0",
+      "sha256": "e3b0c44298fc...",
+      "type": "exe"
+    },
+    {
+      "name": "lint-rules",
+      "version": "1.5.0",
+      "description": "Custom lint rules",
+      "url": "https://plugins.example.com/lint-rules-1.5.0.wasm",
+      "sha256": "d7a8fbb307d7...",
+      "type": "wasm"
+    }
+  ]
+}
+```
+
+## Update Workflow
+
+When releasing updates:
+
+<Steps>
+
+1. Update version in code
+2. Build new binaries
+3. Generate new checksums
+4. Upload binaries
+5. Update marketplace index
+6. Announce the release
+
+</Steps>
+
+Users update installed plugins:
+
+```bash
+sky plugin install my-plugin  # Reinstalls from marketplace
+```
+
+## Best Practices
+
+1. **Test all platforms** before release
+2. **Provide checksums** for security
+3. **Keep old versions** available for rollback
+4. **Document changes** in a changelog
+5. **Use semantic versioning** consistently
+6. **Respond to issues** promptly

@@ -1,0 +1,422 @@
+---
+title: SDK Reference
+description: API reference for the Sky plugin SDK
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The `pkg/skyplugin` package provides helpers that eliminate boilerplate
+when building Sky plugins.
+
+## Installation
+
+```bash
+go get github.com/albertocavalcante/sky/pkg/skyplugin
+```
+
+## Quick Start
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/albertocavalcante/sky/pkg/skyplugin"
+)
+
+func main() {
+    skyplugin.Serve(skyplugin.Plugin{
+        Metadata: skyplugin.Metadata{
+            APIVersion: 1,
+            Name:       "my-plugin",
+            Version:    "1.0.0",
+            Summary:    "Does something useful",
+        },
+        Run: func(ctx context.Context, args []string) error {
+            fmt.Println("Hello!")
+            return nil
+        },
+    })
+}
+```
+
+## Core Types
+
+### Plugin
+
+```go
+type Plugin struct {
+    Metadata Metadata
+    Run      func(ctx context.Context, args []string) error
+}
+```
+
+The main plugin definition. Contains metadata and the run function.
+
+### Metadata
+
+```go
+type Metadata struct {
+    APIVersion int               `json:"api_version"`
+    Name       string            `json:"name"`
+    Version    string            `json:"version,omitempty"`
+    Summary    string            `json:"summary,omitempty"`
+    Commands   []CommandMetadata `json:"commands,omitempty"`
+}
+```
+
+Plugin metadata returned in metadata mode.
+
+### CommandMetadata
+
+```go
+type CommandMetadata struct {
+    Name    string `json:"name"`
+    Summary string `json:"summary,omitempty"`
+}
+```
+
+Describes a command the plugin provides.
+
+## Entry Points
+
+### Serve
+
+```go
+func Serve(p Plugin)
+```
+
+The main entry point for plugins. Handles:
+
+1. Checking `SKY_PLUGIN` environment variable
+2. Handling metadata mode
+3. Setting up context with interrupt handling
+4. Calling the Run function
+5. Exiting with appropriate code
+
+### ServeFunc
+
+```go
+func ServeFunc(m Metadata, run func(ctx context.Context, args []string) error)
+```
+
+Convenience wrapper for simple plugins:
+
+```go
+skyplugin.ServeFunc(
+    skyplugin.Metadata{Name: "hello", Version: "1.0.0"},
+    func(ctx context.Context, args []string) error {
+        fmt.Println("Hello!")
+        return nil
+    },
+)
+```
+
+## Environment Helpers
+
+### IsPlugin
+
+```go
+func IsPlugin() bool
+```
+
+Returns `true` if `SKY_PLUGIN=1`.
+
+### IsMetadataMode
+
+```go
+func IsMetadataMode() bool
+```
+
+Returns `true` if `SKY_PLUGIN_MODE=metadata`.
+
+### PluginName
+
+```go
+func PluginName() string
+```
+
+Returns the value of `SKY_PLUGIN_NAME`.
+
+### WorkspaceRoot
+
+```go
+func WorkspaceRoot() string
+```
+
+Returns `SKY_WORKSPACE_ROOT`, falling back to current directory.
+
+```go
+root := skyplugin.WorkspaceRoot()
+configPath := filepath.Join(root, ".sky.yaml")
+```
+
+### ConfigDir
+
+```go
+func ConfigDir() string
+```
+
+Returns `SKY_CONFIG_DIR`, falling back to platform default:
+- Linux/macOS: `~/.config/sky`
+- Windows: `%APPDATA%\sky`
+
+### OutputFormat
+
+```go
+func OutputFormat() string
+```
+
+Returns `SKY_OUTPUT_FORMAT`, defaulting to `"text"`.
+
+### IsJSONOutput
+
+```go
+func IsJSONOutput() bool
+```
+
+Returns `true` if JSON output is requested.
+
+```go
+if skyplugin.IsJSONOutput() {
+    json.NewEncoder(os.Stdout).Encode(result)
+} else {
+    fmt.Println(result.String())
+}
+```
+
+### NoColor
+
+```go
+func NoColor() bool
+```
+
+Returns `true` if color should be disabled. Respects both
+`SKY_NO_COLOR` and the `NO_COLOR` standard.
+
+### Verbose
+
+```go
+func Verbose() int
+```
+
+Returns the verbosity level (0-3) from `SKY_VERBOSE`.
+
+```go
+if skyplugin.Verbose() >= 2 {
+    fmt.Fprintln(os.Stderr, "Debug: processing file...")
+}
+```
+
+## Output Helpers
+
+### Output
+
+```go
+type Output struct { ... }
+
+func DefaultOutput() *Output
+func NewOutput(stdout, stderr io.Writer) *Output
+```
+
+Output formatting helper.
+
+### WriteJSON
+
+```go
+func (o *Output) WriteJSON(v any) error
+```
+
+Writes a value as indented JSON to stdout.
+
+### WriteResult
+
+```go
+func (o *Output) WriteResult(v any, textFn func() string) error
+```
+
+Writes output based on `SKY_OUTPUT_FORMAT`:
+
+```go
+out := skyplugin.DefaultOutput()
+out.WriteResult(result, func() string {
+    return fmt.Sprintf("Found %d items", result.Count)
+})
+```
+
+### Println / Printf
+
+```go
+func (o *Output) Println(args ...any)
+func (o *Output) Printf(format string, args ...any)
+```
+
+Write to stdout.
+
+### Error / Errorf
+
+```go
+func (o *Output) Error(args ...any)
+func (o *Output) Errorf(format string, args ...any)
+```
+
+Write to stderr.
+
+### Verbose / Verbosef
+
+```go
+func (o *Output) Verbose(level int, args ...any)
+func (o *Output) Verbosef(level int, format string, args ...any)
+```
+
+Write only if verbosity is at least the given level:
+
+```go
+out.Verbose(1, "Processing files...")
+out.Verbose(2, "Reading", path)
+out.Verbosef(3, "Debug: parsed %d lines\n", lineCount)
+```
+
+## Testing Package
+
+The `pkg/skyplugin/testing` package provides test utilities.
+
+### MockEnv
+
+```go
+func MockEnv(mode, name string) func()
+```
+
+Sets up plugin environment variables. Returns cleanup function.
+
+```go
+func TestMyPlugin(t *testing.T) {
+    cleanup := testing.MockEnv("exec", "my-plugin")
+    defer cleanup()
+
+    // Run plugin code...
+}
+```
+
+### MockEnvFull
+
+```go
+type EnvConfig struct {
+    Mode          string
+    Name          string
+    WorkspaceRoot string
+    ConfigDir     string
+    OutputFormat  string
+    NoColor       bool
+    Verbose       int
+}
+
+func MockEnvFull(cfg EnvConfig) func()
+```
+
+Full environment configuration:
+
+```go
+cleanup := testing.MockEnvFull(testing.EnvConfig{
+    Mode:          "exec",
+    Name:          "my-plugin",
+    WorkspaceRoot: "/test/workspace",
+    OutputFormat:  "json",
+    Verbose:       2,
+})
+defer cleanup()
+```
+
+### CaptureOutput
+
+```go
+type CaptureResult struct {
+    Stdout   string
+    Stderr   string
+    ExitCode int
+}
+
+func CaptureOutput(fn func()) CaptureResult
+```
+
+Captures stdout, stderr, and exit code:
+
+```go
+result := testing.CaptureOutput(func() {
+    main()  // Run your plugin
+})
+
+if result.ExitCode != 0 {
+    t.Errorf("expected exit 0, got %d", result.ExitCode)
+}
+
+if !strings.Contains(result.Stdout, "expected") {
+    t.Errorf("unexpected output: %s", result.Stdout)
+}
+```
+
+### ClearEnv
+
+```go
+func ClearEnv() func()
+```
+
+Removes all Sky environment variables:
+
+```go
+cleanup := testing.ClearEnv()
+defer cleanup()
+
+// Test behavior when not running as a plugin
+```
+
+## Complete Example
+
+```go
+package main
+
+import (
+    "context"
+    "flag"
+    "fmt"
+
+    "github.com/albertocavalcante/sky/pkg/skyplugin"
+)
+
+func main() {
+    skyplugin.Serve(skyplugin.Plugin{
+        Metadata: skyplugin.Metadata{
+            APIVersion: 1,
+            Name:       "greeter",
+            Version:    "1.0.0",
+            Summary:    "Greets users",
+            Commands: []skyplugin.CommandMetadata{
+                {Name: "greeter", Summary: "Greet someone"},
+            },
+        },
+        Run: run,
+    })
+}
+
+func run(ctx context.Context, args []string) error {
+    fs := flag.NewFlagSet("greeter", flag.ContinueOnError)
+    name := fs.String("name", "World", "name to greet")
+
+    if err := fs.Parse(args); err != nil {
+        return err
+    }
+
+    out := skyplugin.DefaultOutput()
+
+    result := map[string]string{
+        "greeting": fmt.Sprintf("Hello, %s!", *name),
+        "workspace": skyplugin.WorkspaceRoot(),
+    }
+
+    return out.WriteResult(result, func() string {
+        return result["greeting"]
+    })
+}
+```

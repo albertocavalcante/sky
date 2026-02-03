@@ -1,0 +1,246 @@
+---
+title: Plugin Protocol
+description: Complete specification of the Sky plugin protocol
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The Sky plugin protocol defines how plugins communicate with the Sky CLI.
+Both native and WASM plugins use the same protocol.
+
+## Protocol Version
+
+The current protocol version is **v1.1**.
+
+- v1.0: Initial release with core environment variables
+- v1.1: Added workspace root, config dir, output format, and verbosity
+
+## Execution Flow
+
+When Sky runs a plugin:
+
+1. Sky sets environment variables
+2. Sky invokes the plugin with CLI arguments
+3. Plugin checks `SKY_PLUGIN_MODE`
+4. If `metadata`: output JSON and exit
+5. If `exec`: run the command and exit with appropriate code
+
+## Environment Variables
+
+Sky sets these environment variables when running plugins:
+
+| Variable | Since | Description |
+|----------|-------|-------------|
+| `SKY_PLUGIN` | v1.0 | Always `"1"` when running as a plugin |
+| `SKY_PLUGIN_MODE` | v1.0 | `"exec"` or `"metadata"` |
+| `SKY_PLUGIN_NAME` | v1.0 | The plugin's registered name |
+| `SKY_WORKSPACE_ROOT` | v1.1 | Workspace root directory |
+| `SKY_CONFIG_DIR` | v1.1 | Sky configuration directory |
+| `SKY_OUTPUT_FORMAT` | v1.1 | `"text"` or `"json"` |
+| `SKY_NO_COLOR` | v1.1 | `"1"` if color should be disabled |
+| `SKY_VERBOSE` | v1.1 | Verbosity level (`0`-`3`) |
+
+### SKY_PLUGIN
+
+Always set to `"1"` when a plugin is run by Sky. Use this to detect if
+your binary is running as a plugin or standalone.
+
+```go
+if os.Getenv("SKY_PLUGIN") != "1" {
+    fmt.Fprintln(os.Stderr, "This is a Sky plugin. Run via: sky my-plugin")
+    os.Exit(1)
+}
+```
+
+### SKY_PLUGIN_MODE
+
+Determines the operation mode:
+
+- **`metadata`**: Output plugin metadata as JSON to stdout and exit
+- **`exec`**: Execute the requested command
+
+### SKY_WORKSPACE_ROOT
+
+The root directory of the current workspace. Determined by searching
+upward from the current directory for:
+
+1. `.sky.yaml` or `.sky.yml`
+2. `.git` directory
+
+Falls back to the current directory if no markers are found.
+
+<Aside type="tip">
+Always provide a fallback when reading `SKY_WORKSPACE_ROOT` since it may
+not be set by older Sky versions.
+</Aside>
+
+### SKY_OUTPUT_FORMAT
+
+The user's preferred output format:
+
+- **`text`** (default): Human-readable text output
+- **`json`**: Machine-readable JSON output
+
+Respect this when your plugin produces structured output:
+
+```go
+if os.Getenv("SKY_OUTPUT_FORMAT") == "json" {
+    json.NewEncoder(os.Stdout).Encode(result)
+} else {
+    fmt.Println(result.String())
+}
+```
+
+### SKY_NO_COLOR
+
+Set to `"1"` when color output should be disabled. Also check the
+standard `NO_COLOR` environment variable.
+
+```go
+func noColor() bool {
+    return os.Getenv("SKY_NO_COLOR") == "1" || os.Getenv("NO_COLOR") != ""
+}
+```
+
+### SKY_VERBOSE
+
+Verbosity level from `0` (quiet) to `3` (debug):
+
+- `0`: Only errors
+- `1`: Normal output
+- `2`: Verbose output
+- `3`: Debug output
+
+## Metadata Mode
+
+When `SKY_PLUGIN_MODE=metadata`, the plugin must:
+
+1. Print a JSON object to stdout
+2. Exit with status code `0`
+3. Not print any other output (no logs, no banners)
+
+### Metadata JSON Schema
+
+```json
+{
+  "api_version": 1,
+  "name": "my-plugin",
+  "version": "1.0.0",
+  "summary": "A brief description",
+  "commands": [
+    {
+      "name": "my-plugin",
+      "summary": "Main command description"
+    },
+    {
+      "name": "subcommand",
+      "summary": "Subcommand description"
+    }
+  ]
+}
+```
+
+### Required Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `api_version` | integer | Must be `1` |
+| `name` | string | Plugin name (must match installed name) |
+
+### Optional Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `version` | string | Semantic version (e.g., `"1.0.0"`) |
+| `summary` | string | Brief description for `sky plugin list` |
+| `commands` | array | List of commands the plugin provides |
+
+### Command Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Command name |
+| `summary` | string | Brief description |
+
+## Execution Mode
+
+When `SKY_PLUGIN_MODE=exec`, the plugin should:
+
+1. Parse command-line arguments from `os.Args[1:]`
+2. Perform the requested operation
+3. Write output to stdout
+4. Write errors to stderr
+5. Exit with appropriate status code
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | General error |
+| `2` | Usage error (invalid arguments) |
+
+## Backward Compatibility
+
+### For Plugin Authors
+
+When reading v1.1 environment variables, always provide fallbacks:
+
+```go
+func workspaceRoot() string {
+    if root := os.Getenv("SKY_WORKSPACE_ROOT"); root != "" {
+        return root
+    }
+    cwd, _ := os.Getwd()
+    return cwd
+}
+```
+
+### For Sky Maintainers
+
+- v1.0 plugins work unchanged with v1.1 Sky
+- New environment variables are additive
+- `api_version` in metadata remains `1`
+
+## Example Implementation
+
+```go
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "os"
+)
+
+func main() {
+    // Check if running as a plugin
+    if os.Getenv("SKY_PLUGIN") != "1" {
+        fmt.Fprintln(os.Stderr, "Run via: sky my-plugin")
+        os.Exit(1)
+    }
+
+    // Handle metadata mode
+    if os.Getenv("SKY_PLUGIN_MODE") == "metadata" {
+        json.NewEncoder(os.Stdout).Encode(map[string]any{
+            "api_version": 1,
+            "name":        "my-plugin",
+            "version":     "1.0.0",
+            "summary":     "Does something useful",
+        })
+        return
+    }
+
+    // Handle execution mode
+    args := os.Args[1:]
+    if err := run(args); err != nil {
+        fmt.Fprintln(os.Stderr, err)
+        os.Exit(1)
+    }
+}
+
+func run(args []string) error {
+    // Plugin logic here
+    return nil
+}
+```

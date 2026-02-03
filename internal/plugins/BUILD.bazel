@@ -12,6 +12,7 @@ go_library(
         "runner_wasi.go",
         "store.go",
         "types.go",
+        "workspace.go",
     ],
     importpath = "github.com/albertocavalcante/sky/internal/plugins",
     visibility = ["//:__subpackages__"],
@@ -28,6 +29,7 @@ go_test(
     srcs = [
         "runner_test.go",
         "store_test.go",
+        "workspace_test.go",
     ],
     embed = [":plugins"],
 )

@@ -1,0 +1,326 @@
+---
+title: WASM Plugins
+description: Build portable WebAssembly plugins for Sky
+---
+
+import { Steps, Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+WASM plugins are WebAssembly modules that run in a sandboxed environment.
+They're portable across platforms and secure by default.
+
+## Advantages
+
+- **Cross-Platform**: Build once, run on any platform Sky supports
+- **Secure Sandbox**: No filesystem or network access by default
+- **Safe Distribution**: Download and run plugins from URLs safely
+- **Small Footprint**: TinyGo produces very compact binaries
+
+## Limitations
+
+WASM plugins run in a restricted environment:
+
+- **No Filesystem Access**: Cannot read/write files directly
+- **No Network Access**: Cannot make HTTP requests
+- **Limited Memory**: Default ~16MB (configurable)
+- **No Subprocesses**: Cannot spawn other programs
+
+<Aside type="caution">
+If your plugin needs filesystem access, network requests, or subprocess
+execution, use a [native plugin](/sky/plugins/native/) instead.
+</Aside>
+
+## When to Use WASM Plugins
+
+WASM plugins are ideal for:
+
+- Text transformation (stdin → stdout)
+- Pure computation
+- Cross-platform distribution
+- Security-sensitive environments
+- URL-based plugin installation
+
+## Creating a WASM Plugin
+
+<Steps>
+
+1. **Initialize the project**
+
+   ```bash
+   sky plugin init my-wasm --wasm
+   cd my-wasm
+   ```
+
+2. **Implement your logic**
+
+   Note the `//go:build wasip1` directive at the top of `main.go`.
+
+3. **Build with Go**
+
+   ```bash
+   GOOS=wasip1 GOARCH=wasm go build -o plugin.wasm
+   ```
+
+   Or with TinyGo for smaller binaries:
+
+   ```bash
+   tinygo build -o plugin.wasm -target=wasip1 .
+   ```
+
+4. **Install and test**
+
+   ```bash
+   sky plugin install --path ./plugin.wasm my-wasm
+   sky my-wasm
+   ```
+
+</Steps>
+
+## Build Options
+
+<Tabs>
+<TabItem label="Go (Standard)">
+
+```bash
+GOOS=wasip1 GOARCH=wasm go build -o plugin.wasm
+```
+
+**Pros:**
+- Full Go compatibility
+- All standard library features
+- Reliable builds
+
+**Cons:**
+- Larger binaries (~2-3 MB)
+
+</TabItem>
+<TabItem label="TinyGo">
+
+```bash
+tinygo build -o plugin.wasm -target=wasip1 .
+```
+
+**Pros:**
+- Much smaller binaries (~100-500 KB)
+- Faster startup
+
+**Cons:**
+- No `reflect` package (limits JSON)
+- No `flag` package
+- Some stdlib limitations
+
+</TabItem>
+</Tabs>
+
+## TinyGo Compatibility
+
+When building with TinyGo, avoid these packages:
+
+- `flag` - Use manual argument parsing
+- `reflect` - Limits `encoding/json` functionality
+- `net/http` - No network in WASM anyway
+
+### Argument Parsing Without `flag`
+
+```go
+func parseArgs(args []string) (name string, verbose bool) {
+    name = "World"  // default
+
+    for i, arg := range args {
+        switch arg {
+        case "-n", "--name":
+            if i+1 < len(args) {
+                name = args[i+1]
+            }
+        case "-v", "--verbose":
+            verbose = true
+        }
+    }
+    return
+}
+```
+
+## Complete Example
+
+```go
+//go:build wasip1
+
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "os"
+)
+
+const (
+    pluginName    = "word-counter"
+    pluginVersion = "1.0.0"
+    pluginSummary = "Counts words from stdin"
+)
+
+func main() {
+    if os.Getenv("SKY_PLUGIN") != "1" {
+        fmt.Fprintf(os.Stderr, "Run via: sky %s\n", pluginName)
+        os.Exit(1)
+    }
+
+    if os.Getenv("SKY_PLUGIN_MODE") == "metadata" {
+        json.NewEncoder(os.Stdout).Encode(map[string]any{
+            "api_version": 1,
+            "name":        pluginName,
+            "version":     pluginVersion,
+            "summary":     pluginSummary,
+        })
+        return
+    }
+
+    run()
+}
+
+func run() {
+    args := os.Args[1:]
+
+    // Check for help
+    for _, arg := range args {
+        if arg == "-h" || arg == "--help" {
+            printHelp()
+            return
+        }
+    }
+
+    // Read from stdin
+    var input []byte
+    buf := make([]byte, 1024)
+    for {
+        n, err := os.Stdin.Read(buf)
+        if n > 0 {
+            input = append(input, buf[:n]...)
+        }
+        if err != nil {
+            break
+        }
+    }
+
+    // Count words (simple implementation)
+    words := 0
+    inWord := false
+    for _, b := range input {
+        if b == ' ' || b == '\n' || b == '\t' {
+            inWord = false
+        } else if !inWord {
+            words++
+            inWord = true
+        }
+    }
+
+    // Output based on format preference
+    if os.Getenv("SKY_OUTPUT_FORMAT") == "json" {
+        json.NewEncoder(os.Stdout).Encode(map[string]any{
+            "words": words,
+            "bytes": len(input),
+        })
+    } else {
+        fmt.Printf("Words: %d\nBytes: %d\n", words, len(input))
+    }
+}
+
+func printHelp() {
+    fmt.Printf("Usage: sky %s < input.txt\n\n", pluginName)
+    fmt.Println("Counts words from standard input.")
+    fmt.Println()
+    fmt.Println("Options:")
+    fmt.Println("  -h, --help    Show this help")
+}
+```
+
+## Working with Environment Variables
+
+Since WASM plugins can't access the filesystem, use environment variables
+to receive information from Sky:
+
+```go
+func main() {
+    // Workspace root is provided via environment
+    root := os.Getenv("SKY_WORKSPACE_ROOT")
+    if root != "" {
+        fmt.Println("Workspace:", root)
+    }
+
+    // Config directory
+    configDir := os.Getenv("SKY_CONFIG_DIR")
+
+    // Output format preference
+    outputJSON := os.Getenv("SKY_OUTPUT_FORMAT") == "json"
+}
+```
+
+## Input/Output Pattern
+
+WASM plugins typically use a stdin/stdout pattern:
+
+```bash
+# Pass file content via stdin
+cat file.star | sky word-counter
+
+# Or use shell redirection
+sky word-counter < file.star
+
+# Pipe to other tools
+sky word-counter < file.star | jq .words
+```
+
+## Size Comparison
+
+| Compiler | Example Size |
+|----------|--------------|
+| Go 1.21 | ~2-3 MB |
+| TinyGo 0.30 | ~100-500 KB |
+
+For distribution, TinyGo is recommended when possible.
+
+## Distribution via URL
+
+WASM plugins can be safely installed from URLs:
+
+```bash
+sky plugin install --url https://example.com/my-plugin.wasm my-plugin
+```
+
+The sandbox ensures downloaded plugins can't access your filesystem
+or network.
+
+## Testing WASM Plugins
+
+Test locally before building for WASM:
+
+```go
+// main_native_test.go
+//go:build !wasip1
+
+package main
+
+import (
+    "os"
+    "testing"
+)
+
+func TestRun(t *testing.T) {
+    os.Setenv("SKY_PLUGIN", "1")
+    defer os.Unsetenv("SKY_PLUGIN")
+
+    // Test your logic
+    run()
+}
+```
+
+Build and run tests normally:
+
+```bash
+go test ./...
+```
+
+Then build for WASM:
+
+```bash
+GOOS=wasip1 GOARCH=wasm go build -o plugin.wasm
+```

@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "star-counter_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/albertocavalcante/sky/examples/plugins/star-counter",
+    visibility = ["//visibility:private"],
+    deps = ["//examples/plugins/star-counter/counter"],
+)
+
+go_binary(
+    name = "star-counter",
+    embed = [":star-counter_lib"],
+    visibility = ["//visibility:public"],
+)

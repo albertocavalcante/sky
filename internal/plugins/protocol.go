@@ -6,9 +6,17 @@ import (
 )
 
 const (
+	// Core protocol environment variables (v1.0)
 	EnvPlugin     = "SKY_PLUGIN"
 	EnvPluginMode = "SKY_PLUGIN_MODE"
 	EnvPluginName = "SKY_PLUGIN_NAME"
+
+	// Extended environment variables (v1.1)
+	EnvWorkspaceRoot = "SKY_WORKSPACE_ROOT"
+	EnvConfigDir     = "SKY_CONFIG_DIR"
+	EnvOutputFormat  = "SKY_OUTPUT_FORMAT"
+	EnvNoColor       = "SKY_NO_COLOR"
+	EnvVerbose       = "SKY_VERBOSE"
 )
 
 const (
