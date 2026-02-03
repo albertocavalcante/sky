@@ -1,0 +1,32 @@
+---
+title: Output Formats
+description: Coverage output formats supported by skycov
+---
+
+# Output Formats
+
+skycov supports multiple output formats for CI integration.
+
+## Text (default)
+
+```bash
+skycov coverage.json
+```
+
+## JSON
+
+```bash
+skycov --format=json coverage.json
+```
+
+## Cobertura XML
+
+```bash
+skycov --format=cobertura coverage.json > coverage.xml
+```
+
+## LCOV
+
+```bash
+skycov --format=lcov coverage.json > coverage.lcov
+```

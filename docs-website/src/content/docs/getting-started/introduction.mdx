@@ -1,0 +1,64 @@
+---
+title: Introduction
+description: Sky - A comprehensive toolkit for Starlark development
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+# Sky
+
+**Sky** is a comprehensive toolkit for [Starlark](https://github.com/bazelbuild/starlark) development, providing linting, formatting, testing, coverage, and documentation tools.
+
+## What is Starlark?
+
+Starlark is a configuration language originally designed for [Bazel](https://bazel.build/). It's a dialect of Python, making it familiar to most developers while being deterministic and hermetic.
+
+## Why Sky?
+
+<CardGrid>
+  <Card title="Linting" icon="warning">
+    Catch bugs and enforce best practices with `skylint`
+  </Card>
+  <Card title="Formatting" icon="document">
+    Consistent code style with `skyfmt`
+  </Card>
+  <Card title="Testing" icon="rocket">
+    Test runner with assertions via `skytest`
+  </Card>
+  <Card title="Coverage" icon="approve-check">
+    Code coverage collection with `skycov`
+  </Card>
+</CardGrid>
+
+## Tools Overview
+
+| Tool | Description |
+|------|-------------|
+| `skylint` | Starlark linter with configurable rules |
+| `skyfmt` | Code formatter for consistent style |
+| `skytest` | Test runner with built-in assertions |
+| `skycov` | Coverage reporter (text, JSON, Cobertura, LCOV) |
+| `skydoc` | Documentation generator |
+| `skycheck` | Static analyzer |
+| `skyquery` | Query tool for Starlark codebases |
+| `skyrepl` | Interactive REPL |
+
+## Getting Started
+
+```bash
+# Install all tools
+go install github.com/albertocavalcante/sky/cmd/...@latest
+
+# Or install specific tools
+go install github.com/albertocavalcante/sky/cmd/skylint@latest
+go install github.com/albertocavalcante/sky/cmd/skytest@latest
+```
+
+## starlark-go-x
+
+Sky is powered by [starlark-go-x](https://github.com/albertocavalcante/starlark-go-x), our enhanced fork of the official starlark-go interpreter with:
+
+- **OnExec hook** for coverage instrumentation
+- **Type annotation** parsing support
+
+These features are being proposed upstream to the official [google/starlark-go](https://github.com/google/starlark-go) repository.

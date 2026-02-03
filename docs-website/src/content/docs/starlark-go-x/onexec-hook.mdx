@@ -1,0 +1,126 @@
+---
+title: OnExec Hook
+description: Coverage instrumentation via the OnExec callback
+---
+
+import { Code } from '@astrojs/starlight/components';
+
+# OnExec Hook
+
+The `OnExec` hook is a callback on `starlark.Thread` that fires before each bytecode instruction is executed. This enables coverage collection, debugging, and tracing.
+
+## API
+
+```go
+type Thread struct {
+    // ... other fields ...
+
+    // OnExec is called before each bytecode instruction is executed, if non-nil.
+    // Use fn.PositionAt(pc) to resolve the source position.
+    OnExec func(fn *Function, pc uint32)
+}
+```
+
+## Usage
+
+```go
+import "go.starlark.net/starlark"
+
+// Create a coverage collector
+coverage := make(map[string]map[int]int) // file -> line -> hits
+
+thread := &starlark.Thread{
+    Name: "main",
+    OnExec: func(fn *starlark.Function, pc uint32) {
+        pos := fn.PositionAt(pc)
+        file := pos.Filename()
+        line := int(pos.Line)
+
+        if coverage[file] == nil {
+            coverage[file] = make(map[int]int)
+        }
+        coverage[file][line]++
+    },
+}
+
+// Execute Starlark code - OnExec fires for each instruction
+starlark.ExecFile(thread, "example.star", src, nil)
+```
+
+## Performance
+
+The `OnExec` callback is invoked for **every bytecode instruction**, which can be expensive. For coverage collection, deduplicate by line:
+
+```go
+var lastFile string
+var lastLine int32
+
+thread.OnExec = func(fn *starlark.Function, pc uint32) {
+    pos := fn.PositionAt(pc)
+
+    // Skip if same line as last instruction
+    if pos.Filename() == lastFile && pos.Line == lastLine {
+        return
+    }
+    lastFile = pos.Filename()
+    lastLine = pos.Line
+
+    // Record coverage hit
+    collector.RecordHit(lastFile, int(lastLine))
+}
+```
+
+## PositionAt Method
+
+The `PositionAt` method on `*Function` maps a program counter to source position:
+
+```go
+// PositionAt returns the source position for program counter pc.
+func (fn *Function) PositionAt(pc uint32) syntax.Position
+```
+
+The returned `Position` contains:
+- `Filename()` - source file path
+- `Line` - 1-based line number
+- `Col` - 1-based column number
+
+## Implementation Details
+
+The hook is inserted in the interpreter loop at `starlark/interp.go`:
+
+```go
+loop:
+    for {
+        thread.Steps++
+        // ... cancellation check ...
+
+        fr.pc = pc
+
+        // Coverage hook
+        if thread.OnExec != nil {
+            thread.OnExec(fn, pc)
+        }
+
+        op := compile.Opcode(code[pc])
+        // ... opcode dispatch ...
+    }
+```
+
+## Future Enhancements
+
+### Branch Coverage
+
+To support branch coverage, the hook signature could be extended:
+
+```go
+// Future: include opcode for branch detection
+OnExec func(fn *Function, pc uint32, op Opcode)
+```
+
+This would allow detecting conditional jumps (`CJMP`) to track branch coverage.
+
+## Repository
+
+The OnExec hook is implemented in [starlark-go-x](https://github.com/albertocavalcante/starlark-go-x) on the `trunk` branch.
+
+We plan to propose this upstream to [google/starlark-go](https://github.com/google/starlark-go).

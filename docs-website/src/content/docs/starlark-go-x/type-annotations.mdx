@@ -1,0 +1,33 @@
+---
+title: Type Annotations
+description: Python-style type annotation support
+---
+
+# Type Annotations
+
+starlark-go-x supports parsing Python-style type annotations.
+
+## Syntax
+
+```python
+def greet(name: str) -> str:
+    return "Hello, " + name
+
+def add(a: int, b: int = 0) -> int:
+    return a + b
+```
+
+## AST Nodes
+
+- `TypeExpr` - Type expression wrapper
+- `TypedParam` - Parameter with type annotation
+- `DefStmt.ReturnType` - Return type annotation
+
+## Enabling
+
+```go
+opts := &syntax.FileOptions{
+    TypeAnnotations: true,
+}
+f, err := opts.Parse(filename, src, 0)
+```

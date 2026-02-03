@@ -1,0 +1,98 @@
+---
+title: Tools Overview
+description: Overview of all Sky tools
+---
+
+# Tools Overview
+
+Sky provides a comprehensive suite of tools for Starlark development.
+
+## Analysis Tools
+
+### skylint
+
+Static linter with configurable rules.
+
+```bash
+skylint --format=json src/
+```
+
+### skycheck
+
+Deep static analyzer with type inference.
+
+```bash
+skycheck --strict src/
+```
+
+## Formatting Tools
+
+### skyfmt
+
+Code formatter for consistent style.
+
+```bash
+skyfmt --write src/
+```
+
+## Testing Tools
+
+### skytest
+
+Test runner with built-in assertions.
+
+```bash
+skytest --coverage tests/
+```
+
+Features:
+- Test discovery (`*_test.star`, `test_*.star`)
+- Built-in `assert` module
+- `setup()` and `teardown()` support
+- JSON and JUnit output formats
+
+### skycov
+
+Coverage reporter supporting multiple output formats.
+
+```bash
+skycov --format=cobertura coverage.json > coverage.xml
+```
+
+Formats:
+- Text (default)
+- JSON
+- Cobertura XML
+- LCOV
+
+## Documentation Tools
+
+### skydoc
+
+Generate documentation from Starlark docstrings.
+
+```bash
+skydoc --output=docs src/
+```
+
+## Query Tools
+
+### skyquery
+
+Query Starlark codebases.
+
+```bash
+skyquery 'deps(//src:lib)'
+```
+
+## Interactive Tools
+
+### skyrepl
+
+Interactive REPL for Starlark.
+
+```bash
+skyrepl
+>>> 1 + 1
+2
+```
