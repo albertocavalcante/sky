@@ -1,0 +1,263 @@
+---
+title: Best Practices
+description: Performance tips and coding patterns for Starlark
+---
+
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
+
+# Starlark Best Practices
+
+Performance tips, memory optimization, and coding patterns for writing efficient Starlark code.
+
+## Memory Management
+
+Starlark uses garbage collection, but GC only runs between top-level statements—not inside function calls. This means memory can accumulate during execution.
+
+### Avoid Allocations in Loops
+
+```python
+# Bad: allocates memory on every iteration
+for target in huge_target_list:
+    result = memory_intensive_function(x, y)
+    process(target, result)
+
+# Good: hoist allocation outside the loop
+result = memory_intensive_function(x, y)
+for target in huge_target_list:
+    process(target, result)
+```
+
+### Process Data Incrementally
+
+```python
+# Bad: stores all targets in memory
+targets = generate_all_targets(n)
+for target in targets:
+    process(target)
+
+# Good: process as you generate
+for i in range(n):
+    target = generate_target(i)
+    process(target)
+```
+
+### Beware of dict.items() and dict.keys()
+
+These methods allocate a new list on every call:
+
+```python
+# Bad: allocates a new list each iteration if called in loop
+for key, value in config.items():  # Allocates!
+    process(key, value)
+
+# Good: cache the items if iterating multiple times
+items = config.items()
+for key, value in items:
+    process(key, value)
+```
+
+### Avoid Large Data Structures
+
+```python
+# Bad: creates a billion-element list
+million = [1 for i in range(1 << 20)]
+billion = million * (1 << 10)  # 1GB+ memory!
+
+# Good: process in chunks or use generators
+def process_range(start, end):
+    for i in range(start, end):
+        process(i)
+```
+
+## Performance Patterns
+
+### Use Early Returns
+
+```python
+# Bad: processes all items even when one fails
+def validate_all(items):
+    errors = []
+    for item in items:
+        if not is_valid(item):
+            errors.append(item)
+    if errors:
+        fail("Invalid items: " + str(errors))
+
+# Good: fail fast
+def validate_all(items):
+    for item in items:
+        if not is_valid(item):
+            fail("Invalid item: " + str(item))
+```
+
+### Prefer Dictionaries for Lookups
+
+```python
+# Bad: O(n) lookup
+def find_by_name(items, name):
+    for item in items:
+        if item.name == name:
+            return item
+    return None
+
+# Good: O(1) lookup with dict
+items_by_name = {item.name: item for item in items}
+def find_by_name(name):
+    return items_by_name.get(name)
+```
+
+### Cache Repeated Computations
+
+```python
+# Bad: recomputes on every call
+def get_config():
+    return expensive_computation()
+
+for target in targets:
+    cfg = get_config()  # Called N times!
+    process(target, cfg)
+
+# Good: compute once
+config = expensive_computation()
+for target in targets:
+    process(target, config)
+```
+
+## Code Organization
+
+### Keep Build Files Simple
+
+Build files (BUCK, BUILD.bazel) should be declarative:
+
+```python
+# Good: simple, declarative
+python_library(
+    name = "mylib",
+    srcs = glob(["*.py"]),
+    deps = [":utils"],
+)
+
+# Avoid: complex logic in build files
+# for x in some_list:
+#     if condition(x):
+#         python_library(...)
+```
+
+### Move Logic to .bzl Files
+
+Complex logic belongs in separate `.bzl` files:
+
+```python
+# macros.bzl
+def my_python_library(name, srcs, deps = []):
+    """Wrapper with team defaults."""
+    python_library(
+        name = name,
+        srcs = srcs,
+        deps = deps + ["//common:base"],
+        visibility = ["//..."],
+    )
+```
+
+```python
+# BUCK or BUILD.bazel
+load("//tools:macros.bzl", "my_python_library")
+
+my_python_library(
+    name = "mylib",
+    srcs = glob(["*.py"]),
+)
+```
+
+### Use Descriptive Names
+
+```python
+# Bad
+def f(x, y):
+    return x + y
+
+# Good
+def calculate_total_size(file_sizes, overhead_bytes):
+    return file_sizes + overhead_bytes
+```
+
+## Debugging
+
+### Use print() Strategically
+
+```python
+def process_targets(targets):
+    print("Processing {} targets".format(len(targets)))
+    for i, target in enumerate(targets):
+        if i % 100 == 0:
+            print("Progress: {}/{}".format(i, len(targets)))
+        process(target)
+```
+
+### Validate Inputs Early
+
+```python
+def create_library(name, srcs, deps = []):
+    # Validate early
+    if not name:
+        fail("name is required")
+    if not srcs:
+        fail("srcs cannot be empty")
+    if type(deps) != "list":
+        fail("deps must be a list, got: " + type(deps))
+
+    # Proceed with valid inputs
+    native.library(name = name, srcs = srcs, deps = deps)
+```
+
+## Profiling
+
+Build systems like Buck2 offer profiling to identify bottlenecks:
+
+```bash
+# Profile loading phase
+buck2 profile loading --mode=heap-summary-allocated -o profile.csv //path:target
+
+# Profile analysis phase
+buck2 profile analysis --mode=heap-summary-allocated -o profile.csv //path:target
+```
+
+### Profiling Modes
+
+| Mode | Description |
+|------|-------------|
+| `heap-summary-allocated` | Time and allocations per function |
+| `heap-summary-retained` | Memory retained after freezing |
+| `time-flame` | Flamegraph of time spent |
+| `statement` | Time per statement |
+
+<Aside type="tip">
+For `skytest`, use the `-v` flag for verbose output and timing information.
+</Aside>
+
+## Common Pitfalls
+
+<CardGrid>
+  <Card title="No while loops" icon="warning">
+    Use `for i in range(n)` instead of `while`. Starlark forbids `while` to prevent infinite loops.
+  </Card>
+  <Card title="No recursion" icon="warning">
+    Recursion is disabled in standard Starlark. Use iteration instead.
+  </Card>
+  <Card title="Frozen values" icon="warning">
+    Values become immutable after a module loads. Don't rely on mutation across files.
+  </Card>
+  <Card title="No classes" icon="warning">
+    Use `struct()` or `record()` instead of classes. Starlark has no OOP.
+  </Card>
+</CardGrid>
+
+## Summary
+
+1. **Minimize allocations in loops** - Hoist computations outside
+2. **Process incrementally** - Don't build huge intermediate structures
+3. **Cache dict.items()** - It allocates on every call
+4. **Fail fast** - Validate early, return early
+5. **Use dicts for lookups** - O(1) vs O(n)
+6. **Keep build files simple** - Move logic to .bzl files
+7. **Profile when needed** - Use built-in profilers to find bottlenecks
