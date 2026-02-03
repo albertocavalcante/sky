@@ -1,9 +1,19 @@
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "cli",
-    srcs = ["cli.go"],
+    srcs = [
+        "cli.go",
+        "exitcodes.go",
+        "output.go",
+    ],
     importpath = "github.com/albertocavalcante/sky/internal/cli",
     visibility = ["//:__subpackages__"],
     deps = ["//internal/version"],
+)
+
+go_test(
+    name = "cli_test",
+    srcs = ["cli_test.go"],
+    embed = [":cli"],
 )

@@ -10,8 +10,8 @@ package checker
 
 import (
 	"fmt"
-	"sort"
 
+	"github.com/albertocavalcante/sky/internal/starlark/sortutil"
 	"go.starlark.net/resolve"
 	"go.starlark.net/syntax"
 )
@@ -221,12 +221,10 @@ func (c *Checker) checkParsedFile(f *syntax.File) ([]Diagnostic, error) {
 	}
 
 	// Sort diagnostics by position
-	sort.Slice(diagnostics, func(i, j int) bool {
-		if diagnostics[i].Pos.Line != diagnostics[j].Pos.Line {
-			return diagnostics[i].Pos.Line < diagnostics[j].Pos.Line
-		}
-		return diagnostics[i].Pos.Col < diagnostics[j].Pos.Col
-	})
+	sortutil.ByLineColumn(diagnostics,
+		func(d Diagnostic) int { return int(d.Pos.Line) },
+		func(d Diagnostic) int { return int(d.Pos.Col) },
+	)
 
 	return diagnostics, nil
 }

@@ -18,6 +18,7 @@ go_library(
     deps = [
         "//internal/starlark/classifier",
         "//internal/starlark/filekind",
+        "//internal/starlark/sortutil",
         "//internal/starlark/validator",
         "@com_github_bazelbuild_buildtools//build",
         "@com_github_pmezard_go_difflib//difflib",

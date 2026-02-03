@@ -9,7 +9,10 @@ go_library(
     ],
     importpath = "github.com/albertocavalcante/sky/internal/starlark/docgen",
     visibility = ["//:__subpackages__"],
-    deps = ["@net_starlark_go//syntax"],
+    deps = [
+        "//internal/starlark/sortutil",
+        "@net_starlark_go//syntax",
+    ],
 )
 
 go_test(

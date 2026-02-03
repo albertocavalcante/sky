@@ -3,7 +3,8 @@ package linter
 import (
 	"fmt"
 	"io"
-	"sort"
+
+	"github.com/albertocavalcante/sky/internal/starlark/sortutil"
 )
 
 // GitHubReporter outputs findings in GitHub Actions annotation format.
@@ -21,16 +22,11 @@ func (r *GitHubReporter) Report(w io.Writer, result *Result) error {
 	// Sort findings by file, then line, then column
 	sortedFindings := make([]Finding, len(result.Findings))
 	copy(sortedFindings, result.Findings)
-	sort.Slice(sortedFindings, func(i, j int) bool {
-		fi, fj := sortedFindings[i], sortedFindings[j]
-		if fi.FilePath != fj.FilePath {
-			return fi.FilePath < fj.FilePath
-		}
-		if fi.Line != fj.Line {
-			return fi.Line < fj.Line
-		}
-		return fi.Column < fj.Column
-	})
+	sortutil.ByLocation(sortedFindings,
+		func(f Finding) string { return f.FilePath },
+		func(f Finding) int { return f.Line },
+		func(f Finding) int { return f.Column },
+	)
 
 	// Output each finding as a GitHub Actions annotation
 	for _, finding := range sortedFindings {

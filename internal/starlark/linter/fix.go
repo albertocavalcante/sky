@@ -5,8 +5,8 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"sort"
 
+	"github.com/albertocavalcante/sky/internal/starlark/sortutil"
 	"github.com/pmezard/go-difflib/difflib"
 )
 
@@ -67,9 +67,7 @@ func ApplyFixes(content []byte, fixes []*Replacement) ([]byte, int, int) {
 	}
 
 	// Sort fixes by start position (ascending) to detect overlaps correctly
-	sort.Slice(validFixes, func(i, j int) bool {
-		return validFixes[i].Start < validFixes[j].Start
-	})
+	sortutil.Asc(validFixes, func(f *Replacement) int { return f.Start })
 
 	// Detect and skip overlapping fixes (prefer earlier fixes)
 	var nonOverlapping []*Replacement
@@ -88,9 +86,7 @@ func ApplyFixes(content []byte, fixes []*Replacement) ([]byte, int, int) {
 	}
 
 	// Sort by start position descending to apply from end to start
-	sort.Slice(nonOverlapping, func(i, j int) bool {
-		return nonOverlapping[i].Start > nonOverlapping[j].Start
-	})
+	sortutil.Desc(nonOverlapping, func(f *Replacement) int { return f.Start })
 
 	// Apply fixes
 	result := content
@@ -142,7 +138,7 @@ func FixFiles(findings []Finding) ([]FixResult, error) {
 func fixFile(path string, findings []Finding) (FixResult, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return FixResult{}, err
+		return FixResult{}, fmt.Errorf("reading file: %w", err)
 	}
 
 	// Extract replacements from findings

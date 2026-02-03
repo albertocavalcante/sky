@@ -3,8 +3,9 @@ package linter
 import (
 	"fmt"
 	"io"
-	"sort"
 	"strings"
+
+	"github.com/albertocavalcante/sky/internal/starlark/sortutil"
 )
 
 // Reporter formats and outputs lint results.
@@ -43,20 +44,11 @@ func (r *TextReporter) Report(w io.Writer, result *Result) error {
 	// Sort findings by file, then line, then column
 	sortedFindings := make([]Finding, len(result.Findings))
 	copy(sortedFindings, result.Findings)
-	sort.Slice(sortedFindings, func(i, j int) bool {
-		fi, fj := sortedFindings[i], sortedFindings[j]
-
-		// First by file
-		if fi.FilePath != fj.FilePath {
-			return fi.FilePath < fj.FilePath
-		}
-		// Then by line
-		if fi.Line != fj.Line {
-			return fi.Line < fj.Line
-		}
-		// Then by column
-		return fi.Column < fj.Column
-	})
+	sortutil.ByLocation(sortedFindings,
+		func(f Finding) string { return f.FilePath },
+		func(f Finding) int { return f.Line },
+		func(f Finding) int { return f.Column },
+	)
 
 	// Output findings grouped by file
 	var currentFile string
@@ -227,16 +219,11 @@ func (r *CompactReporter) Report(w io.Writer, result *Result) error {
 	// Sort findings by file, then line, then column
 	sortedFindings := make([]Finding, len(result.Findings))
 	copy(sortedFindings, result.Findings)
-	sort.Slice(sortedFindings, func(i, j int) bool {
-		fi, fj := sortedFindings[i], sortedFindings[j]
-		if fi.FilePath != fj.FilePath {
-			return fi.FilePath < fj.FilePath
-		}
-		if fi.Line != fj.Line {
-			return fi.Line < fj.Line
-		}
-		return fi.Column < fj.Column
-	})
+	sortutil.ByLocation(sortedFindings,
+		func(f Finding) string { return f.FilePath },
+		func(f Finding) int { return f.Line },
+		func(f Finding) int { return f.Column },
+	)
 
 	// Output each finding on a single line
 	for _, finding := range sortedFindings {

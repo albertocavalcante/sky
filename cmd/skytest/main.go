@@ -169,6 +169,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 	return exitOK
 }
 
+// Helper functions for writing output.
+// Write errors are intentionally ignored because:
+//  1. These functions write to stdout/stderr where there's no reasonable recovery
+//     if the terminal/pipe is broken (EPIPE, etc.)
+//  2. If we can't write error messages, we can't report the write failure either
+//  3. The exit code still reflects the actual operation status
 func writef(w io.Writer, format string, args ...any) {
 	_, _ = fmt.Fprintf(w, format, args...)
 }

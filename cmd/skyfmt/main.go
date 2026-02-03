@@ -249,43 +249,12 @@ func expandPath(path string) ([]string, error) {
 			}
 			return nil
 		}
-		if isStarlarkFile(d.Name()) {
+		if filekind.IsStarlarkFile(d.Name()) {
 			files = append(files, p)
 		}
 		return nil
 	})
 	return files, err
-}
-
-// isStarlarkFile returns true if the filename is a recognized Starlark file.
-// Supports files from: Bazel, Buck2, Pants, Please, Tilt, Copybara, Skycfg,
-// Kurtosis, Drone CI, Isopod, Cirrus CI, and generic Starlark.
-func isStarlarkFile(name string) bool {
-	// Exact filename matches (no extension)
-	switch name {
-	case "BUILD", "BUILD.bazel", "WORKSPACE", "WORKSPACE.bazel", "MODULE.bazel", // Bazel
-		"BUCK",     // Buck2
-		"Tiltfile": // Tilt (Kubernetes dev)
-		return true
-	}
-	// Extension-based matches
-	ext := filepath.Ext(name)
-	switch ext {
-	case ".bzl", // Bazel/Buck2 extensions
-		".bxl",      // Buck2 BXL (Buck2 Extension Language)
-		".star",     // Generic Starlark (Kurtosis, Drone CI, Cirrus CI, Qri, etc.)
-		".starlark", // Full extension variant
-		".sky",      // Skycfg, Copybara (.bara.sky)
-		".skyi",     // Type stubs
-		".axl",      // Starlark config files
-		".ipd",      // Isopod (Kubernetes)
-		".plz",      // Please Build
-		".pconf",    // Protoconf config
-		".pinc",     // Protoconf include
-		".mpconf":   // Protoconf mutable config
-		return true
-	}
-	return false
 }
 
 // computeDiff returns a unified diff between original and formatted content.
@@ -315,10 +284,14 @@ func computeDiff(path string, original, formatted []byte) string {
 	return buf.String()
 }
 
-// Helper functions for writing output without error checking.
-// These are intentionally ignoring errors as there's no reasonable
-// recovery for write failures to stdout/stderr.
-
+// Helper functions for writing output.
+// Write errors are intentionally ignored because:
+//  1. These functions write to stdout/stderr where there's no reasonable recovery
+//     if the terminal/pipe is broken (EPIPE, etc.)
+//  2. If we can't write error messages, we can't report the write failure either
+//  3. The exit code still reflects the actual operation status
+//
+// Note: File output (-w flag) uses os.WriteFile which handles errors properly.
 func writef(w io.Writer, format string, args ...any) {
 	_, _ = fmt.Fprintf(w, format, args...)
 }

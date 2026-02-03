@@ -41,7 +41,7 @@ func LoadConfig(path string) (*Config, error) {
 	if configPath == "" {
 		found, err := findConfigFile()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("finding config file: %w", err)
 		}
 		if found == "" {
 			// No config file found, return default config
@@ -128,7 +128,7 @@ func (c *Config) ApplyToRegistry(registry *Registry) error {
 			Severity: severity,
 			Options:  override.Options,
 		}); err != nil {
-			return err
+			return fmt.Errorf("setting config for rule %s: %w", ruleName, err)
 		}
 	}
 

@@ -2,6 +2,7 @@
 package formatter
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/bazelbuild/buildtools/build"
@@ -43,7 +44,7 @@ func (r *Result) Changed() bool {
 func Format(src []byte, path string, kind filekind.Kind) ([]byte, error) {
 	f, err := parse(src, path, kind)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 	return build.Format(f), nil
 }

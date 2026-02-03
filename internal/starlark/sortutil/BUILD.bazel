@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "sortutil",
+    srcs = ["sortutil.go"],
+    importpath = "github.com/albertocavalcante/sky/internal/starlark/sortutil",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "sortutil_test",
+    srcs = ["sortutil_test.go"],
+    deps = [":sortutil"],
+)

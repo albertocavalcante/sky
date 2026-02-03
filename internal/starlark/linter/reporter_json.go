@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"io"
 	"sort"
+
+	"github.com/albertocavalcante/sky/internal/starlark/sortutil"
 )
 
 // JSONReporter outputs findings in JSON format for CI integration.
@@ -87,12 +89,10 @@ func (r *JSONReporter) buildOutput(result *Result) jsonOutput {
 		findings := fileMap[path]
 
 		// Sort findings by line and column for deterministic output
-		sort.Slice(findings, func(i, j int) bool {
-			if findings[i].Line != findings[j].Line {
-				return findings[i].Line < findings[j].Line
-			}
-			return findings[i].Column < findings[j].Column
-		})
+		sortutil.ByLineColumn(findings,
+			func(f Finding) int { return f.Line },
+			func(f Finding) int { return f.Column },
+		)
 
 		jf := jsonFile{
 			Path:     path,

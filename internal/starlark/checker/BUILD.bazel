@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/albertocavalcante/sky/internal/starlark/checker",
     visibility = ["//:__subpackages__"],
     deps = [
+        "//internal/starlark/sortutil",
         "@net_starlark_go//resolve",
         "@net_starlark_go//syntax",
     ],

@@ -33,7 +33,7 @@ func (d *Driver) Run(ctx context.Context, paths []string) (*Result, error) {
 	// Expand paths to individual files
 	files, err := d.expandPaths(paths)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("expanding paths: %w", err)
 	}
 
 	result := &Result{
@@ -93,7 +93,10 @@ func (d *Driver) RunFile(path string) ([]Finding, error) {
 	suppressionParser := NewSuppressionParser(content)
 
 	// Get enabled rules in dependency order
-	rules := d.registry.EnabledRules()
+	rules, err := d.registry.EnabledRules()
+	if err != nil {
+		return nil, fmt.Errorf("getting enabled rules: %w", err)
+	}
 
 	// Filter rules by file kind
 	var applicableRules []*Rule
@@ -176,7 +179,7 @@ func (d *Driver) expandPaths(paths []string) ([]string, error) {
 	for _, path := range paths {
 		expanded, err := d.expandPath(path)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("expanding %s: %w", path, err)
 		}
 
 		for _, f := range expanded {
@@ -199,7 +202,7 @@ func (d *Driver) expandPaths(paths []string) ([]string, error) {
 func (d *Driver) expandPath(path string) ([]string, error) {
 	info, err := os.Stat(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("stat %s: %w", path, err)
 	}
 
 	if !info.IsDir() {
@@ -225,7 +228,7 @@ func (d *Driver) expandPath(path string) ([]string, error) {
 		}
 
 		// Check if it's a Starlark file
-		if d.isStarlarkFile(entry.Name()) {
+		if filekind.IsStarlarkFile(entry.Name()) {
 			files = append(files, p)
 		}
 
@@ -233,26 +236,6 @@ func (d *Driver) expandPath(path string) ([]string, error) {
 	})
 
 	return files, err
-}
-
-// isStarlarkFile checks if a filename is a Starlark file.
-func (d *Driver) isStarlarkFile(name string) bool {
-	// Exact matches
-	switch name {
-	case "BUILD", "BUILD.bazel", "WORKSPACE", "WORKSPACE.bazel", "MODULE.bazel",
-		"BUCK", "Tiltfile":
-		return true
-	}
-
-	// Extension matches
-	ext := filepath.Ext(name)
-	switch ext {
-	case ".bzl", ".bxl", ".star", ".starlark", ".sky", ".skyi",
-		".axl", ".ipd", ".plz", ".pconf", ".pinc", ".mpconf":
-		return true
-	}
-
-	return false
 }
 
 // parseFile parses a Starlark file based on its kind.

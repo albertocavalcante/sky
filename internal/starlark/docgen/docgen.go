@@ -6,9 +6,10 @@
 package docgen
 
 import (
-	"sort"
+	"fmt"
 	"strings"
 
+	"github.com/albertocavalcante/sky/internal/starlark/sortutil"
 	"go.starlark.net/syntax"
 )
 
@@ -93,7 +94,7 @@ func ExtractFile(filename string, src []byte, opts Options) (*ModuleDoc, error) 
 	// Parse the file
 	f, err := syntax.Parse(filename, src, syntax.RetainComments)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parsing %s: %w", filename, err)
 	}
 
 	doc := &ModuleDoc{
@@ -133,9 +134,7 @@ func ExtractFile(filename string, src []byte, opts Options) (*ModuleDoc, error) 
 	}
 
 	// Sort functions by name
-	sort.Slice(doc.Functions, func(i, j int) bool {
-		return doc.Functions[i].Name < doc.Functions[j].Name
-	})
+	sortutil.ByName(doc.Functions, func(f FunctionDoc) string { return f.Name })
 
 	return doc, nil
 }

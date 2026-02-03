@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"sort"
+
+	"github.com/albertocavalcante/sky/internal/starlark/sortutil"
 )
 
 // Format defines the output format for query results.
@@ -134,15 +135,11 @@ func (f *Formatter) formatName(w io.Writer, result Result) error {
 	// Sort by file, then line, then name for deterministic output
 	sorted := make([]Item, len(items))
 	copy(sorted, items)
-	sort.Slice(sorted, func(i, j int) bool {
-		if sorted[i].File() != sorted[j].File() {
-			return sorted[i].File() < sorted[j].File()
-		}
-		if sorted[i].Line() != sorted[j].Line() {
-			return sorted[i].Line() < sorted[j].Line()
-		}
-		return sorted[i].Name() < sorted[j].Name()
-	})
+	sortutil.ByFileLineName(sorted,
+		func(i Item) string { return i.File() },
+		func(i Item) int { return i.Line() },
+		func(i Item) string { return i.Name() },
+	)
 
 	for _, item := range sorted {
 		if _, err := fmt.Fprintln(w, item.Name()); err != nil {
@@ -158,12 +155,10 @@ func (f *Formatter) formatLocation(w io.Writer, result Result) error {
 	// Sort by file, then line
 	sorted := make([]Item, len(items))
 	copy(sorted, items)
-	sort.Slice(sorted, func(i, j int) bool {
-		if sorted[i].File() != sorted[j].File() {
-			return sorted[i].File() < sorted[j].File()
-		}
-		return sorted[i].Line() < sorted[j].Line()
-	})
+	sortutil.ByFileLine(sorted,
+		func(i Item) string { return i.File() },
+		func(i Item) int { return i.Line() },
+	)
 
 	for _, item := range sorted {
 		if _, err := fmt.Fprintf(w, "//%s:%d: %s\n", item.File(), item.Line(), item.Name()); err != nil {
@@ -200,15 +195,11 @@ func (f *Formatter) formatJSON(w io.Writer, result Result) error {
 	// Sort for deterministic output
 	sorted := make([]Item, len(items))
 	copy(sorted, items)
-	sort.Slice(sorted, func(i, j int) bool {
-		if sorted[i].File() != sorted[j].File() {
-			return sorted[i].File() < sorted[j].File()
-		}
-		if sorted[i].Line() != sorted[j].Line() {
-			return sorted[i].Line() < sorted[j].Line()
-		}
-		return sorted[i].Name() < sorted[j].Name()
-	})
+	sortutil.ByFileLineName(sorted,
+		func(i Item) string { return i.File() },
+		func(i Item) int { return i.Line() },
+		func(i Item) string { return i.Name() },
+	)
 
 	output := jsonOutput{
 		Query:   result.Query(),

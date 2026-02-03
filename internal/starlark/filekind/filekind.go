@@ -1,6 +1,8 @@
 // Package filekind defines the types of Starlark files recognized by the SKY toolchain.
 package filekind
 
+import "path/filepath"
+
 // Kind represents the type of Starlark file.
 type Kind string
 
@@ -96,4 +98,35 @@ func AllKinds() []Kind {
 		KindBuckconfig,
 		KindUnknown,
 	}
+}
+
+// IsStarlarkFile returns true if the filename is a recognized Starlark file.
+// Supports files from: Bazel, Buck2, Pants, Please, Tilt, Copybara, Skycfg,
+// Kurtosis, Drone CI, Isopod, Cirrus CI, and generic Starlark.
+func IsStarlarkFile(name string) bool {
+	// Exact filename matches (no extension)
+	switch name {
+	case "BUILD", "BUILD.bazel", "WORKSPACE", "WORKSPACE.bazel", "MODULE.bazel", // Bazel
+		"BUCK",     // Buck2
+		"Tiltfile": // Tilt (Kubernetes dev)
+		return true
+	}
+	// Extension-based matches
+	ext := filepath.Ext(name)
+	switch ext {
+	case ".bzl", // Bazel/Buck2 extensions
+		".bxl",      // Buck2 BXL (Buck2 Extension Language)
+		".star",     // Generic Starlark (Kurtosis, Drone CI, Cirrus CI, Qri, etc.)
+		".starlark", // Full extension variant
+		".sky",      // Skycfg, Copybara (.bara.sky)
+		".skyi",     // Type stubs
+		".axl",      // Starlark config files
+		".ipd",      // Isopod (Kubernetes)
+		".plz",      // Please Build
+		".pconf",    // Protoconf config
+		".pinc",     // Protoconf include
+		".mpconf":   // Protoconf mutable config
+		return true
+	}
+	return false
 }

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/albertocavalcante/sky/internal/starlark/sortutil"
 )
 
 // Registry manages a collection of lint rules with enable/disable controls.
@@ -178,7 +180,8 @@ func (r *Registry) GetConfig(ruleName string) RuleConfig {
 
 // EnabledRules returns all currently enabled rules in dependency order.
 // Rules with no dependencies come first, followed by rules that depend on them.
-func (r *Registry) EnabledRules() []*Rule {
+// Returns an error if there is a dependency cycle among the enabled rules.
+func (r *Registry) EnabledRules() ([]*Rule, error) {
 	var enabled []*Rule
 	for name, rule := range r.rules {
 		if r.enabled[name] {
@@ -198,9 +201,7 @@ func (r *Registry) AllRules() []*Rule {
 	}
 
 	// Sort by name for consistent ordering
-	sort.Slice(rules, func(i, j int) bool {
-		return rules[i].Name < rules[j].Name
-	})
+	sortutil.ByName(rules, func(r *Rule) string { return r.Name })
 
 	return rules
 }
@@ -299,7 +300,8 @@ func matchGlob(pattern, str string) bool {
 }
 
 // topologicalSort sorts rules so dependencies come before dependents.
-func topologicalSort(rules []*Rule) []*Rule {
+// Returns an error if a dependency cycle is detected.
+func topologicalSort(rules []*Rule) ([]*Rule, error) {
 	// Build adjacency map and in-degree count
 	deps := make(map[string][]*Rule)  // rule -> rules that depend on it
 	inDegree := make(map[string]int)  // rule -> number of dependencies
@@ -338,12 +340,18 @@ func topologicalSort(rules []*Rule) []*Rule {
 		}
 	}
 
-	// If we couldn't sort all rules, there's a cycle (shouldn't happen if Validate was called)
+	// If we couldn't sort all rules, there's a cycle
 	if len(sorted) != len(rules) {
-		// This indicates a dependency cycle, which is a programming error.
-		// The Validate() method should have caught this, so we panic.
-		panic("dependency cycle detected in linter rules")
+		// Find which rules are involved in the cycle (those with non-zero in-degree)
+		var cycleRules []string
+		for name, degree := range inDegree {
+			if degree > 0 {
+				cycleRules = append(cycleRules, name)
+			}
+		}
+		sort.Strings(cycleRules)
+		return nil, fmt.Errorf("dependency cycle detected among rules: %v", cycleRules)
 	}
 
-	return sorted
+	return sorted, nil
 }

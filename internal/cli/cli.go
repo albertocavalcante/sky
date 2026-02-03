@@ -28,26 +28,26 @@ func Execute(cmd Command, args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	showVersion := fs.Bool("version", false, "print version and exit")
 	fs.Usage = func() {
-		writef(stderr, "usage: %s [flags]\n\n%s\n\nflags:\n", cmd.Name, cmd.Summary)
+		Writef(stderr, "usage: %s [flags]\n\n%s\n\nflags:\n", cmd.Name, cmd.Summary)
 		fs.PrintDefaults()
 	}
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
-			return 0
+			return ExitOK
 		}
-		writeln(stderr, err)
-		return 2
+		Writeln(stderr, err)
+		return ExitWarning
 	}
 
 	if *showVersion {
-		writef(stdout, "%s %s\n", cmd.Name, version.String())
-		return 0
+		Writef(stdout, "%s %s\n", cmd.Name, version.String())
+		return ExitOK
 	}
 
 	if cmd.Run == nil {
-		writef(stderr, "%s: no command configured\n", cmd.Name)
-		return 1
+		Writef(stderr, "%s: no command configured\n", cmd.Name)
+		return ExitError
 	}
 
 	if err := cmd.Run(fs.Args(), stdout, stderr); err != nil {
@@ -55,27 +55,9 @@ func Execute(cmd Command, args []string, stdout, stderr io.Writer) int {
 		if exitErr, ok := err.(ExitCodeError); ok {
 			return int(exitErr)
 		}
-		writef(stderr, "%s: %v\n", cmd.Name, err)
-		return 1
+		Writef(stderr, "%s: %v\n", cmd.Name, err)
+		return ExitError
 	}
 
-	return 0
-}
-
-func writef(w io.Writer, format string, args ...any) {
-	_, _ = fmt.Fprintf(w, format, args...)
-}
-
-func writeln(w io.Writer, args ...any) {
-	_, _ = fmt.Fprintln(w, args...)
-}
-
-// Writef writes formatted output to the writer.
-func Writef(w io.Writer, format string, args ...any) {
-	_, _ = fmt.Fprintf(w, format, args...)
-}
-
-// Writeln writes a line to the writer.
-func Writeln(w io.Writer, args ...any) {
-	_, _ = fmt.Fprintln(w, args...)
+	return ExitOK
 }

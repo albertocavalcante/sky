@@ -5,6 +5,7 @@ go_library(
     srcs = ["format.go"],
     importpath = "github.com/albertocavalcante/sky/internal/starlark/query/output",
     visibility = ["//:__subpackages__"],
+    deps = ["//internal/starlark/sortutil"],
 )
 
 go_test(

@@ -1,6 +1,8 @@
 package filekind
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestKind_String(t *testing.T) {
 	tests := []struct {
@@ -126,5 +128,55 @@ func TestAllKinds(t *testing.T) {
 	}
 	if !found {
 		t.Error("AllKinds() should include KindUnknown")
+	}
+}
+
+func TestIsStarlarkFile(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		// Bazel files (exact matches)
+		{"BUILD", true},
+		{"BUILD.bazel", true},
+		{"WORKSPACE", true},
+		{"WORKSPACE.bazel", true},
+		{"MODULE.bazel", true},
+
+		// Buck2 files
+		{"BUCK", true},
+
+		// Tilt files
+		{"Tiltfile", true},
+
+		// Extension-based matches
+		{"rules.bzl", true},
+		{"defs.bxl", true},
+		{"main.star", true},
+		{"config.starlark", true},
+		{"config.sky", true},
+		{"types.skyi", true},
+		{"config.axl", true},
+		{"deploy.ipd", true},
+		{"build.plz", true},
+		{"config.pconf", true},
+		{"include.pinc", true},
+		{"mutable.mpconf", true},
+
+		// Non-Starlark files
+		{"main.go", false},
+		{"README.md", false},
+		{"Makefile", false},
+		{"BUILD.txt", false},
+		{"config.json", false},
+		{"script.py", false},
+		{".bzl", true}, // Hidden file with .bzl extension is still a Starlark file
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsStarlarkFile(tt.name); got != tt.want {
+				t.Errorf("IsStarlarkFile(%q) = %v, want %v", tt.name, got, tt.want)
+			}
+		})
 	}
 }
