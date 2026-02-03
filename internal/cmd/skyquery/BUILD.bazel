@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "skyquery",
+    srcs = ["run.go"],
+    importpath = "github.com/albertocavalcante/sky/internal/cmd/skyquery",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/starlark/query",
+        "//internal/starlark/query/index",
+        "//internal/starlark/query/output",
+        "//internal/version",
+    ],
+)

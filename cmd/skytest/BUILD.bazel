@@ -5,10 +5,7 @@ go_library(
     srcs = ["main.go"],
     importpath = "github.com/albertocavalcante/sky/cmd/skytest",
     visibility = ["//visibility:private"],
-    deps = [
-        "//internal/starlark/tester",
-        "//internal/version",
-    ],
+    deps = ["//internal/cmd/skytest"],
 )
 
 go_binary(

@@ -5,10 +5,7 @@ go_library(
     srcs = ["main.go"],
     importpath = "github.com/albertocavalcante/sky/cmd/skycov",
     visibility = ["//visibility:private"],
-    deps = [
-        "//internal/starlark/coverage",
-        "//internal/version",
-    ],
+    deps = ["//internal/cmd/skycov"],
 )
 
 go_binary(

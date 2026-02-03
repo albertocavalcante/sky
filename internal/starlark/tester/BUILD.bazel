@@ -4,6 +4,7 @@ go_library(
     name = "tester",
     srcs = [
         "assertions.go",
+        "coverage_hook.go",
         "discovery.go",
         "reporter.go",
         "tester.go",
@@ -11,6 +12,7 @@ go_library(
     importpath = "github.com/albertocavalcante/sky/internal/starlark/tester",
     visibility = ["//:__subpackages__"],
     deps = [
+        "//internal/starlark/coverage",
         "@net_starlark_go//starlark",
         "@net_starlark_go//starlarkstruct",
         "@net_starlark_go//syntax",

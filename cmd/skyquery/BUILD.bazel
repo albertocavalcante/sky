@@ -5,12 +5,7 @@ go_library(
     srcs = ["main.go"],
     importpath = "github.com/albertocavalcante/sky/cmd/skyquery",
     visibility = ["//visibility:private"],
-    deps = [
-        "//internal/starlark/query",
-        "//internal/starlark/query/index",
-        "//internal/starlark/query/output",
-        "//internal/version",
-    ],
+    deps = ["//internal/cmd/skyquery"],
 )
 
 go_binary(

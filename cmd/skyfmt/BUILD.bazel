@@ -5,11 +5,7 @@ go_library(
     srcs = ["main.go"],
     importpath = "github.com/albertocavalcante/sky/cmd/skyfmt",
     visibility = ["//visibility:private"],
-    deps = [
-        "//internal/starlark/filekind",
-        "//internal/starlark/formatter",
-        "//internal/version",
-    ],
+    deps = ["//internal/cmd/skyfmt"],
 )
 
 go_binary(
