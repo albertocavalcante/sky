@@ -19,7 +19,6 @@ enable = [
   "staticcheck",
   "unused",
   "gosimple",
-  "typecheck",
 ]
 disable = [
   "godot",
