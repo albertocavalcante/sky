@@ -1,12 +1,286 @@
 ---
 title: skylint
-description: skylint tool documentation
+description: Starlark linter with auto-fix support
 ---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
 # skylint
 
-Documentation coming soon.
+A Starlark linter that wraps [buildtools](https://github.com/bazelbuild/buildtools) warnings with a modern CLI interface, auto-fix support, and multiple output formats.
+
+## Installation
 
 ```bash
-skylint --help
+go install github.com/albertocavalcante/sky/cmd/skylint@latest
 ```
+
+## Usage
+
+```bash
+# Lint a single file
+skylint BUILD.bazel
+
+# Lint all files recursively
+skylint ./...
+
+# Enable all rules
+skylint --enable=all .
+
+# Auto-fix issues
+skylint --fix .
+
+# Preview fixes without applying
+skylint --fix --diff .
+
+# Output as JSON (for CI integration)
+skylint --format=json .
+
+# GitHub Actions format
+skylint --format=github .
+```
+
+## Output Formats
+
+| Format | Description |
+|--------|-------------|
+| `text` | Human-readable output (default) |
+| `compact` | Single line per issue |
+| `json` | Machine-readable JSON |
+| `github` | GitHub Actions annotations |
+
+## Rules
+
+skylint includes all buildtools warnings organized by category. Use `skylint --list-rules` to see available rules.
+
+### Categories
+
+| Category | Description |
+|----------|-------------|
+| `correctness` | Logic errors and bugs |
+| `style` | Code style and formatting |
+| `imports` | Load statement issues |
+| `unused` | Unused code detection |
+| `documentation` | Docstring requirements |
+| `deprecation` | Deprecated API usage |
+| `bazel-api` | Bazel-specific API issues |
+| `native-rules` | Native rule migration |
+| `compatibility` | Python/Starlark compatibility |
+| `control-flow` | Control flow issues |
+
+### Correctness Rules
+
+| Rule | Description |
+|------|-------------|
+| `constant-glob` | Checks for constant glob patterns |
+| `duplicated-name` | Checks for duplicate variable names |
+| `keyword-position-args` | Checks for positional args after keywords |
+| `positional-args` | Checks for too many positional args |
+| `redefined-variable` | Checks for variable redefinition |
+| `return-value` | Checks for return value issues |
+| `rule-impl-return` | Checks rule implementation return value |
+| `uninitialized` | Checks for uninitialized variables |
+
+### Style Rules
+
+| Rule | Description |
+|------|-------------|
+| `confusing-name` | Checks for confusing variable names |
+| `name-conventions` | Checks naming conventions |
+| `print` | Checks for print statements |
+| `unsorted-dict-items` | Checks for unsorted dictionary items |
+
+### Import Rules
+
+| Rule | Description |
+|------|-------------|
+| `load` | Checks for unused load statements |
+| `load-on-top` | Checks that loads are at top of file |
+| `same-origin-load` | Checks for same-origin load statements |
+
+### Unused Code Rules
+
+| Rule | Description |
+|------|-------------|
+| `no-effect` | Checks for statements with no effect |
+| `unreachable` | Checks for unreachable code |
+| `unused-variable` | Checks for unused variables |
+
+### Documentation Rules
+
+| Rule | Description |
+|------|-------------|
+| `function-docstring` | Checks for missing function docstrings |
+| `function-docstring-args` | Checks function docstring documents args |
+| `function-docstring-header` | Checks function docstring header format |
+| `function-docstring-return` | Checks function docstring documents return |
+| `module-docstring` | Checks for missing module docstrings |
+
+### Deprecation Rules
+
+| Rule | Description |
+|------|-------------|
+| `attr-license` | Checks for deprecated licenses attribute |
+| `attr-single-file` | Checks for single_file attribute usage |
+| `bzl-visibility` | Checks for deprecated bzl_visibility |
+| `ctx-actions` | Checks for deprecated ctx.action |
+| `ctx-args` | Checks for deprecated ctx.outputs and ctx.files |
+| `deprecated-function` | Checks for deprecated function usage |
+| `depset-iteration` | Checks for iteration over depset |
+| `depset-union` | Checks for deprecated depset union |
+| `dict-concatenation` | Checks for dict concatenation with + |
+| `filetype` | Checks for deprecated FileType usage |
+| `git-repository` | Checks for deprecated git_repository |
+| `http-archive` | Checks for deprecated http_archive |
+| `output-group` | Checks for deprecated OutputGroupInfo |
+| `package-name` | Checks for deprecated PACKAGE_NAME |
+| `repository-name` | Checks for deprecated REPOSITORY_NAME |
+
+### Bazel API Rules
+
+| Rule | Description |
+|------|-------------|
+| `overly-nested-depset` | Checks for deeply nested depsets |
+| `provider-params` | Checks provider parameter usage |
+
+### Native Rules Migration
+
+| Rule | Description |
+|------|-------------|
+| `native-android` | Checks for native android_* rules |
+| `native-build` | Checks for native.existing_rules usage |
+| `native-cc` | Checks for native cc_* rules |
+| `native-java` | Checks for native java_* rules |
+| `native-package` | Checks for native.package usage |
+| `native-proto` | Checks for native proto_* rules |
+| `native-py` | Checks for native py_* rules |
+
+### Compatibility Rules
+
+| Rule | Description |
+|------|-------------|
+| `integer-division` | Checks for integer division compatibility |
+| `string-iteration` | Checks for string iteration compatibility |
+
+### Other Rules
+
+| Rule | Description |
+|------|-------------|
+| `attr-cfg` | Checks for invalid cfg attribute |
+| `attr-non-empty` | Checks for non-empty attribute requirements |
+| `attr-output-default` | Checks for output attributes with defaults |
+| `build-args-kwargs` | Checks for **kwargs in build rules |
+| `package-on-top` | Checks that package() is at top |
+| `unnamed-macro` | Checks for unnamed macro definitions |
+
+## Configuration
+
+Create a `.skylint.json` file in your project root:
+
+```json
+{
+  "enable": ["all"],
+  "disable": ["print", "module-docstring"],
+  "warnings_as_errors": false
+}
+```
+
+### Configuration Options
+
+| Option | Description |
+|--------|-------------|
+| `enable` | Rules to enable (supports `all` and category names) |
+| `disable` | Rules to disable (supports glob patterns like `native-*`) |
+| `warnings_as_errors` | Treat warnings as errors |
+
+## Auto-fix
+
+Many rules support automatic fixing:
+
+```bash
+# Fix all fixable issues
+skylint --fix .
+
+# Preview fixes as diff
+skylint --fix --diff .
+```
+
+<Aside type="note">
+When fixes conflict (multiple fixes for the same line), skylint applies the first fix and skips conflicting ones. Run `skylint --fix` again to apply remaining fixes.
+</Aside>
+
+## Explaining Rules
+
+Get detailed information about a specific rule:
+
+```bash
+skylint --explain=load
+```
+
+Output:
+```
+Rule: load
+Category: imports
+Severity: warning
+Auto-fix: true
+
+Description:
+  Checks for unused load statements
+
+Documentation:
+  https://github.com/bazelbuild/buildtools/blob/master/WARNINGS.md#load
+```
+
+## Suppressing Warnings
+
+Suppress specific warnings with comments:
+
+```starlark
+# skylint: disable=print
+print("Debug output")
+
+# skylint: disable=unused-variable
+unused = compute_value()
+```
+
+Or suppress for a block:
+
+```starlark
+# skylint: disable=print
+def debug_function():
+    print("Starting")
+    print("Done")
+# skylint: enable=print
+```
+
+## CI Integration
+
+### GitHub Actions
+
+```yaml
+- name: Lint Starlark
+  run: skylint --format=github ./...
+```
+
+### Pre-commit
+
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: skylint
+        name: skylint
+        entry: skylint
+        language: system
+        files: \.(bzl|bazel|star)$
+```
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success (no issues) |
+| 1 | Error (lint errors or tool failure) |
+| 2 | Warning (warnings found, no errors) |
+
+Use `--warnings-as-errors` to treat warnings as errors (exit code 1).
