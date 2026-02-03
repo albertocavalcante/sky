@@ -120,8 +120,10 @@ export default defineConfig({
 					label: 'starlark-go-x',
 					items: [
 						{ label: 'Overview', slug: 'starlark-go-x/overview' },
-						{ label: 'OnExec Hook', slug: 'starlark-go-x/onexec-hook' },
+						{ label: 'Coverage Hooks API', slug: 'starlark-go-x/hooks' },
+						{ label: 'Technical Deep Dive', slug: 'starlark-go-x/technical' },
 						{ label: 'Type Annotations', slug: 'starlark-go-x/type-annotations' },
+						{ label: 'Roadmap & TODO', slug: 'starlark-go-x/roadmap' },
 					],
 				},
 				{

@@ -1,0 +1,320 @@
+---
+title: Technical Deep Dive
+description: Implementation details, bytecode analysis, and architecture of starlark-go-x hooks
+---
+
+import { Aside, Tabs, TabItem, Code } from '@astrojs/starlight/components';
+
+# Technical Deep Dive
+
+This document provides detailed technical information about the starlark-go-x instrumentation hooks, including bytecode analysis, implementation details, and architectural decisions.
+
+## Starlark Bytecode Overview
+
+Starlark compiles source code to bytecode executed by a stack-based virtual machine. Understanding the bytecode is essential for understanding how our hooks work.
+
+### VM Components
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Starlark VM                          │
+├─────────────────────────────────────────────────────────┤
+│  Program Counter (PC)  │  Index into bytecode array    │
+│  Operand Stack         │  Values for operations        │
+│  Iterator Stack        │  Active for-loop iterators    │
+│  Local Variables       │  Function-scoped variables    │
+│  Free Variables        │  Captured from outer scope    │
+│  Global Variables      │  Module-level variables       │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Control Flow Opcodes
+
+These are the opcodes relevant to coverage instrumentation:
+
+| Opcode | Description | Coverage Hook |
+|--------|-------------|---------------|
+| `JMP` | Unconditional jump | None (no coverage relevance) |
+| `CJMP` | Conditional jump (if true, jump to addr) | `OnBranch` |
+| `ITERJMP` | Iterator jump (if more items, continue; else jump) | `OnIteration` |
+| `RETURN` | Return from function | `OnFunctionExit` |
+| `CALL*` | Call a function | `OnFunctionEnter` |
+
+### Bytecode Example
+
+Consider this Starlark code:
+
+```starlark
+def abs(x):
+    if x < 0:
+        return -x
+    return x
+```
+
+Compiles to (simplified):
+
+```
+abs:
+  0: LOCAL 0        # load x
+  1: CONSTANT 0     # load 0
+  2: LT             # x < 0
+  3: CJMP 7         # if true, jump to 7  ← OnBranch fires here
+  4: LOCAL 0        # load x
+  5: RETURN         # return x
+  6: JMP 9          # skip else branch
+  7: LOCAL 0        # load x
+  8: UMINUS         # negate
+  9: RETURN         # return -x
+```
+
+## Hook Implementation Details
+
+### OnExec - Line Coverage
+
+**Location**: `starlark/interp.go` in the main interpreter loop
+
+**Implementation**:
+```go
+// Before each instruction
+fr.pc = pc
+if thread.OnExec != nil {
+    thread.OnExec(fn, pc)
+}
+op := compile.Opcode(code[pc])
+// ... execute instruction
+```
+
+**Key Points**:
+- Fires **before** each bytecode instruction
+- `pc` is the program counter pointing to the current instruction
+- Use `fn.PositionAt(pc)` to map PC to source position
+- Multiple instructions may map to the same source line
+
+**Performance Tip**: Deduplicate by line number to avoid redundant work:
+
+```go
+lastLine := int32(-1)
+thread.OnExec = func(fn *starlark.Function, pc uint32) {
+    pos := fn.PositionAt(pc)
+    if pos.Line != lastLine {
+        lastLine = pos.Line
+        recordLine(pos.Filename(), pos.Line)
+    }
+}
+```
+
+### OnBranch - Branch Coverage
+
+**Location**: `starlark/interp.go` at `case compile.CJMP`
+
+**Implementation**:
+```go
+case compile.CJMP:
+    cond := stack[sp-1].Truth()
+    taken := bool(cond)
+    if taken {
+        pc = arg  // jump to target
+    }
+    sp--
+    if thread.OnBranch != nil {
+        thread.OnBranch(fn, fr.pc, taken)
+    }
+```
+
+**Key Points**:
+- Fires **after** the branch decision is made
+- `taken=true` means the condition was truthy (branch taken)
+- `taken=false` means the condition was falsy (fall through)
+- `fr.pc` points to the CJMP instruction itself
+
+**What Generates CJMP**:
+- `if` / `elif` conditions
+- `while` conditions (if enabled in dialect)
+- `and` short-circuit (jumps if first operand is falsy)
+- `or` short-circuit (jumps if first operand is truthy)
+- Ternary `x if cond else y`
+- Comprehension filters `[x for x in items if cond]`
+
+### OnFunctionEnter/Exit - Function Coverage
+
+**Location**: `starlark/interp.go` in `CallInternal`
+
+**Implementation**:
+```go
+func (fn *Function) CallInternal(thread *Thread, args Tuple, kwargs []Tuple) (Value, error) {
+    // ... argument binding ...
+
+    var result Value
+
+    // Notify function entry
+    if thread.OnFunctionEnter != nil {
+        thread.OnFunctionEnter(fn)
+    }
+
+    defer func() {
+        // Notify function exit (captures result by reference)
+        if thread.OnFunctionExit != nil {
+            thread.OnFunctionExit(fn, result)
+        }
+        // ... cleanup ...
+    }()
+
+    // ... interpreter loop ...
+    // result is set when RETURN executes
+
+    return result, err
+}
+```
+
+**Key Points**:
+- `OnFunctionEnter` fires after argument binding, before execution
+- `OnFunctionExit` fires on all exit paths (return, error, panic)
+- The `<toplevel>` pseudo-function also triggers these hooks
+- `result` may be `nil` if the function raised an error
+
+**Profiling Use Case**:
+```go
+type callInfo struct {
+    start time.Time
+    name  string
+}
+var callStack []callInfo
+
+thread.OnFunctionEnter = func(fn *starlark.Function) {
+    callStack = append(callStack, callInfo{time.Now(), fn.Name()})
+}
+
+thread.OnFunctionExit = func(fn *starlark.Function, result starlark.Value) {
+    info := callStack[len(callStack)-1]
+    callStack = callStack[:len(callStack)-1]
+    duration := time.Since(info.start)
+    fmt.Printf("%s took %v\n", info.name, duration)
+}
+```
+
+### OnIteration - Loop Coverage
+
+**Location**: `starlark/interp.go` at `case compile.ITERJMP`
+
+**Implementation**:
+```go
+case compile.ITERJMP:
+    iter := iterstack[len(iterstack)-1]
+    continued := iter.Next(&stack[sp])
+    if continued {
+        sp++  // push next element
+    } else {
+        pc = arg  // jump to end of loop
+    }
+    if thread.OnIteration != nil {
+        thread.OnIteration(fn, fr.pc, continued)
+    }
+```
+
+**Key Points**:
+- Fires **after** each iteration decision
+- `continued=true` means the loop has another element
+- `continued=false` means the loop is exhausted (exits)
+- Empty loops (`for x in []`) fire once with `continued=false`
+- Useful for detecting loops that execute 0, 1, or N times
+
+## Source Position Mapping
+
+### PositionAt Method
+
+Each compiled function has a `pclinetab` (program counter to line table) that maps bytecode offsets to source positions.
+
+```go
+// Added in coverage-hooks branch
+func (fn *Function) PositionAt(pc uint32) syntax.Position {
+    return fn.funcode.Position(pc)
+}
+```
+
+The returned `syntax.Position` contains:
+- `Filename()` - source file path
+- `Line` - 1-based line number
+- `Col` - 1-based column number
+
+### Position Resolution Performance
+
+<Aside type="caution">
+`PositionAt` does a binary search through the line table. For hot loops, this can be expensive. Consider caching or deduplicating.
+</Aside>
+
+```go
+// Efficient: deduplicate by PC
+seen := make(map[uint32]bool)
+thread.OnExec = func(fn *starlark.Function, pc uint32) {
+    if !seen[pc] {
+        seen[pc] = true
+        pos := fn.PositionAt(pc)
+        record(pos)
+    }
+}
+```
+
+## Thread-Safety Considerations
+
+All hooks execute **synchronously** on the same goroutine as the interpreter. However, if you're running multiple Starlark threads concurrently, your callbacks must be thread-safe.
+
+```go
+var mu sync.Mutex
+coverage := make(map[string]map[int]int)
+
+thread.OnExec = func(fn *starlark.Function, pc uint32) {
+    pos := fn.PositionAt(pc)
+    mu.Lock()
+    defer mu.Unlock()
+
+    if coverage[pos.Filename()] == nil {
+        coverage[pos.Filename()] = make(map[int]int)
+    }
+    coverage[pos.Filename()][int(pos.Line)]++
+}
+```
+
+## Memory Layout
+
+### Thread Struct (eval.go)
+
+```go
+type Thread struct {
+    Name       string
+    Print      func(thread *Thread, msg string)
+    Load       func(thread *Thread, module string) (StringDict, error)
+    OnMaxSteps func(thread *Thread)
+
+    // Coverage hooks (our additions)
+    OnExec          func(fn *Function, pc uint32)
+    OnBranch        func(fn *Function, pc uint32, taken bool)
+    OnFunctionEnter func(fn *Function)
+    OnFunctionExit  func(fn *Function, result Value)
+    OnIteration     func(fn *Function, pc uint32, continued bool)
+
+    Steps, maxSteps uint64
+    // ... other fields
+}
+```
+
+Each hook is a function pointer (8 bytes on 64-bit systems). When `nil`, the hook has zero runtime cost (single pointer comparison).
+
+## Files Modified
+
+| File | Changes |
+|------|---------|
+| `starlark/eval.go` | Thread struct with hook fields |
+| `starlark/interp.go` | Hook invocations in interpreter loop |
+| `starlark/value.go` | `PositionAt` method on Function |
+| `starlark/eval_test.go` | Tests for all hooks |
+
+## Diff Summary
+
+```
+trunk vs upstream (google/starlark-go):
+  starlark/eval.go      | +25 lines (hook fields)
+  starlark/interp.go    | +40 lines (hook invocations)
+  starlark/value.go     | +8 lines (PositionAt method)
+  starlark/eval_test.go | +400 lines (tests)
+  syntax/*.go           | +223 lines (type annotations)
+```

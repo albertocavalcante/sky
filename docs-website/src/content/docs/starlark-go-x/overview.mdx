@@ -1,31 +1,133 @@
 ---
 title: starlark-go-x Overview
-description: Enhanced Starlark interpreter fork
+description: Enhanced Starlark interpreter fork with coverage instrumentation hooks
 ---
+
+import { Aside, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 # starlark-go-x
 
-[starlark-go-x](https://github.com/albertocavalcante/starlark-go-x) is our enhanced fork of the official [starlark-go](https://github.com/google/starlark-go) interpreter.
+[starlark-go-x](https://github.com/albertocavalcante/starlark-go-x) is our enhanced fork of Google's official [starlark-go](https://github.com/google/starlark-go) interpreter. It adds instrumentation hooks that enable coverage collection, profiling, and debugging without modifying user code.
 
-## Features
+<Aside type="tip">
+All features are designed for upstream contribution to google/starlark-go. We maintain TODO comments to track changes needed before proposing.
+</Aside>
 
-- **OnExec hook** - Coverage instrumentation callback
-- **Type annotations** - Parse Python-style type hints
+## Why a Fork?
 
-## Installation
+The official starlark-go interpreter doesn't expose hooks for:
+- Tracking which lines of code execute
+- Monitoring branch decisions (if/else outcomes)
+- Observing function entry/exit
+- Counting loop iterations
+
+These hooks are essential for building coverage tools like `skycov` and `skytest --coverage`.
+
+## Features at a Glance
+
+<CardGrid>
+  <Card title="OnExec" icon="rocket">
+    Line coverage - fires before each bytecode instruction
+  </Card>
+  <Card title="OnBranch" icon="random">
+    Branch coverage - fires after each conditional jump
+  </Card>
+  <Card title="OnFunctionEnter/Exit" icon="seti:todo">
+    Function coverage - fires on function entry and return
+  </Card>
+  <Card title="OnIteration" icon="loop">
+    Loop coverage - fires on each for-loop iteration decision
+  </Card>
+</CardGrid>
+
+## Quick Start
+
+### Installation
+
+Add to your `go.mod`:
 
 ```go
-// In go.mod
-replace go.starlark.net => github.com/albertocavalcante/starlark-go-x@trunk
+// Replace upstream starlark-go with our fork
+replace go.starlark.net => github.com/albertocavalcante/starlark-go-x v0.0.0-trunk
 ```
 
-## Branches
+Or use a local path during development:
 
-| Branch | Description |
-|--------|-------------|
-| `main` | Tracks upstream google/starlark-go |
-| `trunk` | Our features, rebased on upstream |
+```go
+replace go.starlark.net => ../starlark-go-x/trunk
+```
 
-## Upstream
+### Basic Usage
 
-We plan to propose these features upstream to google/starlark-go.
+```go
+import "go.starlark.net/starlark"
+
+thread := &starlark.Thread{
+    Name: "my-thread",
+
+    // Line coverage
+    OnExec: func(fn *starlark.Function, pc uint32) {
+        pos := fn.PositionAt(pc)
+        fmt.Printf("Executing %s:%d\n", pos.Filename(), pos.Line)
+    },
+
+    // Branch coverage
+    OnBranch: func(fn *starlark.Function, pc uint32, taken bool) {
+        pos := fn.PositionAt(pc)
+        fmt.Printf("Branch at %s:%d -> %v\n", pos.Filename(), pos.Line, taken)
+    },
+}
+
+// Execute Starlark code with instrumentation
+starlark.ExecFile(thread, "example.star", src, nil)
+```
+
+## Branch Structure
+
+| Branch | Purpose | Status |
+|--------|---------|--------|
+| `main` | Tracks upstream google/starlark-go | Read-only |
+| `trunk` | All features combined | **Use this** |
+| `coverage-hooks` | OnExec hook only | Merged to trunk |
+| `branch-coverage` | +OnBranch | Merged to trunk |
+| `function-coverage` | +OnFunctionEnter/Exit | Merged to trunk |
+| `loop-coverage` | +OnIteration | Merged to trunk |
+| `type-hints` | Type annotation parsing | Merged to trunk |
+
+## Coverage Metrics Enabled
+
+| Metric | Hook | Description |
+|--------|------|-------------|
+| **Line Coverage** | `OnExec` | Tracks which source lines execute |
+| **Branch Coverage** | `OnBranch` | Tracks if/else and short-circuit outcomes |
+| **Function Coverage** | `OnFunctionEnter` | Tracks which functions are called |
+| **Loop Coverage** | `OnIteration` | Tracks for-loop iteration counts |
+
+## Starlark Constructs Mapped
+
+| Construct | Bytecode | Hook |
+|-----------|----------|------|
+| `if/elif/else` | CJMP | OnBranch |
+| `for x in items` | ITERJMP | OnIteration |
+| `a and b` | CJMP | OnBranch |
+| `a or b` | CJMP | OnBranch |
+| `x if cond else y` | CJMP | OnBranch |
+| `[x for x in items]` | ITERJMP | OnIteration |
+| `def f(): ...` calls | CALL | OnFunctionEnter/Exit |
+
+## Upstream Contribution Plan
+
+We intend to propose these changes to google/starlark-go:
+
+1. **Phase 1**: `OnExec` hook (most impactful, enables line coverage)
+2. **Phase 2**: `OnBranch` hook (branch coverage)
+3. **Phase 3**: `OnFunctionEnter/Exit` hooks (function coverage, profiling)
+4. **Phase 4**: `OnIteration` hook (loop coverage)
+
+Each hook is designed to have zero overhead when not used (nil check at call site).
+
+<LinkCard
+  title="Technical Deep Dive"
+  description="Detailed implementation notes and bytecode analysis"
+  href="/sky/starlark-go-x/technical"
+/>

@@ -1,0 +1,415 @@
+---
+title: Coverage Hooks API
+description: Complete API reference for all starlark-go-x instrumentation hooks
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+# Coverage Hooks API
+
+This page documents all instrumentation hooks available in starlark-go-x.
+
+## Thread Configuration
+
+All hooks are fields on the `starlark.Thread` struct:
+
+```go
+type Thread struct {
+    // ... standard fields ...
+
+    // Coverage hooks (set any/all as needed)
+    OnExec          func(fn *Function, pc uint32)
+    OnBranch        func(fn *Function, pc uint32, taken bool)
+    OnFunctionEnter func(fn *Function)
+    OnFunctionExit  func(fn *Function, result Value)
+    OnIteration     func(fn *Function, pc uint32, continued bool)
+}
+```
+
+All hooks default to `nil` (disabled). When `nil`, there is no runtime overhead beyond a pointer comparison.
+
+---
+
+## OnExec
+
+**Purpose**: Line/statement coverage
+
+**Signature**:
+```go
+OnExec func(fn *Function, pc uint32)
+```
+
+**Parameters**:
+- `fn` - The Starlark function currently executing
+- `pc` - Program counter (bytecode offset) about to execute
+
+**When Called**: Before each bytecode instruction is executed.
+
+**Example**:
+```go
+lines := make(map[string]map[int32]int)
+var mu sync.Mutex
+
+thread := &starlark.Thread{
+    OnExec: func(fn *starlark.Function, pc uint32) {
+        pos := fn.PositionAt(pc)
+        file := pos.Filename()
+        line := pos.Line
+
+        mu.Lock()
+        if lines[file] == nil {
+            lines[file] = make(map[int32]int)
+        }
+        lines[file][line]++
+        mu.Unlock()
+    },
+}
+```
+
+<Aside type="tip">
+For performance, consider deduplicating by line number since multiple bytecode instructions often map to the same source line.
+</Aside>
+
+---
+
+## OnBranch
+
+**Purpose**: Branch coverage (if/else, short-circuit operators)
+
+**Signature**:
+```go
+OnBranch func(fn *Function, pc uint32, taken bool)
+```
+
+**Parameters**:
+- `fn` - The Starlark function currently executing
+- `pc` - Program counter of the CJMP instruction
+- `taken` - `true` if condition was truthy (branch taken), `false` if falsy (fell through)
+
+**When Called**: After each conditional jump (CJMP) instruction.
+
+**Constructs That Fire OnBranch**:
+- `if` / `elif` conditions
+- `and` operator (short-circuit)
+- `or` operator (short-circuit)
+- Ternary expression `x if cond else y`
+- Comprehension filters `[x for x in items if cond]`
+
+**Example**:
+```go
+type BranchHit struct {
+    TrueCount  int
+    FalseCount int
+}
+branches := make(map[string]map[int32]*BranchHit)
+
+thread := &starlark.Thread{
+    OnBranch: func(fn *starlark.Function, pc uint32, taken bool) {
+        pos := fn.PositionAt(pc)
+        file := pos.Filename()
+        line := pos.Line
+
+        if branches[file] == nil {
+            branches[file] = make(map[int32]*BranchHit)
+        }
+        if branches[file][line] == nil {
+            branches[file][line] = &BranchHit{}
+        }
+
+        if taken {
+            branches[file][line].TrueCount++
+        } else {
+            branches[file][line].FalseCount++
+        }
+    },
+}
+```
+
+**Coverage Calculation**:
+```go
+// A branch is fully covered if both true and false paths were taken
+fullyCovered := hit.TrueCount > 0 && hit.FalseCount > 0
+
+// Branch coverage percentage
+branchCoverage := (coveredBranches / totalBranches) * 100
+```
+
+---
+
+## OnFunctionEnter
+
+**Purpose**: Function coverage, profiling entry point
+
+**Signature**:
+```go
+OnFunctionEnter func(fn *Function)
+```
+
+**Parameters**:
+- `fn` - The Starlark function being entered
+
+**When Called**: After argument binding, before the function body executes.
+
+**Example**:
+```go
+calledFunctions := make(map[string]int)
+
+thread := &starlark.Thread{
+    OnFunctionEnter: func(fn *starlark.Function) {
+        name := fn.Name()
+        calledFunctions[name]++
+    },
+}
+```
+
+<Aside>
+The `<toplevel>` pseudo-function fires this hook when module-level code executes.
+</Aside>
+
+---
+
+## OnFunctionExit
+
+**Purpose**: Function coverage, profiling exit point, return value inspection
+
+**Signature**:
+```go
+OnFunctionExit func(fn *Function, result Value)
+```
+
+**Parameters**:
+- `fn` - The Starlark function exiting
+- `result` - The return value (may be `nil` if function raised an error)
+
+**When Called**: When the function returns (via `return` statement or falling off end).
+
+**Example - Profiling**:
+```go
+type CallInfo struct {
+    Name  string
+    Start time.Time
+}
+var callStack []CallInfo
+
+thread := &starlark.Thread{
+    OnFunctionEnter: func(fn *starlark.Function) {
+        callStack = append(callStack, CallInfo{fn.Name(), time.Now()})
+    },
+    OnFunctionExit: func(fn *starlark.Function, result starlark.Value) {
+        info := callStack[len(callStack)-1]
+        callStack = callStack[:len(callStack)-1]
+        duration := time.Since(info.Start)
+        fmt.Printf("%s: %v\n", info.Name, duration)
+    },
+}
+```
+
+**Example - Return Value Logging**:
+```go
+thread := &starlark.Thread{
+    OnFunctionExit: func(fn *starlark.Function, result starlark.Value) {
+        if result != nil {
+            fmt.Printf("%s returned %s\n", fn.Name(), result.String())
+        } else {
+            fmt.Printf("%s returned (error or None)\n", fn.Name())
+        }
+    },
+}
+```
+
+---
+
+## OnIteration
+
+**Purpose**: Loop coverage (for-loop iteration tracking)
+
+**Signature**:
+```go
+OnIteration func(fn *Function, pc uint32, continued bool)
+```
+
+**Parameters**:
+- `fn` - The Starlark function currently executing
+- `pc` - Program counter of the ITERJMP instruction
+- `continued` - `true` if loop has more iterations, `false` if loop exits
+
+**When Called**: After each for-loop iteration decision.
+
+**Example**:
+```go
+type LoopHit struct {
+    Iterations int  // Number of times loop continued
+    Exits      int  // Number of times loop exited (always 1 per loop execution)
+}
+loops := make(map[string]map[int32]*LoopHit)
+
+thread := &starlark.Thread{
+    OnIteration: func(fn *starlark.Function, pc uint32, continued bool) {
+        pos := fn.PositionAt(pc)
+        file := pos.Filename()
+        line := pos.Line
+
+        if loops[file] == nil {
+            loops[file] = make(map[int32]*LoopHit)
+        }
+        if loops[file][line] == nil {
+            loops[file][line] = &LoopHit{}
+        }
+
+        if continued {
+            loops[file][line].Iterations++
+        } else {
+            loops[file][line].Exits++
+        }
+    },
+}
+```
+
+**Loop Coverage Scenarios**:
+```go
+// Empty loop: for x in []: ...
+// OnIteration fires once with continued=false
+
+// Single iteration: for x in [1]: ...
+// OnIteration fires with continued=true, then continued=false
+
+// Multiple iterations: for x in [1, 2, 3]: ...
+// OnIteration fires 3x continued=true, then 1x continued=false
+```
+
+---
+
+## Helper Method: PositionAt
+
+**Purpose**: Map program counter to source position
+
+**Signature**:
+```go
+func (fn *Function) PositionAt(pc uint32) syntax.Position
+```
+
+**Returns**: `syntax.Position` with:
+- `Filename()` - Source file path
+- `Line` - 1-based line number
+- `Col` - 1-based column number
+
+**Example**:
+```go
+thread.OnExec = func(fn *starlark.Function, pc uint32) {
+    pos := fn.PositionAt(pc)
+    fmt.Printf("%s:%d:%d\n", pos.Filename(), pos.Line, pos.Col)
+}
+```
+
+---
+
+## Complete Example
+
+Here's a complete example collecting all coverage metrics:
+
+```go
+package main
+
+import (
+    "fmt"
+    "sync"
+
+    "go.starlark.net/starlark"
+)
+
+type Coverage struct {
+    mu        sync.Mutex
+    Lines     map[string]map[int32]int
+    Branches  map[string]map[int32]*BranchHit
+    Functions map[string]int
+    Loops     map[string]map[int32]*LoopHit
+}
+
+type BranchHit struct{ True, False int }
+type LoopHit struct{ Iterations, Exits int }
+
+func NewCoverage() *Coverage {
+    return &Coverage{
+        Lines:     make(map[string]map[int32]int),
+        Branches:  make(map[string]map[int32]*BranchHit),
+        Functions: make(map[string]int),
+        Loops:     make(map[string]map[int32]*LoopHit),
+    }
+}
+
+func (c *Coverage) ConfigureThread(thread *starlark.Thread) {
+    thread.OnExec = func(fn *starlark.Function, pc uint32) {
+        pos := fn.PositionAt(pc)
+        c.mu.Lock()
+        if c.Lines[pos.Filename()] == nil {
+            c.Lines[pos.Filename()] = make(map[int32]int)
+        }
+        c.Lines[pos.Filename()][pos.Line]++
+        c.mu.Unlock()
+    }
+
+    thread.OnBranch = func(fn *starlark.Function, pc uint32, taken bool) {
+        pos := fn.PositionAt(pc)
+        c.mu.Lock()
+        if c.Branches[pos.Filename()] == nil {
+            c.Branches[pos.Filename()] = make(map[int32]*BranchHit)
+        }
+        if c.Branches[pos.Filename()][pos.Line] == nil {
+            c.Branches[pos.Filename()][pos.Line] = &BranchHit{}
+        }
+        if taken {
+            c.Branches[pos.Filename()][pos.Line].True++
+        } else {
+            c.Branches[pos.Filename()][pos.Line].False++
+        }
+        c.mu.Unlock()
+    }
+
+    thread.OnFunctionEnter = func(fn *starlark.Function) {
+        c.mu.Lock()
+        c.Functions[fn.Name()]++
+        c.mu.Unlock()
+    }
+
+    thread.OnIteration = func(fn *starlark.Function, pc uint32, continued bool) {
+        pos := fn.PositionAt(pc)
+        c.mu.Lock()
+        if c.Loops[pos.Filename()] == nil {
+            c.Loops[pos.Filename()] = make(map[int32]*LoopHit)
+        }
+        if c.Loops[pos.Filename()][pos.Line] == nil {
+            c.Loops[pos.Filename()][pos.Line] = &LoopHit{}
+        }
+        if continued {
+            c.Loops[pos.Filename()][pos.Line].Iterations++
+        } else {
+            c.Loops[pos.Filename()][pos.Line].Exits++
+        }
+        c.mu.Unlock()
+    }
+}
+
+func main() {
+    cov := NewCoverage()
+    thread := &starlark.Thread{Name: "main"}
+    cov.ConfigureThread(thread)
+
+    src := `
+def greet(name):
+    if name:
+        return "Hello, " + name
+    return "Hello, stranger"
+
+for i in [1, 2, 3]:
+    print(greet("World" if i > 1 else ""))
+`
+
+    _, err := starlark.ExecFile(thread, "example.star", src, nil)
+    if err != nil {
+        fmt.Printf("Error: %v\n", err)
+    }
+
+    fmt.Printf("Lines covered: %d\n", len(cov.Lines["example.star"]))
+    fmt.Printf("Functions called: %v\n", cov.Functions)
+}
+```

@@ -1,0 +1,225 @@
+---
+title: Roadmap & TODO
+description: What's done, what's planned, and what needs validation for starlark-go-x
+---
+
+import { Aside, Steps, Badge } from '@astrojs/starlight/components';
+
+# Roadmap & TODO
+
+This page tracks the current status of starlark-go-x, what's been accomplished, and what still needs to be done before upstream contribution.
+
+## Current Status
+
+### Implemented Features <Badge text="Complete" variant="success" />
+
+| Feature | Status | Branch | Description |
+|---------|--------|--------|-------------|
+| OnExec | ✅ Done | `coverage-hooks` | Line coverage instrumentation |
+| OnBranch | ✅ Done | `branch-coverage` | Branch coverage (if/else, and/or) |
+| OnFunctionEnter | ✅ Done | `function-coverage` | Function entry tracking |
+| OnFunctionExit | ✅ Done | `function-coverage` | Function exit + return value |
+| OnIteration | ✅ Done | `loop-coverage` | For-loop iteration tracking |
+| PositionAt | ✅ Done | `coverage-hooks` | Map PC to source position |
+| Type Annotations | ✅ Done | `type-hints` | Parse Python-style type hints |
+
+All features are merged into the `trunk` branch.
+
+## TODO Before Upstream Proposal
+
+### 1. Performance Validation <Badge text="Required" variant="caution" />
+
+<Aside type="caution">
+Critical: We must validate that the hooks have zero or negligible overhead when not used.
+</Aside>
+
+#### Benchmark Requirements
+
+<Steps>
+
+1. **Baseline Benchmark**
+
+   Run standard starlark-go benchmarks against upstream (unmodified) version.
+
+   ```bash
+   cd google/starlark-go
+   go test -bench=. ./starlark/... > baseline.txt
+   ```
+
+2. **A/B Comparison - Hooks Disabled**
+
+   Run same benchmarks on starlark-go-x with all hooks set to `nil`.
+
+   ```bash
+   cd starlark-go-x/trunk
+   go test -bench=. ./starlark/... > hooks-disabled.txt
+   benchstat baseline.txt hooks-disabled.txt
+   ```
+
+3. **A/B Comparison - Hooks Enabled**
+
+   Run benchmarks with hooks enabled (but doing minimal work).
+
+   ```bash
+   # Modify benchmark to set OnExec = func(fn, pc) {}
+   go test -bench=. ./starlark/... > hooks-enabled.txt
+   benchstat hooks-disabled.txt hooks-enabled.txt
+   ```
+
+4. **Document Results**
+
+   - If hooks disabled shows >1% regression: investigate and fix
+   - If hooks enabled shows expected overhead: document it
+   - Create benchmark comparison table for upstream proposal
+
+</Steps>
+
+#### Expected Results
+
+| Scenario | Expected Overhead |
+|----------|------------------|
+| Hooks nil (disabled) | ~0% (nil pointer check only) |
+| OnExec enabled | 5-15% per instruction |
+| OnBranch enabled | <1% (only on branches) |
+| OnFunctionEnter/Exit | <1% (only on calls) |
+| OnIteration enabled | <1% (only on loops) |
+
+### 2. Code Style Cleanup <Badge text="Required" variant="caution" />
+
+Our code has verbose comments marked with `TODO(upstream)`. Before proposing:
+
+<Steps>
+
+1. **Remove verbose comments**
+
+   ```go
+   // Current (verbose):
+   // OnExec is called before each bytecode instruction is executed, if non-nil.
+   // This hook enables coverage instrumentation, debugging, and tracing.
+   // The callback receives the executing function and program counter;
+   // use fn.PositionAt(pc) to resolve the source position.
+   // For performance, avoid calling PositionAt on every instruction—deduplicate by line.
+   // TODO(upstream): trim verbose comments to match codebase style before proposing.
+   OnExec func(fn *Function, pc uint32)
+
+   // Target (concise, matches upstream style):
+   // OnExec, if non-nil, is called before each bytecode instruction.
+   OnExec func(fn *Function, pc uint32)
+   ```
+
+2. **Review upstream comment style**
+
+   Study existing Thread fields in google/starlark-go for tone and length.
+
+3. **Create clean branch**
+
+   Fork from trunk, clean up comments, prepare for PR.
+
+</Steps>
+
+### 3. Test Coverage <Badge text="Required" variant="caution" />
+
+Current test status:
+
+| Test | Status | File |
+|------|--------|------|
+| TestOnExec | ✅ Pass | eval_test.go |
+| TestOnExecCoverage | ✅ Pass | eval_test.go |
+| TestOnBranch | ✅ Pass | eval_test.go |
+| TestOnBranchShortCircuit | ✅ Pass | eval_test.go |
+| TestOnFunctionEnterExit | ✅ Pass | eval_test.go |
+| TestOnFunctionExitResult | ✅ Pass | eval_test.go |
+| TestOnIteration | ✅ Pass | eval_test.go |
+| TestOnIterationEmptyLoop | ✅ Pass | eval_test.go |
+
+Additional tests needed:
+
+- [ ] Test hooks with recursive functions
+- [ ] Test hooks with nested functions (closures)
+- [ ] Test hooks with comprehensions
+- [ ] Test hooks with exceptions/errors
+- [ ] Test thread-safety with concurrent execution
+- [ ] Benchmark tests (see above)
+
+### 4. Documentation for Upstream <Badge text="Required" variant="caution" />
+
+Prepare materials for the upstream proposal:
+
+- [ ] Design document explaining use cases (coverage, profiling, debugging)
+- [ ] API documentation in godoc format
+- [ ] Example usage in documentation
+- [ ] Performance analysis results
+
+## Future Enhancements <Badge text="Nice to Have" variant="note" />
+
+### Potential Additional Hooks
+
+| Hook | Use Case | Priority |
+|------|----------|----------|
+| OnLoad | Track module loading | Low |
+| OnError | Track error locations | Medium |
+| OnBuiltinCall | Track built-in function calls | Low |
+
+### Advanced Coverage Features
+
+Not currently planned, but could be added:
+
+| Feature | Description | Complexity |
+|---------|-------------|------------|
+| MC/DC Coverage | Modified Condition/Decision Coverage | High |
+| Path Coverage | Track all execution paths | Very High |
+| Data Flow Coverage | Track variable def/use | High |
+
+These are rarely needed outside safety-critical systems and would require significant AST-level changes.
+
+## Sky Integration Status
+
+### Current Integration
+
+- [x] Sky's `go.mod` uses starlark-go-x via replace directive
+- [x] `skytest --coverage` uses OnExec for line coverage
+- [x] `skycov` reports line coverage
+
+### Pending Integration
+
+- [ ] Update Sky to use OnBranch for branch coverage
+- [ ] Update Sky to use OnFunctionEnter for function coverage
+- [ ] Update skycov reporters (Cobertura branch-rate, LCOV BRDA)
+- [ ] Add branch/function coverage to skytest output
+
+## Timeline Estimate
+
+| Phase | Task | Effort |
+|-------|------|--------|
+| 1 | Performance benchmarking | 2-4 hours |
+| 2 | Additional tests | 2-3 hours |
+| 3 | Code cleanup | 1-2 hours |
+| 4 | Upstream proposal draft | 2-3 hours |
+| 5 | Sky integration (branch/function) | 3-4 hours |
+
+## Contributing
+
+To work on starlark-go-x:
+
+```bash
+# Clone with worktrees
+git clone --bare https://github.com/albertocavalcante/starlark-go-x.git .bare
+echo "gitdir: ./.bare" > .git
+
+# Create worktrees
+git worktree add main main
+git worktree add trunk trunk
+
+# Work on new feature
+git branch my-feature trunk
+git worktree add my-feature my-feature
+cd my-feature
+# ... make changes ...
+go test ./...
+git commit -m "feat: my feature"
+
+# Merge to trunk (linear history)
+cd ../trunk
+git merge --ff-only my-feature
+git push origin trunk
+```
