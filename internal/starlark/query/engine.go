@@ -36,12 +36,21 @@ func (i Item) key() string {
 
 // Engine evaluates queries against an index.
 type Engine struct {
-	index *index.Index
+	index     *index.Index
+	loadGraph *index.LoadGraph // lazily built
 }
 
 // NewEngine creates a query engine with the given index.
 func NewEngine(idx *index.Index) *Engine {
 	return &Engine{index: idx}
+}
+
+// getLoadGraph returns the load graph, building it lazily if needed.
+func (e *Engine) getLoadGraph() *index.LoadGraph {
+	if e.loadGraph == nil {
+		e.loadGraph = e.index.BuildLoadGraph()
+	}
+	return e.loadGraph
 }
 
 // Eval evaluates a query expression and returns results.
@@ -102,6 +111,10 @@ func (e *Engine) evalCall(expr *CallExpr) (*Result, error) {
 		return e.evalAssigns(expr.Args)
 	case "filter":
 		return e.evalFilter(expr.Args)
+	case "loadedby":
+		return e.evalLoadedBy(expr.Args)
+	case "allloads":
+		return e.evalAllLoads(expr.Args)
 	default:
 		return nil, fmt.Errorf("unknown function: %s", expr.Func)
 	}

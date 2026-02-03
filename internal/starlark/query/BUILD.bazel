@@ -19,6 +19,7 @@ go_test(
     srcs = [
         "engine_test.go",
         "funcs_test.go",
+        "loadgraph_test.go",
         "parser_test.go",
         "sets_test.go",
     ],

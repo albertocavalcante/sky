@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "discovery.go",
         "extract.go",
+        "graph.go",
         "index.go",
         "types.go",
     ],
@@ -22,6 +23,7 @@ go_test(
     srcs = [
         "discovery_test.go",
         "extract_test.go",
+        "graph_test.go",
         "index_test.go",
         "types_test.go",
     ],
