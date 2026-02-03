@@ -83,11 +83,11 @@ func TestLoadedBy(t *testing.T) {
 	engine := NewEngine(idx)
 
 	tests := []struct {
-		name       string
-		query      string
-		wantCount  int
-		wantFiles  []string
-		wantErr    bool
+		name      string
+		query     string
+		wantCount int
+		wantFiles []string
+		wantErr   bool
 	}{
 		{
 			name:      "loadedby base.bzl",

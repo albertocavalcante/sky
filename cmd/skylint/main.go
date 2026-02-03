@@ -35,6 +35,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		listCategoriesFlag bool
 		explainFlag        string
 		versionFlag        bool
+		fixFlag            bool
+		diffFlag           bool
 	)
 
 	fs := flag.NewFlagSet("skylint", flag.ContinueOnError)
@@ -48,6 +50,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.BoolVar(&listCategoriesFlag, "list-categories", false, "list all rule categories")
 	fs.StringVar(&explainFlag, "explain", "", "show detailed explanation for a rule")
 	fs.BoolVar(&versionFlag, "version", false, "print version and exit")
+	fs.BoolVar(&fixFlag, "fix", false, "automatically fix issues where possible")
+	fs.BoolVar(&diffFlag, "diff", false, "show diff of fixes without applying (use with --fix)")
 
 	fs.Usage = func() {
 		writeln(stderr, "Usage: skylint [flags] path ...")
@@ -62,6 +66,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		writeln(stderr, "  skylint ./...                    # Lint all files recursively")
 		writeln(stderr, "  skylint --enable=all .           # Enable all rules")
 		writeln(stderr, "  skylint --disable=native-* .     # Disable native-* rules")
+		writeln(stderr, "  skylint --fix .                  # Fix issues automatically")
+		writeln(stderr, "  skylint --fix --diff .           # Preview fixes as diff")
 		writeln(stderr, "  skylint --list-rules             # List all available rules")
 		writeln(stderr, "  skylint --explain=load           # Explain the 'load' rule")
 	}
@@ -149,6 +155,58 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		writef(stderr, "skylint: %v\n", err)
 		return exitError
+	}
+
+	// Handle --fix mode
+	if fixFlag {
+		fixableCount := linter.FixableCount(result.Findings)
+		if fixableCount == 0 {
+			writeln(stderr, "skylint: no fixable issues found")
+		} else {
+			fixResults, err := linter.FixFiles(result.Findings)
+			if err != nil {
+				writef(stderr, "skylint: failed to compute fixes: %v\n", err)
+				return exitError
+			}
+
+			// Count total fixes
+			totalApplied := 0
+			totalSkipped := 0
+			filesChanged := 0
+			for _, fr := range fixResults {
+				totalApplied += fr.AppliedFixes
+				totalSkipped += fr.SkippedFixes
+				if fr.HasChanges() {
+					filesChanged++
+				}
+			}
+
+			if diffFlag {
+				// Show diff without applying
+				for _, fr := range fixResults {
+					if fr.HasChanges() {
+						writef(stdout, "%s", fr.Diff())
+					}
+				}
+				writef(stderr, "\nWould fix %d issue(s) in %d file(s)", totalApplied, filesChanged)
+				if totalSkipped > 0 {
+					writef(stderr, " (%d skipped due to conflicts)", totalSkipped)
+				}
+				writeln(stderr)
+			} else {
+				// Apply fixes
+				if err := linter.WriteFixResults(fixResults); err != nil {
+					writef(stderr, "skylint: failed to write fixes: %v\n", err)
+					return exitError
+				}
+				writef(stderr, "Fixed %d issue(s) in %d file(s)", totalApplied, filesChanged)
+				if totalSkipped > 0 {
+					writef(stderr, " (%d skipped due to conflicts)", totalSkipped)
+				}
+				writeln(stderr)
+			}
+		}
+		return exitOK
 	}
 
 	// Create reporter based on format

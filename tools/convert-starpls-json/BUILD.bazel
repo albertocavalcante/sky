@@ -1,10 +1,15 @@
-load("@rules_go//go:def.bzl", "go_binary")
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
 
 go_binary(
     name = "convert-starpls-json",
-    srcs = ["main.go"],
+    embed = [":convert-starpls-json_lib"],
     visibility = ["//visibility:public"],
-    deps = [
-        "//internal/starlark/builtins",
-    ],
+)
+
+go_library(
+    name = "convert-starpls-json_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/albertocavalcante/sky/tools/convert-starpls-json",
+    visibility = ["//visibility:private"],
+    deps = ["//internal/starlark/builtins"],
 )

@@ -11,7 +11,10 @@ go_library(
 filegroup(
     name = "data",
     srcs = glob(
-        ["data/proto/**/*.pb", "data/proto/**/*.pbtxt"],
+        [
+            "data/proto/**/*.pb",
+            "data/proto/**/*.pbtxt",
+        ],
         allow_empty = True,
     ),
     visibility = ["//:__subpackages__"],

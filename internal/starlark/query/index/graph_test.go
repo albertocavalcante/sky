@@ -65,7 +65,7 @@ func TestLoadGraph_AllLoads_Simple(t *testing.T) {
 	// Create graph: a.bzl -> b.bzl -> c.bzl
 	g := &LoadGraph{
 		Forward: map[string][]string{
-			"a.bzl": {"//lib:b.bzl"},
+			"a.bzl":     {"//lib:b.bzl"},
 			"lib/b.bzl": {"//lib:c.bzl"},
 		},
 		Reverse: map[string][]string{
@@ -115,7 +115,7 @@ func TestLoadGraph_DetectCycles_NoCycle(t *testing.T) {
 	// Create graph without cycle: a -> b -> c
 	g := &LoadGraph{
 		Forward: map[string][]string{
-			"a.bzl": {"//lib:b.bzl"},
+			"a.bzl":     {"//lib:b.bzl"},
 			"lib/b.bzl": {"//lib:c.bzl"},
 		},
 		Reverse: map[string][]string{

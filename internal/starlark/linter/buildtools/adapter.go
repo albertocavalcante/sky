@@ -75,7 +75,7 @@ func wrapFileWarning(name string) *linter.Rule {
 		URL:      getWarningURL(name),
 		Category: categorizeWarning(name),
 		Severity: linter.SeverityWarning,
-		AutoFix:  false, // Buildtools rules can have fixes, but we'll handle that later
+		AutoFix:  true, // Buildtools rules may provide fixes
 		Run: func(pass *linter.Pass) (any, error) {
 			findings := fn(pass.File)
 			for _, f := range findings {
@@ -96,7 +96,7 @@ func wrapMultiFileWarning(name string) *linter.Rule {
 		URL:      getWarningURL(name),
 		Category: categorizeWarning(name),
 		Severity: linter.SeverityWarning,
-		AutoFix:  false,
+		AutoFix:  true, // Buildtools rules may provide fixes
 		Run: func(pass *linter.Pass) (any, error) {
 			// Create a FileReader that reads from the filesystem
 			fileReader := warn.NewFileReader(func(path string) ([]byte, error) {
@@ -122,7 +122,7 @@ func wrapRuleWarning(name string) *linter.Rule {
 		URL:      getWarningURL(name),
 		Category: categorizeWarning(name),
 		Severity: linter.SeverityWarning,
-		AutoFix:  false,
+		AutoFix:  true, // Buildtools rules may provide fixes
 		Run: func(pass *linter.Pass) (any, error) {
 			// Walk through all rule calls in the file
 			build.Walk(pass.File, func(expr build.Expr, stack []build.Expr) {
@@ -158,10 +158,23 @@ func convertFinding(f *warn.LinterFinding, ruleName, filePath string) linter.Fin
 
 	// Convert replacement if present
 	if len(f.Replacement) > 0 {
-		// For now, we only handle single replacements
-		// TODO: Handle multiple replacements
-		// Buildtools replacements are complex - skip for MVP
-		// We would need to format the New Expr and extract byte positions
+		// Extract the first replacement (most common case)
+		// Multiple replacements are rare and usually represent alternatives
+		repl := f.Replacement[0]
+
+		if repl.Old != nil {
+			// Get byte positions from the Old expression
+			start, end := (*repl.Old).Span()
+
+			// Format the New expression as text
+			newText := build.FormatString(repl.New)
+
+			finding.Replacement = &linter.Replacement{
+				Content: newText,
+				Start:   start.Byte,
+				End:     end.Byte,
+			}
+		}
 	}
 
 	return finding

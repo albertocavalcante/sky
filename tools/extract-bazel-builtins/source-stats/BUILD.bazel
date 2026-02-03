@@ -1,0 +1,18 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_binary(
+    name = "source-stats",
+    embed = [":source-stats_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_library(
+    name = "source-stats_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/albertocavalcante/sky/tools/extract-bazel-builtins/source-stats",
+    visibility = ["//visibility:private"],
+    deps = [
+        "@com_github_bazelbuild_buildtools//build_proto",
+        "@org_golang_google_protobuf//proto",
+    ],
+)

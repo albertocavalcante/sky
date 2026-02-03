@@ -271,18 +271,18 @@ func isStarlarkFile(name string) bool {
 	// Extension-based matches
 	ext := filepath.Ext(name)
 	switch ext {
-	case ".bzl",      // Bazel/Buck2 extensions
-		".bxl",       // Buck2 BXL (Buck2 Extension Language)
-		".star",      // Generic Starlark (Kurtosis, Drone CI, Cirrus CI, Qri, etc.)
-		".starlark",  // Full extension variant
-		".sky",       // Skycfg, Copybara (.bara.sky)
-		".skyi",      // Type stubs
-		".axl",       // Starlark config files
-		".ipd",       // Isopod (Kubernetes)
-		".plz",       // Please Build
-		".pconf",     // Protoconf config
-		".pinc",      // Protoconf include
-		".mpconf":    // Protoconf mutable config
+	case ".bzl", // Bazel/Buck2 extensions
+		".bxl",      // Buck2 BXL (Buck2 Extension Language)
+		".star",     // Generic Starlark (Kurtosis, Drone CI, Cirrus CI, Qri, etc.)
+		".starlark", // Full extension variant
+		".sky",      // Skycfg, Copybara (.bara.sky)
+		".skyi",     // Type stubs
+		".axl",      // Starlark config files
+		".ipd",      // Isopod (Kubernetes)
+		".plz",      // Please Build
+		".pconf",    // Protoconf config
+		".pinc",     // Protoconf include
+		".mpconf":   // Protoconf mutable config
 		return true
 	}
 	return false
