@@ -6,7 +6,7 @@ version = "2"
 [run]
 timeout = "5m"
 modules-download-mode = "readonly"
-skip-dirs = [
+exclude-dirs = [
   "bazel-*",
   "vendor",
 ]
@@ -27,25 +27,26 @@ disable = [
   "gofumpt",
 ]
 
-[linters-settings.errcheck]
+[settings.errcheck]
 check-type-assertions = false
 check-blank = false
 
-[linters-settings.govet]
+[settings.govet]
 enable-all = true
 disable = ["shadow"]
 
-[linters-settings.staticcheck]
+[settings.staticcheck]
 checks = ["all"]
 
 [issues]
 max-issues-per-linter = 50
 max-same-issues = 10
 
-[[issues.exclude-rules]]
+[issues.exclusions]
+[[issues.exclusions.rules]]
 path = "_test\\.go"
 linters = ["funlen"]
 
-[[issues.exclude-rules]]
+[[issues.exclusions.rules]]
 path = "\\.pb\\.go"
 linters = ["all"]
