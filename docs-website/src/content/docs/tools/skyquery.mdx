@@ -1,12 +1,343 @@
 ---
 title: skyquery
-description: skyquery tool documentation
+description: Query language for Starlark source analysis
 ---
+
+import { Aside } from '@astrojs/starlight/components';
 
 # skyquery
 
-Documentation coming soon.
+A query tool for analyzing Starlark source code. Find function definitions, load statements, and function calls across your codebase using a simple query language.
+
+## Installation
 
 ```bash
-skyquery --help
+go install github.com/albertocavalcante/sky/cmd/skyquery@latest
 ```
+
+## Usage
+
+```bash
+# List all function definitions
+skyquery 'defs(//...)'
+
+# List all load statements in a directory
+skyquery 'loads(//internal/...)'
+
+# Find functions matching a pattern
+skyquery 'filter("^test_", defs(//...))'
+
+# Output as JSON
+skyquery --output=json 'defs(//...)'
+
+# Show file locations
+skyquery --output=location 'defs(//...)'
+
+# Count results only
+skyquery --output=count 'files(//...)'
+```
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--output` | Output format: `name`, `location`, `json`, `count` (default: `name`) |
+| `--workspace` | Workspace root directory (default: `.`) |
+| `--keep_going` | Continue on parse errors |
+| `--version` | Print version and exit |
+
+## Query Language
+
+skyquery uses a simple functional query language to find elements in Starlark source files.
+
+### Target Patterns
+
+Target patterns specify which files to analyze:
+
+| Pattern | Description |
+|---------|-------------|
+| `//...` | All files in workspace recursively |
+| `//path/...` | All files under `path/` recursively |
+| `//path:file.star` | Specific file |
+
+### Query Functions
+
+#### defs(pattern)
+
+Find function definitions:
+
+```bash
+# All function definitions
+skyquery 'defs(//...)'
+
+# Functions in a specific directory
+skyquery 'defs(//lib/...)'
+```
+
+#### loads(pattern)
+
+Find load statements:
+
+```bash
+# All load statements
+skyquery 'loads(//...)'
+
+# Loads in BUILD files
+skyquery 'loads(//...)'
+```
+
+#### calls(function, pattern)
+
+Find function calls:
+
+```bash
+# Find all calls to 'load'
+skyquery 'calls(load, //...)'
+
+# Find all calls to 'rule'
+skyquery 'calls(rule, //...)'
+```
+
+#### files(pattern)
+
+List matching files:
+
+```bash
+# Count all Starlark files
+skyquery --output=count 'files(//...)'
+
+# List all files in a directory
+skyquery 'files(//internal/...)'
+```
+
+#### filter(regex, query)
+
+Filter query results by name:
+
+```bash
+# Find test functions
+skyquery 'filter("^test_", defs(//...))'
+
+# Find private functions
+skyquery 'filter("^_", defs(//...))'
+
+# Find functions ending with _impl
+skyquery 'filter("_impl$", defs(//...))'
+```
+
+## Output Formats
+
+### name (Default)
+
+Outputs just the names, one per line:
+
+```bash
+$ skyquery 'defs(//lib/...)'
+create_target
+validate_inputs
+helper_function
+```
+
+### location
+
+Outputs file:line: name format:
+
+```bash
+$ skyquery --output=location 'defs(//lib/...)'
+lib/targets.star:10: create_target
+lib/targets.star:25: validate_inputs
+lib/utils.star:5: helper_function
+```
+
+### json
+
+Full JSON output with all details:
+
+```bash
+$ skyquery --output=json 'defs(//lib/...)'
+```
+
+```json
+{
+  "query": "defs(//lib/...)",
+  "items": [
+    {
+      "type": "def",
+      "name": "create_target",
+      "file": "lib/targets.star",
+      "line": 10,
+      "params": ["name", "srcs", "deps"],
+      "docstring": "Create a build target."
+    },
+    {
+      "type": "def",
+      "name": "validate_inputs",
+      "file": "lib/targets.star",
+      "line": 25,
+      "params": ["inputs"],
+      "docstring": ""
+    }
+  ]
+}
+```
+
+### count
+
+Outputs only the count of results:
+
+```bash
+$ skyquery --output=count 'defs(//...)'
+42
+
+$ skyquery --output=count 'files(//...)'
+15
+```
+
+## Examples
+
+### Find All Public Functions
+
+```bash
+# Functions not starting with underscore
+skyquery 'filter("^[^_]", defs(//...))'
+```
+
+### Analyze Dependencies
+
+```bash
+# Find all external loads
+skyquery --output=json 'loads(//...)' | jq '.items[] | select(.module | startswith("@"))'
+```
+
+### Count Functions per Directory
+
+```bash
+# Count functions in each major directory
+for dir in lib internal rules; do
+  count=$(skyquery --output=count "defs(//${dir}/...)")
+  echo "${dir}: ${count} functions"
+done
+```
+
+### Find Undocumented Functions
+
+```bash
+# Get JSON and filter for empty docstrings
+skyquery --output=json 'defs(//...)' | \
+  jq '.items[] | select(.docstring == "") | .name'
+```
+
+### Search for Specific Patterns
+
+```bash
+# Find all rule implementations
+skyquery 'filter("_impl$", defs(//...))'
+
+# Find all test functions
+skyquery 'filter("^test_", defs(//...))'
+
+# Find all setup functions
+skyquery 'filter("^setup", defs(//...))'
+```
+
+### Generate Function Index
+
+```bash
+# Create a markdown index of all functions
+echo "# Function Index"
+echo ""
+skyquery --output=location 'defs(//...)' | while read line; do
+  file=$(echo "$line" | cut -d: -f1)
+  linenum=$(echo "$line" | cut -d: -f2)
+  name=$(echo "$line" | cut -d: -f3 | tr -d ' ')
+  echo "- [\`${name}\`](${file}#L${linenum})"
+done
+```
+
+## CI Integration
+
+### Check for New Functions
+
+```bash
+# In CI, compare against baseline
+skyquery --output=count 'defs(//...)' > current_count.txt
+diff baseline_count.txt current_count.txt || echo "Function count changed"
+```
+
+### Enforce Naming Conventions
+
+```bash
+# Fail if any public function doesn't follow naming convention
+bad_names=$(skyquery 'filter("^[A-Z]", defs(//...))' | wc -l)
+if [ "$bad_names" -gt 0 ]; then
+  echo "Error: Found $bad_names functions starting with uppercase"
+  skyquery 'filter("^[A-Z]", defs(//...))'
+  exit 1
+fi
+```
+
+### Generate Documentation Index
+
+```yaml
+- name: Generate function index
+  run: |
+    skyquery --output=json 'defs(//...)' > docs/function-index.json
+```
+
+## Working with Large Codebases
+
+### Use Specific Patterns
+
+```bash
+# Instead of scanning everything:
+skyquery 'defs(//...)'
+
+# Scan specific directories:
+skyquery 'defs(//lib/...)'
+skyquery 'defs(//rules/...)'
+```
+
+### Continue on Errors
+
+```bash
+# Don't fail on parse errors in some files
+skyquery --keep_going 'defs(//...)'
+```
+
+### Specify Workspace Root
+
+```bash
+# Run from a different directory
+skyquery --workspace=/path/to/project 'defs(//...)'
+```
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Error (invalid query, no files found, etc.) |
+
+## Query Language Grammar
+
+```
+query       = function "(" args ")"
+function    = "defs" | "loads" | "calls" | "files" | "filter"
+args        = arg ("," arg)*
+arg         = pattern | string | query
+pattern     = "//" path "..."
+string      = "\"" chars "\""
+```
+
+## Comparison with Bazel Query
+
+| Feature | skyquery | bazel query |
+|---------|----------|-------------|
+| Scope | Starlark source files | Build graph |
+| Speed | Fast (no build) | Requires loading |
+| Function defs | Yes | No |
+| Load statements | Yes | Limited |
+| Dependencies | No | Yes |
+| Targets | No | Yes |
+
+skyquery is designed for source code analysis, not build graph queries. Use Bazel's query for dependency analysis and skyquery for source-level analysis.
