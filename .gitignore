@@ -17,7 +17,8 @@
 # Test artifacts
 *.test
 *.out
-coverage.*
+/coverage.out
+/coverage.html
 
 # Go workspace files
 go.work
