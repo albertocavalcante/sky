@@ -1,5 +1,6 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import starlightLinksValidator from 'starlight-links-validator';
 import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
 
@@ -14,6 +15,7 @@ export default defineConfig({
 	integrations: [
 		sitemap(),
 		starlight({
+			plugins: [starlightLinksValidator()],
 			title: 'Sky',
 			description: 'A comprehensive toolkit for Starlark development',
 			favicon: '/favicon.svg',
