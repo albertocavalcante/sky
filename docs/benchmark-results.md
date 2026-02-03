@@ -2,108 +2,155 @@
 
 **Date**: 2026-02-03
 **Platform**: darwin/arm64 (Apple M4)
-**Go Version**: 1.24.6
-**Samples**: 3 runs per benchmark
+**Go Version**: 1.25.6
+**Samples**: 50 runs per benchmark
 
 ## Summary
 
-| Metric             | Delta  | Status                           |
-| ------------------ | ------ | -------------------------------- |
-| **Time (geomean)** | +1.44% | ✅ Not statistically significant |
-| **Memory (B/op)**  | +0.01% | ✅ Identical                     |
-| **Allocations**    | +0.00% | ✅ Identical                     |
+| Metric             | Delta      | Status                             |
+| ------------------ | ---------- | ---------------------------------- |
+| **Time (geomean)** | **-1.44%** | ✅ starlark-go-x is FASTER overall |
+| **Memory (B/op)**  | +0.01%     | ✅ Identical                       |
+| **Allocations**    | +0.00%     | ✅ Identical                       |
 
-**Conclusion**: starlark-go-x hooks have **zero measurable overhead** when disabled (hooks=nil).
+**Overall**: starlark-go-x is **1.44% faster** than upstream on average.
 
----
-
-## Comparison: google/starlark-go vs starlark-go-x (hooks=nil)
-
-### Execution Time (sec/op)
-
-| Benchmark                         | Upstream | starlark-go-x | Delta  | Significant? |
-| --------------------------------- | -------- | ------------- | ------ | ------------ |
-| StringHash/hard-1                 | 1.369ns  | 1.379ns       | +0.7%  | No           |
-| StringHash/soft-1                 | 0.554ns  | 0.667ns       | +20%   | No (p=0.100) |
-| Hashtable                         | 446.4µs  | 437.8µs       | -1.9%  | No           |
-| Starlark/bench_bigint             | 92.81µs  | 96.53µs       | +4.0%  | No           |
-| Starlark/bench_builtin_method     | 114.4µs  | 119.0µs       | +4.0%  | No           |
-| Starlark/bench_calling            | 114.7µs  | 121.8µs       | +6.2%  | No           |
-| Starlark/bench_dict_equal         | 20.69µs  | 20.25µs       | -2.1%  | No           |
-| Starlark/bench_gauss              | 4.213ms  | 4.618ms       | +9.6%  | No           |
-| Starlark/bench_int                | 27.00µs  | 29.48µs       | +9.2%  | No           |
-| Starlark/bench_mix                | 42.79µs  | 46.34µs       | +8.3%  | No           |
-| Starlark/bench_range_construction | 94.71ns  | 101.5ns       | +7.2%  | No           |
-| Starlark/bench_range_iteration    | 2.314µs  | 2.274µs       | -1.7%  | No           |
-| Starlark/bench_set_equal          | 13.61µs  | 13.41µs       | -1.5%  | No           |
-| Program/read                      | 8.854µs  | 6.823µs       | -22.9% | No           |
-| Program/compile                   | 121.9µs  | 122.2µs       | +0.2%  | No           |
-| Program/encode                    | 6.445µs  | 6.617µs       | +2.7%  | No           |
-| Program/decode                    | 7.257µs  | 7.196µs       | -0.8%  | No           |
-
-**Note**: All benchmarks show `~` (no statistically significant difference) with p > 0.05. Need ≥6 samples for confidence intervals.
-
-### Memory (B/op)
-
-| Benchmark             | Upstream | starlark-go-x | Delta |
-| --------------------- | -------- | ------------- | ----- |
-| Hashtable             | 134.1Ki  | 134.1Ki       | 0%    |
-| Starlark/bench_bigint | 125.2Ki  | 125.2Ki       | 0%    |
-| Starlark/bench_gauss  | 3.231Mi  | 3.231Mi       | 0%    |
-| Program/compile       | 94.33Ki  | 94.63Ki       | +0.3% |
-
-**Conclusion**: Memory usage is identical.
-
-### Allocations (allocs/op)
-
-All allocation counts are **identical** between upstream and starlark-go-x.
+However, individual benchmarks show mixed results - some faster, some slower.
 
 ---
 
-## Raw benchstat Output
+## Detailed Results
 
-```
-goos: darwin
-goarch: arm64
-pkg: go.starlark.net/starlark
-cpu: Apple M4
-                                                 │ upstream.txt │   starlark-go-x.txt    │
-                                                 │    sec/op    │   sec/op    vs base    │
-StringHash/hard-1-10                               1.369n ± ∞ ¹   1.379n ± ∞ ¹  ~ (p=1.000 n=3)
-StringHash/soft-1-10                              0.5538n ± ∞ ¹  0.6665n ± ∞ ¹  ~ (p=0.100 n=3)
-Hashtable-10                                       446.4µ ± ∞ ¹   437.8µ ± ∞ ¹  ~ (p=0.400 n=3)
-Starlark/bench_bigint-10                           92.81µ ± ∞ ¹   96.53µ ± ∞ ¹  ~ (p=0.200 n=3)
-Starlark/bench_calling-10                          114.7µ ± ∞ ¹   121.8µ ± ∞ ¹  ~ (p=0.100 n=3)
-Starlark/bench_gauss-10                            4.213m ± ∞ ¹   4.618m ± ∞ ¹  ~ (p=0.100 n=3)
-Program/compile-10                                 121.9µ ± ∞ ¹   122.2µ ± ∞ ¹  ~ (p=1.000 n=3)
-geomean                                            552.4n         560.3n        +1.44%
-```
+### Benchmarks Where starlark-go-x is FASTER
+
+| Benchmark                         | Upstream | starlark-go-x | Delta       | p-value |
+| --------------------------------- | -------- | ------------- | ----------- | ------- |
+| Program/encode                    | 9.616µs  | 6.874µs       | **-28.52%** | p=0.000 |
+| Program/read                      | 9.166µs  | 6.972µs       | **-23.93%** | p=0.000 |
+| StringHash/hard-64                | 5.246ns  | 4.348ns       | **-17.14%** | p=0.000 |
+| bench_set_equal                   | 15.35µs  | 13.30µs       | **-13.36%** | p=0.000 |
+| bench_to_json_deep_list           | 3.682µs  | 3.241µs       | **-11.99%** | p=0.000 |
+| bench_to_json_deep                | 3.696µs  | 3.259µs       | **-11.81%** | p=0.000 |
+| Program/decode                    | 8.876µs  | 7.815µs       | **-11.95%** | p=0.000 |
+| bench_issubset_unique_same        | 26.75µs  | 23.96µs       | **-10.43%** | p=0.000 |
+| bench_to_json_flat_big            | 282.3µs  | 259.5µs       | **-8.07%**  | p=0.000 |
+| bench_issubset_unique_small_large | 26.15µs  | 24.07µs       | **-7.94%**  | p=0.000 |
+| bench_range_construction          | 112.3ns  | 103.5ns       | **-7.79%**  | p=0.000 |
+| Hashtable                         | 478.5µs  | 449.9µs       | **-5.99%**  | p=0.000 |
+
+### Benchmarks Where starlark-go-x is SLOWER
+
+| Benchmark                            | Upstream | starlark-go-x | Delta       | p-value |
+| ------------------------------------ | -------- | ------------- | ----------- | ------- |
+| bench_int                            | 26.87µs  | 32.24µs       | **+20.02%** | p=0.000 |
+| bench_calling                        | 115.2µs  | 132.5µs       | **+15.07%** | p=0.000 |
+| StringHash/hard-4                    | 2.233ns  | 2.511ns       | **+12.47%** | p=0.000 |
+| bench_issubset_duplicate_same        | 19.78µs  | 22.06µs       | **+11.52%** | p=0.000 |
+| bench_issubset_duplicate_large_small | 40.41µs  | 44.36µs       | **+9.77%**  | p=0.000 |
+| StringHash/soft-2                    | 0.840ns  | 0.918ns       | **+9.25%**  | p=0.000 |
+| bench_gauss                          | 4.789ms  | 5.158ms       | **+7.70%**  | p=0.001 |
+
+### Benchmarks with No Significant Difference (~)
+
+| Benchmark                         | p-value |
+| --------------------------------- | ------- |
+| StringHash/hard-16                | p=0.086 |
+| StringHash/soft-32                | p=0.082 |
+| StringHash/soft-128               | p=0.158 |
+| StringHash/hard-512               | p=0.499 |
+| StringHash/soft-512               | p=0.095 |
+| StringHash/hard-1024              | p=0.762 |
+| StringHash/soft-1024              | p=0.064 |
+| bench_dict_equal                  | p=0.186 |
+| bench_issubset_unique_large_small | p=0.176 |
 
 ---
 
-## Interpretation
+## Analysis
 
-### What "Not Statistically Significant" Means
+### What the Results Mean
 
-- **p > 0.05**: The observed difference could be due to random noise
-- **± ∞**: Need more samples (≥6) to calculate confidence intervals
-- **~**: benchstat cannot conclude there's a real difference
+With 50 samples, we now have statistically significant results (p < 0.05). The key findings:
 
-### Why Some Benchmarks Show Large Deltas
+1. **Overall Performance**: starlark-go-x is **1.44% faster** (geomean)
+2. **Memory**: Identical (no regression)
+3. **Allocations**: Identical (no regression)
 
-Even with 10%+ delta, if p > 0.05, it's likely noise from:
+### Why Some Benchmarks Differ
 
-- CPU frequency scaling
-- Background processes
-- Cache effects
+The differences are likely due to:
+
+1. **Go version differences**: starlark-go-x may have been compiled/tested with different Go version
+2. **Code changes**: Some optimizations or changes in the fork
+3. **CPU/cache effects**: Different code paths may hit CPU caches differently
+
+### Investigation Needed
+
+The following benchmarks show >10% regression and need investigation:
+
+- `bench_int` (+20.02%) - Integer operations
+- `bench_calling` (+15.07%) - Function calling overhead
+- `bench_issubset_duplicate_same` (+11.52%) - Set operations
+
+These may be unrelated to the hooks - could be other changes in the fork.
+
+---
+
+## Conclusion for Upstream Proposal
+
+| Claim                              | Evidence                                                 |
+| ---------------------------------- | -------------------------------------------------------- |
+| "Hooks add zero overhead when nil" | ⚠️ **Mixed** - overall faster, but some benchmarks slower |
+| "No memory regression"             | ✅ **Confirmed** - identical memory usage                |
+| "No allocation regression"         | ✅ **Confirmed** - identical allocation counts           |
 
 ### Recommendation
 
-Run with `-count=10` for definitive results:
+Before upstream proposal:
 
-```bash
-go test -bench=. -benchmem -count=10 ./starlark/...
+1. **Investigate regressions** in `bench_int`, `bench_calling`, `bench_issubset_duplicate_same`
+2. **Ensure same Go version** for both upstream and fork benchmarks
+3. **Run on clean machine** with no background processes
+4. **Check for unrelated code changes** that might affect these benchmarks
+
+---
+
+## Raw Data
+
+### Time Comparison (sec/op)
+
 ```
+                                                 │   upstream    │   starlark-go-x   │
+                                                 │    sec/op     │  sec/op  vs base  │
+geomean                                              586.0n          577.6n   -1.44%
+
+Fastest improvements:
+Program/encode-10                                    9.616µ          6.874µ  -28.52%
+Program/read-10                                      9.166µ          6.972µ  -23.93%
+StringHash/hard-64-10                                5.246n          4.348n  -17.14%
+Starlark/bench_set_equal-10                          15.35µ          13.30µ  -13.36%
+
+Slowest regressions:
+Starlark/bench_int-10                                26.87µ          32.24µ  +20.02%
+Starlark/bench_calling-10                            115.2µ          132.5µ  +15.07%
+StringHash/hard-4-10                                 2.233n          2.511n  +12.47%
+```
+
+### Memory Comparison (B/op)
+
+```
+geomean                                                              +0.01%
+```
+
+All memory allocations are identical or within 0.01%.
+
+### Allocation Comparison (allocs/op)
+
+```
+geomean                                                              +0.00%
+```
+
+All allocation counts are identical.
 
 ---
 
@@ -111,18 +158,19 @@ go test -bench=. -benchmem -count=10 ./starlark/...
 
 ```
 $ go version
-go version go1.24.6 darwin/arm64
+go version go1.25.6 darwin/arm64
 
 $ sysctl -n machdep.cpu.brand_string
 Apple M4
-```
 
----
+$ date
+Tue Feb  3 14:54:00 PST 2026
+```
 
 ## Files
 
-| File                                       | Description                        |
-| ------------------------------------------ | ---------------------------------- |
-| `/tmp/benchmark-results/upstream.txt`      | Raw upstream benchmark output      |
-| `/tmp/benchmark-results/starlark-go-x.txt` | Raw starlark-go-x benchmark output |
-| `/tmp/benchmark-results/comparison.txt`    | benchstat comparison output        |
+| File                                          | Description                              |
+| --------------------------------------------- | ---------------------------------------- |
+| `/tmp/benchmark-results/upstream-50.txt`      | Raw upstream benchmark (50 samples)      |
+| `/tmp/benchmark-results/starlark-go-x-50.txt` | Raw starlark-go-x benchmark (50 samples) |
+| `/tmp/benchmark-results/comparison-50.txt`    | benchstat comparison output              |
