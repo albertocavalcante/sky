@@ -3,6 +3,12 @@ import starlight from '@astrojs/starlight';
 import starlightLinksValidator from 'starlight-links-validator';
 import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
+import fs from 'node:fs';
+
+// Load Starlark TextMate grammar for syntax highlighting
+const starlarkGrammar = JSON.parse(
+	fs.readFileSync(new URL('./starlark.tmLanguage.json', import.meta.url), 'utf-8')
+);
 
 export default defineConfig({
 	site: 'https://albertocavalcante.github.io',
@@ -33,6 +39,15 @@ export default defineConfig({
 			tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 3 },
 			expressiveCode: {
 				themes: ['github-dark', 'github-light'],
+				shiki: {
+					langs: [starlarkGrammar],
+					langAlias: {
+						bzl: 'starlark',
+						bazel: 'starlark',
+						build: 'starlark',
+						star: 'starlark',
+					},
+				},
 				styleOverrides: {
 					borderRadius: '0.625rem',
 					codeFontFamily: "'JetBrains Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace",

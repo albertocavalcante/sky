@@ -17,7 +17,7 @@ Type annotation support varies by implementation. Buck2's starlark-rust has the 
 
 Add types to function parameters and return values:
 
-```python
+```starlark
 def add(x: int, y: int) -> int:
     return x + y
 
@@ -42,7 +42,7 @@ def greet(name: str) -> str:
 
 Specify element types for collections:
 
-```python
+```starlark
 def sum_numbers(numbers: list[int]) -> int:
     total = 0
     for n in numbers:
@@ -58,7 +58,7 @@ def point() -> tuple[int, int]:
 
 ### Tuple Variants
 
-```python
+```starlark
 # Fixed-size tuple with specific types
 def rgb() -> tuple[int, int, int]:
     return (255, 128, 0)
@@ -72,7 +72,7 @@ def numbers() -> tuple[int, ...]:
 
 Allow multiple types using `|`:
 
-```python
+```starlark
 def process(value: int | str) -> str:
     if type(value) == "int":
         return str(value)
@@ -96,7 +96,7 @@ From the `typing` module (where available):
 | `typing.Iterable` | Any iterable value |
 | `typing.Never` | No valid values (e.g., `fail()` return) |
 
-```python
+```starlark
 def accepts_anything(x: typing.Any) -> None:
     print(x)
 
@@ -108,7 +108,7 @@ def run_callback(fn: typing.Callable) -> None:
 
 Records provide structured data with type-checked fields:
 
-```python
+```starlark
 # Define a record type
 Person = record(
     name = str,
@@ -131,7 +131,7 @@ print(alice.age)   # 30
 
 Use `field()` for optional fields with defaults:
 
-```python
+```starlark
 Config = record(
     host = str,
     port = field(int, 8080),      # Default: 8080
@@ -147,7 +147,7 @@ print(cfg.port)  # 8080
 
 Enums represent a fixed set of values:
 
-```python
+```starlark
 # Define an enum
 Status = enum("pending", "running", "completed", "failed")
 
@@ -172,7 +172,7 @@ print(Status[0])      # Status("pending")
 
 ### Using Enums in Functions
 
-```python
+```starlark
 LogLevel = enum("debug", "info", "warn", "error")
 
 def log(level: LogLevel, message: str) -> None:
@@ -190,7 +190,7 @@ Types can be checked at different times:
 2. **Static analysis** - Without execution (tooling)
 3. **Compile time** - During loading (build systems)
 
-```python
+```starlark
 # Runtime checking: error raised when called with wrong type
 def square(n: int) -> int:
     return n * n
@@ -206,13 +206,15 @@ square("5")    # Runtime error: expected int, got str
 3. **Prefer specific types** - `list[str]` over `list` when possible
 4. **Document with types** - Types serve as documentation
 
-```python
-# Good: Clear types
-def create_user(name: str, age: int) -> record:
+```starlark
+# Good: Clear types with defined record
+User = record(name=str, age=int)
+
+def create_user(name: str, age: int) -> User:
     return User(name=name, age=age)
 
-# Avoid: Unclear types
-def create_user(name, age):
+# Avoid: Unclear types, untyped dict
+def create_user_bad(name, age):
     return {"name": name, "age": age}
 ```
 
