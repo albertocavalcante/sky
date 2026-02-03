@@ -7,17 +7,28 @@ Redesign Sky CLI to be plugin-first while supporting two distribution modes:
 1. **Modular**: Minimal `sky` binary + individual plugins installed on demand
 2. **Bundled**: Single `sky` binary with all core tools compiled in
 
-## Current State
+## Current State (IMPLEMENTED)
 
-The existing architecture already has strong foundations:
+The plugin architecture is now implemented:
 
 ```
-cmd/sky/main.go          # Dispatcher (535 lines)
-├── Core command mapping  # fmt → skyfmt, lint → skylint, etc.
-├── Plugin resolution     # Falls back to plugins for unknown commands
-└── Plugin management     # install, uninstall, list, search, update
+cmd/sky/
+├── main.go              # Dispatcher with embedded tool support
+├── embedded.go          # EmbeddedTool interface
+├── embedded_full.go     # sky_full build tag - imports all tools
+└── embedded_minimal.go  # Default - no embedded tools
 
-internal/plugins/
+internal/cmd/            # Tool logic as importable packages
+├── skylint/run.go       # package skylint
+├── skyfmt/run.go        # package skyfmt
+├── skytest/run.go       # etc.
+└── ...
+
+cmd/skylint/main.go      # Thin wrapper: imports internal/cmd/skylint
+cmd/skyfmt/main.go       # Thin wrapper: imports internal/cmd/skyfmt
+...
+
+internal/plugins/        # External plugin system
 ├── store.go             # Plugin storage (~/.config/sky/plugins/)
 ├── runner_exec.go       # Execute native binaries
 ├── runner_wasi.go       # Execute WASM via wazero
@@ -25,11 +36,10 @@ internal/plugins/
 └── protocol.go          # Metadata protocol (API v1)
 ```
 
-**Problem**: Core tools are currently external binaries that `sky` shells out to. This creates:
+**Build modes**:
 
-- Larger distribution footprint (8 separate binaries)
-- Slower execution (process spawn overhead)
-- Complex installation (need all binaries in PATH)
+- `go build ./cmd/sky` → 12MB, uses external binaries
+- `go build -tags=sky_full ./cmd/sky` → 18MB, all tools embedded
 
 ## Proposed Architecture
 
@@ -398,40 +408,45 @@ sky plugin metadata ./my-plugin            # Verify metadata
 
 ## Migration Path
 
-### Phase 1: Export Run() from Core Tools
+### Phase 1: Export Run() from Core Tools ✅ DONE
 
-Minimal refactor - each tool exports `Run(args) int` and `RunWithIO(ctx, args, stdin, stdout, stderr) int`:
+Tool logic moved to `internal/cmd/*` as importable packages:
 
-```bash
-# For each tool:
-cmd/skylint/main.go  →  just calls Run()
-cmd/skylint/run.go   →  exported Run() + RunWithIO()
+```
+internal/cmd/skylint/run.go  # package skylint, exports Run() + RunWithIO()
+cmd/skylint/main.go          # package main, imports internal/cmd/skylint
 ```
 
-This is backwards compatible. Standalone binaries work exactly as before.
+Each tool remains independently installable via `go install ./cmd/skylint`.
 
-### Phase 2: Build Tags for sky Binary
+### Phase 2: Build Tags for sky Binary ✅ DONE
 
-Add `cmd/sky/embedded.go` with build tag that imports all tools:
+Added embedded tool support:
 
 ```go
-//go:build sky_full
+// cmd/sky/embedded.go
+type EmbeddedTool func(ctx, args, stdin, stdout, stderr) int
 
-var embeddedTools = map[string]func([]string) int{
-    "lint": skylint.Run,
+// cmd/sky/embedded_full.go (//go:build sky_full)
+embeddedTools = map[string]EmbeddedTool{
+    "fmt":  skyfmt.RunWithIO,
+    "lint": skylint.RunWithIO,
     ...
 }
+
+// cmd/sky/embedded_minimal.go (//go:build !sky_full)
+embeddedTools = nil
 ```
 
-Update resolution logic to check `embeddedTools` first.
+Resolution order: embedded → external binary → plugin system
 
-### Phase 3: Plugin CLI Polish
+### Phase 3: Plugin CLI Polish (TODO)
 
 1. Better error messages ("lint not found, install with: sky plugin install lint")
 2. `sky plugin init` scaffolding for new plugins
 3. Plugin update notifications
 
-### Phase 4: Documentation
+### Phase 4: Documentation (TODO)
 
 1. Plugin development guide
 2. "go install" instructions for individual tools
