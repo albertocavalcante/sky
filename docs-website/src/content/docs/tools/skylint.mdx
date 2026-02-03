@@ -233,24 +233,25 @@ Documentation:
 
 ## Suppressing Warnings
 
-Suppress specific warnings with comments:
+Suppress warnings with comments:
 
 ```starlark
+# Suppress on the current line (comment-only line)
 # skylint: disable=print
 print("Debug output")
 
-# skylint: disable=unused-variable
+# Suppress on the next line
+# skylint: disable-next-line=unused-variable
 unused = compute_value()
+
+# Inline suppression (same line as code)
+print("Debug")  # skylint: disable=print
 ```
 
-Or suppress for a block:
+Multiple rules can be suppressed with commas:
 
 ```starlark
-# skylint: disable=print
-def debug_function():
-    print("Starting")
-    print("Done")
-# skylint: enable=print
+# skylint: disable=print,unused-variable
 ```
 
 ## CI Integration
