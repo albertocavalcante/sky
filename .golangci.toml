@@ -1,0 +1,50 @@
+# golangci-lint configuration
+# https://golangci-lint.run/usage/configuration/
+
+[run]
+timeout = "5m"
+modules-download-mode = "readonly"
+skip-dirs = [
+  "bazel-*",
+  "vendor",
+]
+
+[linters]
+enable = [
+  "errcheck",
+  "govet",
+  "ineffassign",
+  "staticcheck",
+  "unused",
+  "gosimple",
+  "typecheck",
+]
+disable = [
+  "godot",
+  "wsl",
+  "nlreturn",
+  "gofumpt",
+]
+
+[linters-settings.errcheck]
+check-type-assertions = false
+check-blank = false
+
+[linters-settings.govet]
+enable-all = true
+disable = ["shadow"]
+
+[linters-settings.staticcheck]
+checks = ["all"]
+
+[issues]
+max-issues-per-linter = 50
+max-same-issues = 10
+
+[[issues.exclude-rules]]
+path = "_test\\.go"
+linters = ["funlen"]
+
+[[issues.exclude-rules]]
+path = "\\.pb\\.go"
+linters = ["all"]
