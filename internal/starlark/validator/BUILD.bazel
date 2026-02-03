@@ -1,9 +1,16 @@
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "validator",
     srcs = ["validator.go"],
     importpath = "github.com/albertocavalcante/sky/internal/starlark/validator",
     visibility = ["//:__subpackages__"],
+    deps = ["//internal/starlark/filekind"],
+)
+
+go_test(
+    name = "validator_test",
+    srcs = ["validator_test.go"],
+    embed = [":validator"],
     deps = ["//internal/starlark/filekind"],
 )
