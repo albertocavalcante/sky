@@ -1,5 +1,6 @@
 load("@rules_go//go:def.bzl", "go_binary", "go_library")
 
+# Minimal build - no embedded tools
 go_library(
     name = "sky_lib",
     srcs = [
@@ -18,5 +19,35 @@ go_library(
 go_binary(
     name = "sky",
     embed = [":sky_lib"],
+    visibility = ["//visibility:public"],
+)
+
+# Full build - all tools embedded
+go_library(
+    name = "sky_full_lib",
+    srcs = [
+        "embedded.go",
+        "embedded_full.go",
+        "main.go",
+    ],
+    importpath = "github.com/albertocavalcante/sky/cmd/sky",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//internal/cmd/skycheck",
+        "//internal/cmd/skycov",
+        "//internal/cmd/skydoc",
+        "//internal/cmd/skyfmt",
+        "//internal/cmd/skylint",
+        "//internal/cmd/skyquery",
+        "//internal/cmd/skyrepl",
+        "//internal/cmd/skytest",
+        "//internal/plugins",
+        "//internal/version",
+    ],
+)
+
+go_binary(
+    name = "sky_full",
+    embed = [":sky_full_lib"],
     visibility = ["//visibility:public"],
 )

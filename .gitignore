@@ -39,3 +39,4 @@ bazel-*
 .bazelrc.user
 .bazelrc.local
 .cache/
+dist/
