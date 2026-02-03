@@ -1,0 +1,228 @@
+---
+title: Type System
+description: Starlark type annotations and type checking
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Starlark Type System
+
+Starlark supports optional type annotations similar to Python's type hints. Different implementations offer varying levels of type checking.
+
+<Aside type="note">
+Type annotation support varies by implementation. Buck2's starlark-rust has the most advanced type system. The starlark-go implementation (used by Bazel) has more limited support.
+</Aside>
+
+## Basic Type Annotations
+
+Add types to function parameters and return values:
+
+```python
+def add(x: int, y: int) -> int:
+    return x + y
+
+def greet(name: str) -> str:
+    return "Hello, " + name
+```
+
+## Built-in Types
+
+| Type | Description | Example |
+|------|-------------|---------|
+| `int` | Integer values | `42` |
+| `float` | Floating-point numbers | `3.14` |
+| `str` | String values | `"hello"` |
+| `bool` | Boolean values | `True`, `False` |
+| `None` | The None value | `None` |
+| `list` | List values | `[1, 2, 3]` |
+| `dict` | Dictionary values | `{"a": 1}` |
+| `tuple` | Tuple values | `(1, 2)` |
+
+## Generic Types
+
+Specify element types for collections:
+
+```python
+def sum_numbers(numbers: list[int]) -> int:
+    total = 0
+    for n in numbers:
+        total += n
+    return total
+
+def lookup(data: dict[str, int], key: str) -> int:
+    return data[key]
+
+def point() -> tuple[int, int]:
+    return (10, 20)
+```
+
+### Tuple Variants
+
+```python
+# Fixed-size tuple with specific types
+def rgb() -> tuple[int, int, int]:
+    return (255, 128, 0)
+
+# Variable-length tuple (all same type)
+def numbers() -> tuple[int, ...]:
+    return (1, 2, 3, 4, 5)
+```
+
+## Union Types
+
+Allow multiple types using `|`:
+
+```python
+def process(value: int | str) -> str:
+    if type(value) == "int":
+        return str(value)
+    return value
+
+def maybe_find(items: list, key: str) -> str | None:
+    for item in items:
+        if item.key == key:
+            return item.value
+    return None
+```
+
+## Special Types
+
+From the `typing` module (where available):
+
+| Type | Description |
+|------|-------------|
+| `typing.Any` | Matches any value |
+| `typing.Callable` | Any callable (function) |
+| `typing.Iterable` | Any iterable value |
+| `typing.Never` | No valid values (e.g., `fail()` return) |
+
+```python
+def accepts_anything(x: typing.Any) -> None:
+    print(x)
+
+def run_callback(fn: typing.Callable) -> None:
+    fn()
+```
+
+## Record Types
+
+Records provide structured data with type-checked fields:
+
+```python
+# Define a record type
+Person = record(
+    name = str,
+    age = int,
+    email = str,
+)
+
+# Create instances
+alice = Person(name="Alice", age=30, email="alice@example.com")
+
+# Access fields
+print(alice.name)  # "Alice"
+print(alice.age)   # 30
+
+# Type-safe: this would be a runtime error
+# bob = Person(name="Bob", age="thirty", email="bob@example.com")
+```
+
+### Default Values
+
+Use `field()` for optional fields with defaults:
+
+```python
+Config = record(
+    host = str,
+    port = field(int, 8080),      # Default: 8080
+    debug = field(bool, False),   # Default: False
+)
+
+# port and debug are optional
+cfg = Config(host="localhost")
+print(cfg.port)  # 8080
+```
+
+## Enum Types
+
+Enums represent a fixed set of values:
+
+```python
+# Define an enum
+Status = enum("pending", "running", "completed", "failed")
+
+# Create values
+current = Status("running")
+
+# Access properties
+print(current.value)  # "running"
+print(current.index)  # 1
+
+# List all values
+print(Status.values())  # ["pending", "running", "completed", "failed"]
+
+# Iterate
+for s in Status:
+    print(s.value)
+
+# Length and indexing
+print(len(Status))    # 4
+print(Status[0])      # Status("pending")
+```
+
+### Using Enums in Functions
+
+```python
+LogLevel = enum("debug", "info", "warn", "error")
+
+def log(level: LogLevel, message: str) -> None:
+    print("[{}] {}".format(level.value.upper(), message))
+
+log(LogLevel("info"), "Server started")
+# [INFO] Server started
+```
+
+## Type Checking Modes
+
+Types can be checked at different times:
+
+1. **Runtime** - As functions execute (most common)
+2. **Static analysis** - Without execution (tooling)
+3. **Compile time** - During loading (build systems)
+
+```python
+# Runtime checking: error raised when called with wrong type
+def square(n: int) -> int:
+    return n * n
+
+square(5)      # OK: returns 25
+square("5")    # Runtime error: expected int, got str
+```
+
+## Best Practices
+
+1. **Add types to public APIs** - Makes interfaces clear
+2. **Use records over dicts** - Better type safety and memory efficiency
+3. **Prefer specific types** - `list[str]` over `list` when possible
+4. **Document with types** - Types serve as documentation
+
+```python
+# Good: Clear types
+def create_user(name: str, age: int) -> record:
+    return User(name=name, age=age)
+
+# Avoid: Unclear types
+def create_user(name, age):
+    return {"name": name, "age": age}
+```
+
+## Implementation Support
+
+| Feature | starlark-rust (Buck2) | starlark-go (Bazel) |
+|---------|----------------------|---------------------|
+| Basic annotations | ✅ | ✅ |
+| Generic types | ✅ | ⚠️ Limited |
+| Union types | ✅ | ❌ |
+| `record` type | ✅ | ❌ |
+| `enum` type | ✅ | ❌ |
+| Static checking | ✅ | ⚠️ Limited |

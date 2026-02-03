@@ -61,6 +61,8 @@ export default defineConfig({
 					items: [
 						{ label: 'What is Starlark?', slug: 'starlark/overview' },
 						{ label: 'Language Basics', slug: 'starlark/basics' },
+						{ label: 'Type System', slug: 'starlark/types' },
+						{ label: 'Best Practices', slug: 'starlark/best-practices' },
 						{ label: 'Resources', slug: 'starlark/resources' },
 					],
 				},
