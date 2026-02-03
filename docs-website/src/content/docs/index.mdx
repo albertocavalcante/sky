@@ -1,0 +1,63 @@
+---
+title: Sky
+description: A comprehensive toolkit for Starlark development
+template: splash
+hero:
+  tagline: Lint, format, test, and analyze your Starlark code with confidence.
+  actions:
+    - text: Get Started
+      link: /getting-started/introduction/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/albertocavalcante/sky
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Features
+
+<CardGrid stagger>
+  <Card title="Linting" icon="warning">
+    Catch bugs and enforce best practices with `skylint`. Configurable rules and multiple output formats.
+  </Card>
+  <Card title="Formatting" icon="document">
+    Consistent code style with `skyfmt`. Compatible with Buildifier.
+  </Card>
+  <Card title="Testing" icon="rocket">
+    Full-featured test runner with `skytest`. Built-in assertions, setup/teardown, JSON and JUnit output.
+  </Card>
+  <Card title="Coverage" icon="approve-check">
+    Code coverage collection with `skycov`. Supports text, JSON, Cobertura, and LCOV formats.
+  </Card>
+  <Card title="Documentation" icon="open-book">
+    Generate docs from docstrings with `skydoc`. Markdown and HTML output.
+  </Card>
+  <Card title="Analysis" icon="magnifier">
+    Deep static analysis with `skycheck`. Type inference and cross-file analysis.
+  </Card>
+</CardGrid>
+
+## Quick Example
+
+```bash
+# Install
+go install github.com/albertocavalcante/sky/cmd/...@latest
+
+# Lint your code
+skylint src/
+
+# Run tests with coverage
+skytest --coverage tests/
+skycov coverage.json
+```
+
+## Powered by starlark-go-x
+
+Sky uses [starlark-go-x](https://github.com/albertocavalcante/starlark-go-x), our enhanced fork of the official interpreter with:
+
+- **OnExec hook** for coverage instrumentation
+- **Type annotation** parsing support
+
+[Learn more →](/starlark-go-x/overview/)

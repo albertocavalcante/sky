@@ -1,0 +1,85 @@
+---
+title: Quick Start
+description: Get started with Sky in 5 minutes
+---
+
+# Quick Start
+
+Get up and running with Sky in 5 minutes.
+
+## 1. Install
+
+```bash
+go install github.com/albertocavalcante/sky/cmd/...@latest
+```
+
+## 2. Create a Starlark File
+
+```python title="hello.star"
+def greet(name):
+    """Greet someone by name."""
+    return "Hello, " + name + "!"
+
+message = greet("World")
+print(message)
+```
+
+## 3. Format It
+
+```bash
+skyfmt hello.star
+```
+
+## 4. Lint It
+
+```bash
+skylint hello.star
+```
+
+## 5. Create a Test
+
+```python title="hello_test.star"
+load("hello.star", "greet")
+
+def test_greet():
+    assert.eq(greet("World"), "Hello, World!")
+    assert.eq(greet("Sky"), "Hello, Sky!")
+
+def test_greet_empty():
+    assert.eq(greet(""), "Hello, !")
+```
+
+## 6. Run Tests
+
+```bash
+skytest hello_test.star
+```
+
+Output:
+```
+PASS  test_greet
+PASS  test_greet_empty
+
+Results: 2 passed, 0 failed
+```
+
+## 7. Collect Coverage
+
+```bash
+skytest --coverage hello_test.star
+skycov coverage.json
+```
+
+Output:
+```
+Coverage Report
+===============
+hello.star    100.0% (3/3 lines)
+Total: 100.0% (3/3 lines)
+```
+
+## Next Steps
+
+- [Tools Overview](/tools/overview) - Learn about all Sky tools
+- [Coverage Guide](/coverage/getting-started) - Deep dive into coverage
+- [starlark-go-x](/starlark-go-x/overview) - Our enhanced interpreter

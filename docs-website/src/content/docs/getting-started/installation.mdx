@@ -1,0 +1,71 @@
+---
+title: Installation
+description: How to install Sky tools
+---
+
+# Installation
+
+## Prerequisites
+
+- Go 1.21 or later
+- Git
+
+## Install All Tools
+
+```bash
+go install github.com/albertocavalcante/sky/cmd/...@latest
+```
+
+## Install Individual Tools
+
+```bash
+# Linter
+go install github.com/albertocavalcante/sky/cmd/skylint@latest
+
+# Formatter
+go install github.com/albertocavalcante/sky/cmd/skyfmt@latest
+
+# Test runner
+go install github.com/albertocavalcante/sky/cmd/skytest@latest
+
+# Coverage reporter
+go install github.com/albertocavalcante/sky/cmd/skycov@latest
+
+# Documentation generator
+go install github.com/albertocavalcante/sky/cmd/skydoc@latest
+
+# Static analyzer
+go install github.com/albertocavalcante/sky/cmd/skycheck@latest
+
+# Query tool
+go install github.com/albertocavalcante/sky/cmd/skyquery@latest
+
+# REPL
+go install github.com/albertocavalcante/sky/cmd/skyrepl@latest
+```
+
+## Verify Installation
+
+```bash
+skylint --version
+skytest --version
+skycov --version
+```
+
+## Build from Source
+
+```bash
+git clone https://github.com/albertocavalcante/sky.git
+cd sky
+go build ./cmd/...
+```
+
+## With Coverage Support
+
+To enable coverage collection, you need [starlark-go-x](https://github.com/albertocavalcante/starlark-go-x):
+
+1. Clone starlark-go-x next to your sky checkout
+2. Uncomment the `replace` directive in `go.mod`
+3. Rebuild
+
+See [Coverage Getting Started](/coverage/getting-started) for details.

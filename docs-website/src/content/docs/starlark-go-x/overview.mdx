@@ -1,0 +1,31 @@
+---
+title: starlark-go-x Overview
+description: Enhanced Starlark interpreter fork
+---
+
+# starlark-go-x
+
+[starlark-go-x](https://github.com/albertocavalcante/starlark-go-x) is our enhanced fork of the official [starlark-go](https://github.com/google/starlark-go) interpreter.
+
+## Features
+
+- **OnExec hook** - Coverage instrumentation callback
+- **Type annotations** - Parse Python-style type hints
+
+## Installation
+
+```go
+// In go.mod
+replace go.starlark.net => github.com/albertocavalcante/starlark-go-x@trunk
+```
+
+## Branches
+
+| Branch | Description |
+|--------|-------------|
+| `main` | Tracks upstream google/starlark-go |
+| `trunk` | Our features, rebased on upstream |
+
+## Upstream
+
+We plan to propose these features upstream to google/starlark-go.

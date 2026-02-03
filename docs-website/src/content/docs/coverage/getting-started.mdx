@@ -1,0 +1,110 @@
+---
+title: Coverage - Getting Started
+description: Collect code coverage for Starlark files
+---
+
+import { Tabs, TabItem, Code } from '@astrojs/starlight/components';
+
+# Code Coverage for Starlark
+
+Sky provides code coverage collection for Starlark files through `skytest` and `skycov`.
+
+## Quick Start
+
+```bash
+# Run tests with coverage collection
+skytest --coverage tests/
+
+# View coverage report
+skycov coverage.json
+```
+
+## How It Works
+
+Coverage collection uses the `OnExec` hook in [starlark-go-x](/starlark-go-x/onexec-hook) to track which lines are executed during test runs.
+
+```
+┌─────────────────────┐
+│  Your .star files   │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  skytest --coverage │  ← OnExec hook fires for each instruction
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│   coverage.json     │  ← Raw coverage data
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│       skycov        │  ← Format and report
+└─────────────────────┘
+```
+
+## Example
+
+Create a test file:
+
+```python title="math_test.star"
+def add(a, b):
+    return a + b
+
+def test_add():
+    assert.eq(add(1, 2), 3)
+    assert.eq(add(0, 0), 0)
+```
+
+Run with coverage:
+
+```bash
+$ skytest --coverage math_test.star
+PASS  test_add
+
+Results: 1 passed, 0 failed
+skytest: coverage written to coverage.json
+
+$ skycov coverage.json
+Coverage Report
+===============
+Total: 100.0% (3/3 lines)
+```
+
+## Coverage Data
+
+The coverage JSON contains line-level hit counts:
+
+```json
+{
+  "files": {
+    "math_test.star": {
+      "lines": {
+        "1": 1,
+        "2": 3,
+        "4": 1,
+        "5": 2,
+        "6": 2
+      }
+    }
+  },
+  "totalLines": 5,
+  "coveredLines": 5,
+  "percentage": 100
+}
+```
+
+## Coverage Types
+
+| Type | Status | Description |
+|------|--------|-------------|
+| Line coverage | ✅ Full | Which lines were executed |
+| Statement coverage | ✅ Full | Which statements were executed |
+| Function coverage | ⚠️ Basic | Inferred from line hits |
+| Branch coverage | 🔜 Planned | Which branches were taken |
+
+## Next Steps
+
+- [Output Formats](/coverage/output-formats) - Cobertura, LCOV, JSON
+- [CI Integration](/coverage/ci-integration) - GitHub Actions, GitLab CI
