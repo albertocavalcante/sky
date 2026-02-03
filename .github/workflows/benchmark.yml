@@ -175,12 +175,20 @@ jobs:
           go test -bench=. -benchmem -count=${{ env.BENCHMARK_COUNT }} ./syntax/... | tee -a ${{ runner.temp }}/starlark-go-x.txt
 
       # ----------------------------------------------------------------------
-      # Compare with benchstat
+      # Compare with benchstat and generate report
       # ----------------------------------------------------------------------
       - name: Compare benchmarks
         run: |
           echo "=== Comparison: upstream vs starlark-go-x ==="
           benchstat ${{ runner.temp }}/upstream.txt ${{ runner.temp }}/starlark-go-x.txt | tee ${{ runner.temp }}/comparison.txt
+
+      - name: Generate markdown report
+        run: |
+          chmod +x ./tools/benchmark/generate-benchmark-report.sh
+          ./tools/benchmark/generate-benchmark-report.sh \
+            ${{ runner.temp }}/upstream.txt \
+            ${{ runner.temp }}/starlark-go-x.txt \
+            ${{ runner.temp }}/benchmark-report.md
 
       - name: Upload comparison results
         uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
@@ -190,19 +198,12 @@ jobs:
             ${{ runner.temp }}/upstream.txt
             ${{ runner.temp }}/starlark-go-x.txt
             ${{ runner.temp }}/comparison.txt
+            ${{ runner.temp }}/benchmark-report.md
           retention-days: 30
 
-      - name: Display comparison summary
+      - name: Display report in summary
         run: |
-          echo "## Upstream Comparison" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Comparing google/starlark-go (baseline) vs starlark-go-x (hooks=nil)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat ${{ runner.temp }}/comparison.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Expected**: < 1% overhead when hooks are nil" >> $GITHUB_STEP_SUMMARY
+          cat ${{ runner.temp }}/benchmark-report.md >> $GITHUB_STEP_SUMMARY
 
   # ===========================================================================
   # Job 3: PR Performance Regression Check
