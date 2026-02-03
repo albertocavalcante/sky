@@ -11,16 +11,18 @@ require (
 	github.com/tetratelabs/wazero v1.11.0
 	github.com/timakin/bodyclose v0.0.0-20241222091800-1db5c5ca4d67
 	go.starlark.net v0.0.0-20260102030733-3fee463870c9
+	golang.org/x/term v0.39.0
 	golang.org/x/tools v0.40.0
 	google.golang.org/protobuf v1.36.11
 )
 
 require (
+	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/golang/protobuf v1.5.0 // indirect
 	github.com/gostaticanalysis/analysisutil v0.7.1 // indirect
 	github.com/gostaticanalysis/comment v1.4.2 // indirect
 	golang.org/x/mod v0.31.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.39.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/tools/go/packages/packagestest v0.1.1-deprecated // indirect
 )
