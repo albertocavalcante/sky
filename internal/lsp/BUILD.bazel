@@ -9,6 +9,7 @@ go_library(
     importpath = "github.com/albertocavalcante/sky/internal/lsp",
     visibility = ["//:__subpackages__"],
     deps = [
+        "//internal/starlark/builtins",
         "//internal/starlark/checker",
         "//internal/starlark/classifier",
         "//internal/starlark/docgen",
@@ -25,13 +26,16 @@ go_library(
 go_test(
     name = "lsp_test",
     srcs = [
+        "builtins_integration_test.go",
         "completion_test.go",
         "jsonrpc_test.go",
         "server_test.go",
     ],
     embed = [":lsp"],
     deps = [
+        "//internal/starlark/builtins",
         "//internal/starlark/checker",
+        "//internal/starlark/filekind",
         "//internal/starlark/linter",
         "@dev_lsp_go_protocol//:protocol",
         "@net_starlark_go//syntax",

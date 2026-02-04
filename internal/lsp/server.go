@@ -341,30 +341,37 @@ func (s *Server) handleHover(ctx context.Context, params json.RawMessage) (any, 
 
 	log.Printf("hover: %s @ %d:%d -> %q", path, p.Position.Line, p.Position.Character, word)
 
-	// Extract documentation
-	moduleDoc, err := docgen.ExtractFile(path, []byte(doc.Content), docgen.Options{IncludePrivate: true})
-	if err != nil {
-		log.Printf("hover: docgen error: %v", err)
-		return nil, nil
-	}
-
-	// Look up the symbol
 	var markdown string
 
-	// Check functions
-	for _, fn := range moduleDoc.Functions {
-		if fn.Name == word {
-			markdown = formatFunctionHover(fn)
-			break
-		}
+	// First, check builtins from provider
+	if s.builtins != nil {
+		markdown = s.getBuiltinHover(word)
 	}
 
-	// Check globals if not found in functions
+	// Fall back to document-defined symbols if not a builtin
 	if markdown == "" {
-		for _, g := range moduleDoc.Globals {
-			if g.Name == word {
-				markdown = formatGlobalHover(g)
+		// Extract documentation
+		moduleDoc, err := docgen.ExtractFile(path, []byte(doc.Content), docgen.Options{IncludePrivate: true})
+		if err != nil {
+			log.Printf("hover: docgen error: %v", err)
+			return nil, nil
+		}
+
+		// Check functions
+		for _, fn := range moduleDoc.Functions {
+			if fn.Name == word {
+				markdown = formatFunctionHover(fn)
 				break
+			}
+		}
+
+		// Check globals if not found in functions
+		if markdown == "" {
+			for _, g := range moduleDoc.Globals {
+				if g.Name == word {
+					markdown = formatGlobalHover(g)
+					break
+				}
 			}
 		}
 	}
@@ -506,9 +513,10 @@ func (s *Server) handleCompletion(ctx context.Context, params json.RawMessage) (
 		items = getModuleMemberCompletions(moduleName, memberPrefix)
 	} else {
 		// Complete keywords, builtins, and document symbols
+		// Use provider-aware keyword completions to avoid duplicates
 		items = slices.Concat(
-			getKeywordCompletions(prefix),
-			getBuiltinCompletions(prefix),
+			s.getKeywordCompletionsFiltered(prefix),
+			s.getProviderBuiltinCompletions(prefix),
 			getModuleCompletions(prefix),
 			s.getDocumentSymbolCompletions(docSnapshot, prefix, int(p.Position.Line)),
 		)
@@ -620,6 +628,97 @@ func getBuiltinCompletions(prefix string) []protocol.CompletionItem {
 		}
 	}
 	return items
+}
+
+// getKeywordCompletionsFiltered returns keyword completions, excluding items
+// that are provided by the builtins provider (True, False, None are globals, not keywords).
+func (s *Server) getKeywordCompletionsFiltered(prefix string) []protocol.CompletionItem {
+	// When using a provider, exclude True/False/None from keywords
+	// since they're provided as globals with proper type info
+	excludeFromKeywords := map[string]bool{}
+	if s.builtins != nil {
+		excludeFromKeywords["True"] = true
+		excludeFromKeywords["False"] = true
+		excludeFromKeywords["None"] = true
+	}
+
+	items := make([]protocol.CompletionItem, 0, len(starlarkKeywords))
+	for _, kw := range starlarkKeywords {
+		if excludeFromKeywords[kw] {
+			continue
+		}
+		if strings.HasPrefix(kw, prefix) {
+			items = append(items, completionItem(kw, protocol.CompletionItemKindKeyword, "keyword", false))
+		}
+	}
+	return items
+}
+
+// getProviderBuiltinCompletions returns completions from the builtins provider.
+// Falls back to hardcoded builtins if no provider is configured.
+func (s *Server) getProviderBuiltinCompletions(prefix string) []protocol.CompletionItem {
+	// Fall back to hardcoded builtins if no provider
+	if s.builtins == nil {
+		return getBuiltinCompletions(prefix)
+	}
+
+	// Get builtins from provider (use starlark dialect and generic kind for now)
+	b, err := s.builtins.Builtins("starlark", filekind.KindStarlark)
+	if err != nil {
+		// Fall back to hardcoded on error
+		return getBuiltinCompletions(prefix)
+	}
+
+	var items []protocol.CompletionItem
+
+	// Add builtin functions
+	for _, fn := range b.Functions {
+		if strings.HasPrefix(fn.Name, prefix) {
+			detail := formatFunctionDetail(fn)
+			items = append(items, completionItem(fn.Name, protocol.CompletionItemKindFunction, detail, true))
+		}
+	}
+
+	// Add builtin types
+	for _, typ := range b.Types {
+		if strings.HasPrefix(typ.Name, prefix) {
+			detail := typ.Doc
+			if detail == "" {
+				detail = "builtin type"
+			}
+			items = append(items, completionItem(typ.Name, protocol.CompletionItemKindClass, detail, true))
+		}
+	}
+
+	// Add builtin globals
+	for _, g := range b.Globals {
+		if strings.HasPrefix(g.Name, prefix) {
+			detail := g.Type
+			if g.Doc != "" {
+				detail = g.Doc
+			}
+			items = append(items, completionItem(g.Name, protocol.CompletionItemKindConstant, detail, false))
+		}
+	}
+
+	return items
+}
+
+// formatFunctionDetail creates a detail string for function completion.
+func formatFunctionDetail(fn builtins.Signature) string {
+	if fn.Doc != "" {
+		return fn.Doc
+	}
+	// Build signature as fallback
+	var params []string
+	for _, p := range fn.Params {
+		params = append(params, p.Name)
+	}
+	sig := fn.Name + "(" + strings.Join(params, ", ") + ")"
+	if fn.ReturnType != "" {
+		sig += " -> " + fn.ReturnType
+	}
+	return sig
 }
 
 func getModuleCompletions(prefix string) []protocol.CompletionItem {
@@ -1112,5 +1211,159 @@ func formatGlobalHover(g docgen.GlobalDoc) string {
 	b.WriteString(" = ")
 	b.WriteString(g.Value)
 	b.WriteString("\n```\n")
+	return b.String()
+}
+
+// getBuiltinHover returns hover markdown for a builtin symbol from the provider.
+func (s *Server) getBuiltinHover(word string) string {
+	if s.builtins == nil {
+		return ""
+	}
+
+	b, err := s.builtins.Builtins("starlark", filekind.KindStarlark)
+	if err != nil {
+		return ""
+	}
+
+	// Check builtin functions
+	for _, fn := range b.Functions {
+		if fn.Name == word {
+			return formatBuiltinFunctionHover(fn)
+		}
+	}
+
+	// Check builtin types
+	for _, typ := range b.Types {
+		if typ.Name == word {
+			return formatBuiltinTypeHover(typ)
+		}
+	}
+
+	// Check builtin globals
+	for _, g := range b.Globals {
+		if g.Name == word {
+			return formatBuiltinGlobalHover(g)
+		}
+	}
+
+	return ""
+}
+
+// formatBuiltinFunctionHover formats a builtin function signature for hover.
+func formatBuiltinFunctionHover(fn builtins.Signature) string {
+	var b strings.Builder
+
+	// Signature
+	b.WriteString("```python\n")
+	b.WriteString(fn.Name)
+	b.WriteString("(")
+	for i, p := range fn.Params {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		if p.Variadic {
+			b.WriteString("*")
+		}
+		if p.KWArgs {
+			b.WriteString("**")
+		}
+		b.WriteString(p.Name)
+		if p.Type != "" {
+			b.WriteString(": ")
+			b.WriteString(p.Type)
+		}
+		if p.Default != "" {
+			b.WriteString(" = ")
+			b.WriteString(p.Default)
+		}
+	}
+	b.WriteString(")")
+	if fn.ReturnType != "" {
+		b.WriteString(" -> ")
+		b.WriteString(fn.ReturnType)
+	}
+	b.WriteString("\n```\n\n")
+
+	// Documentation
+	if fn.Doc != "" {
+		b.WriteString(fn.Doc)
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+// formatBuiltinTypeHover formats a builtin type definition for hover.
+func formatBuiltinTypeHover(typ builtins.TypeDef) string {
+	var b strings.Builder
+
+	// Type header
+	b.WriteString("```python\n")
+	b.WriteString("type ")
+	b.WriteString(typ.Name)
+	b.WriteString("\n```\n\n")
+
+	// Documentation
+	if typ.Doc != "" {
+		b.WriteString(typ.Doc)
+		b.WriteString("\n")
+	}
+
+	// Fields
+	if len(typ.Fields) > 0 {
+		b.WriteString("\n**Fields:**\n")
+		for _, f := range typ.Fields {
+			b.WriteString("- `")
+			b.WriteString(f.Name)
+			b.WriteString("`")
+			if f.Type != "" {
+				b.WriteString(": ")
+				b.WriteString(f.Type)
+			}
+			if f.Doc != "" {
+				b.WriteString(" - ")
+				b.WriteString(f.Doc)
+			}
+			b.WriteString("\n")
+		}
+	}
+
+	// Methods
+	if len(typ.Methods) > 0 {
+		b.WriteString("\n**Methods:**\n")
+		for _, m := range typ.Methods {
+			b.WriteString("- `")
+			b.WriteString(m.Name)
+			b.WriteString("()`")
+			if m.Doc != "" {
+				b.WriteString(" - ")
+				b.WriteString(m.Doc)
+			}
+			b.WriteString("\n")
+		}
+	}
+
+	return b.String()
+}
+
+// formatBuiltinGlobalHover formats a builtin global/constant for hover.
+func formatBuiltinGlobalHover(g builtins.Field) string {
+	var b strings.Builder
+
+	// Global
+	b.WriteString("```python\n")
+	b.WriteString(g.Name)
+	if g.Type != "" {
+		b.WriteString(": ")
+		b.WriteString(g.Type)
+	}
+	b.WriteString("\n```\n\n")
+
+	// Documentation
+	if g.Doc != "" {
+		b.WriteString(g.Doc)
+		b.WriteString("\n")
+	}
+
 	return b.String()
 }
