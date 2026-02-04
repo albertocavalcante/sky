@@ -187,117 +187,21 @@ test-examples: test-example-hello-native test-example-star-counter test-example-
     @echo "All example plugin tests passed"
 
 # ============================================================================
-# Release Management
+# Release Management (uses tools/release)
 # ============================================================================
 
 # Show current version and latest tags
 version:
-    @echo "Latest tags:"
-    @git tag --sort=-v:refname | head -5 || echo "  (no tags yet)"
-    @echo ""
-    @echo "To release:"
-    @echo "  just release-rc 0.1.0    # Create v0.1.0-rc.0 (or increment rc)"
-    @echo "  just release 0.1.0       # Create v0.1.0 final release"
+    @go run ./tools/release
 
-# Create a release candidate (v0.1.0-rc.0, v0.1.0-rc.1, etc.)
+# Create a release candidate (e.g., just release-rc 0.1.0)
 release-rc version:
-    #!/usr/bin/env bash
-    set -euo pipefail
+    @go run ./tools/release rc {{version}}
 
-    # Find the latest RC for this version
-    LATEST_RC=$(git tag --sort=-v:refname | grep "^v{{version}}-rc\." | head -1 || true)
-
-    if [ -z "$LATEST_RC" ]; then
-        NEW_TAG="v{{version}}-rc.0"
-    else
-        # Extract RC number and increment
-        RC_NUM=$(echo "$LATEST_RC" | sed 's/.*-rc\.\([0-9]*\)/\1/')
-        NEW_RC=$((RC_NUM + 1))
-        NEW_TAG="v{{version}}-rc.${NEW_RC}"
-    fi
-
-    echo "Creating release candidate: $NEW_TAG"
-    echo ""
-
-    # Show what will be released
-    if [ -n "$LATEST_RC" ]; then
-        echo "Changes since $LATEST_RC:"
-        git log --oneline "$LATEST_RC"..HEAD | head -20
-    else
-        LATEST_TAG=$(git tag --sort=-v:refname | head -1 || true)
-        if [ -n "$LATEST_TAG" ]; then
-            echo "Changes since $LATEST_TAG:"
-            git log --oneline "$LATEST_TAG"..HEAD | head -20
-        else
-            echo "Changes (first release):"
-            git log --oneline | head -20
-        fi
-    fi
-
-    echo ""
-    read -p "Create and push $NEW_TAG? [y/N] " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
-        git push origin "$NEW_TAG"
-        echo ""
-        echo "Tag $NEW_TAG pushed! GitHub Actions will create the release."
-        echo "View at: https://github.com/albertocavalcante/sky/releases"
-    else
-        echo "Aborted."
-    fi
-
-# Create a final release (v0.1.0)
+# Create a final release (e.g., just release 0.1.0)
 release version:
-    #!/usr/bin/env bash
-    set -euo pipefail
+    @go run ./tools/release final {{version}}
 
-    NEW_TAG="v{{version}}"
-
-    # Check if tag already exists
-    if git tag | grep -q "^${NEW_TAG}$"; then
-        echo "Error: Tag $NEW_TAG already exists!"
-        exit 1
-    fi
-
-    echo "Creating release: $NEW_TAG"
-    echo ""
-
-    # Show what will be released
-    LATEST_TAG=$(git tag --sort=-v:refname | head -1 || true)
-    if [ -n "$LATEST_TAG" ]; then
-        echo "Changes since $LATEST_TAG:"
-        git log --oneline "$LATEST_TAG"..HEAD | head -20
-    else
-        echo "Changes (first release):"
-        git log --oneline | head -20
-    fi
-
-    echo ""
-    read -p "Create and push $NEW_TAG? [y/N] " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
-        git push origin "$NEW_TAG"
-        echo ""
-        echo "Tag $NEW_TAG pushed! GitHub Actions will create the release."
-        echo "View at: https://github.com/albertocavalcante/sky/releases"
-    else
-        echo "Aborted."
-    fi
-
-# Delete a tag (local and remote) - use with caution!
+# Delete a tag (e.g., just release-delete v0.1.0-rc.0)
 release-delete tag:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    echo "This will delete tag: {{tag}}"
-    read -p "Are you sure? [y/N] " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        git tag -d "{{tag}}" || true
-        git push origin --delete "{{tag}}" || true
-        echo "Tag {{tag}} deleted."
-    else
-        echo "Aborted."
-    fi
+    @go run ./tools/release delete {{tag}}
