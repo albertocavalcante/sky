@@ -21,8 +21,11 @@ disable = [
   "godot",
   "wsl",
   "nlreturn",
-  "gofumpt",
 ]
+
+[formatters]
+enable = []
+disable = ["gofumpt"]
 
 [linters.settings.errcheck]
 check-type-assertions = false
