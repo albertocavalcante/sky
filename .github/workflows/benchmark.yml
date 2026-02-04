@@ -42,7 +42,7 @@ jobs:
 
     steps:
       # actions/checkout v6.0.1
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 1
           persist-credentials: false
@@ -87,7 +87,7 @@ jobs:
       # ----------------------------------------------------------------------
       # actions/upload-artifact v4.6.0
       - name: Upload benchmark results
-        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: benchmark-results
           path: |
@@ -122,7 +122,7 @@ jobs:
 
     steps:
       # actions/checkout v6.0.1 (not needed for compare, but keep for consistency)
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 1
           persist-credentials: false
@@ -182,7 +182,7 @@ jobs:
             ${{ runner.temp }}/benchmark-report.md
 
       - name: Upload comparison results
-        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: benchmark-comparison
           path: |
@@ -210,7 +210,7 @@ jobs:
 
     steps:
       # actions/checkout v6.0.1
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
           persist-credentials: false
