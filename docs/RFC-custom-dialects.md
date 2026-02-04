@@ -1,6 +1,6 @@
 # RFC: Custom Dialect Support in skyls
 
-**Date:** 2025-02-04
+**Date:** 2026-02-04
 **Status:** Draft
 **Author:** Generated from research
 

@@ -1,6 +1,6 @@
 # RFC: Starlark Dialect File Structure and Naming
 
-**Date:** 2025-02-04
+**Date:** 2026-02-04
 **Status:** Draft
 **Supersedes:** Naming section of RFC-custom-dialects.md
 
