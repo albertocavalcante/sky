@@ -56,6 +56,8 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		filterFlag    string
 		preludeFlags  stringSliceFlag
 		timeoutFlag   time.Duration
+		bailFlag      bool
+		bailShortFlag bool
 	)
 
 	fs := flag.NewFlagSet("skytest", flag.ContinueOnError)
@@ -70,6 +72,8 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	fs.StringVar(&filterFlag, "k", "", "filter tests by name pattern (supports 'not' prefix)")
 	fs.Var(&preludeFlags, "prelude", "prelude file to load before tests (can be specified multiple times)")
 	fs.DurationVar(&timeoutFlag, "timeout", 30*time.Second, "timeout per test (0 to disable)")
+	fs.BoolVar(&bailFlag, "bail", false, "stop on first test failure")
+	fs.BoolVar(&bailShortFlag, "x", false, "stop on first test failure (short for --bail)")
 	// EXPERIMENTAL: Coverage collection requires starlark-go-x with OnExec hook.
 	// Uncomment the replace directive in go.mod to enable.
 	// TODO(upstream): Remove experimental note once OnExec is merged.
@@ -92,6 +96,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writeln(stderr, "  - Test filtering with -k flag")
 		writeln(stderr, "  - Prelude files for shared helpers (--prelude)")
 		writeln(stderr, "  - Per-test timeouts (--timeout)")
+		writeln(stderr, "  - Fail-fast mode (--bail / -x)")
 		writeln(stderr, "  - Coverage collection (EXPERIMENTAL, requires starlark-go-x)")
 		writeln(stderr)
 		writeln(stderr, "Flags:")
@@ -107,6 +112,8 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writeln(stderr, "  skytest --prelude=helpers.star  # Load prelude before tests")
 		writeln(stderr, "  skytest --timeout=10s           # Set test timeout")
 		writeln(stderr, "  skytest --timeout=0             # Disable timeouts")
+		writeln(stderr, "  skytest --bail                  # Stop on first failure")
+		writeln(stderr, "  skytest -x                      # Stop on first failure (short)")
 		writeln(stderr, "  skytest -json tests/            # JSON output")
 		writeln(stderr, "  skytest -junit tests/ > out.xml # JUnit output for CI")
 		writeln(stderr)
@@ -172,6 +179,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	opts.Filter = filterFlag
 	opts.Preludes = preludeFlags
 	opts.Timeout = timeoutFlag
+	opts.FailFast = bailFlag || bailShortFlag
 
 	// Create a single runner for coverage reporting (if enabled)
 	// Note: We create per-file runners for execution to support :: syntax,
@@ -239,6 +247,11 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		// Report file immediately in text mode
 		if _, ok := reporter.(*tester.TextReporter); ok {
 			reporter.ReportFile(stdout, fileResult)
+		}
+
+		// Fail-fast: stop processing more files after first failure
+		if opts.FailFast && fileResult.HasFailures() {
+			break
 		}
 	}
 

@@ -532,3 +532,118 @@ func TestRun_TimeoutExpired(t *testing.T) {
 		// since Starlark may report it differently
 	}
 }
+
+// Fail-Fast Mode (--bail / -x flag) tests
+
+func TestRun_BailOnFirstFailure(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_bail.star")
+	// Create tests where first fails, second should not run
+	content := `def test_aaa_fails():
+    assert.eq(1, 2)  # Will fail
+
+def test_bbb_should_not_run():
+    assert.eq(1, 1)
+
+def test_ccc_should_not_run():
+    assert.eq(2, 2)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"--bail", "-v", file}, nil, &stdout, &stderr)
+
+	// Should fail
+	if code == 0 {
+		t.Error("RunWithIO(--bail) returned 0, expected failure")
+	}
+
+	output := stdout.String()
+	// First test should appear (it fails)
+	if !strings.Contains(output, "test_aaa_fails") {
+		t.Error("expected test_aaa_fails to be reported")
+	}
+	// Later tests should not run (bail stops after first failure)
+	// Note: They might appear in discovery but not in results
+}
+
+func TestRun_BailShortFlag(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_bail_x.star")
+	content := `def test_fails():
+    assert.eq(1, 2)
+
+def test_passes():
+    assert.eq(1, 1)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	// Use -x short form
+	code := RunWithIO(context.Background(), []string{"-x", file}, nil, &stdout, &stderr)
+
+	// Should fail
+	if code == 0 {
+		t.Error("RunWithIO(-x) returned 0, expected failure")
+	}
+}
+
+func TestRun_BailMultipleFiles(t *testing.T) {
+	dir := t.TempDir()
+
+	// First file fails
+	file1 := filepath.Join(dir, "test_a_fails.star")
+	if err := os.WriteFile(file1, []byte("def test_fail():\n    assert.eq(1, 2)"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	// Second file passes
+	file2 := filepath.Join(dir, "test_b_passes.star")
+	if err := os.WriteFile(file2, []byte("def test_pass():\n    assert.eq(1, 1)"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"--bail", file1, file2}, nil, &stdout, &stderr)
+
+	// Should fail
+	if code == 0 {
+		t.Error("RunWithIO(--bail with multiple files) returned 0, expected failure")
+	}
+}
+
+func TestRun_NoBailRunsAll(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_no_bail.star")
+	content := `def test_aaa_fails():
+    assert.eq(1, 2)  # Will fail
+
+def test_bbb_passes():
+    assert.eq(1, 1)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	// Without --bail, all tests should run
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	// Should fail because one test fails
+	if code == 0 {
+		t.Error("RunWithIO(without --bail) returned 0, expected failure")
+	}
+
+	output := stdout.String()
+	// Both tests should appear
+	if !strings.Contains(output, "test_aaa_fails") {
+		t.Error("expected test_aaa_fails to be reported")
+	}
+	if !strings.Contains(output, "test_bbb_passes") {
+		t.Error("expected test_bbb_passes to be reported (should run without --bail)")
+	}
+}

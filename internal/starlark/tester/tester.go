@@ -69,6 +69,12 @@ func (fr *FileResult) Summary() (passed, failed int) {
 	return
 }
 
+// HasFailures returns true if any test in this file failed.
+func (fr *FileResult) HasFailures() bool {
+	_, failed := fr.Summary()
+	return failed > 0
+}
+
 // RunResult contains all results from a test run.
 type RunResult struct {
 	// Files contains results for each file.
@@ -134,6 +140,9 @@ type Options struct {
 	// Timeout is the maximum duration for each test.
 	// If zero, no timeout is applied.
 	Timeout time.Duration
+
+	// FailFast stops running tests after the first failure.
+	FailFast bool
 }
 
 // DefaultOptions returns sensible defaults.
@@ -225,6 +234,11 @@ func (r *Runner) RunFile(filename string, src []byte) (*FileResult, error) {
 		testResult := r.runSingleTest(thread, name, fn, setupFn, teardownFn, predeclared)
 		testResult.File = filename
 		result.Tests = append(result.Tests, testResult)
+
+		// Fail-fast: stop after first failure
+		if r.opts.FailFast && !testResult.Passed {
+			break
+		}
 	}
 
 	result.Duration = time.Since(start)
