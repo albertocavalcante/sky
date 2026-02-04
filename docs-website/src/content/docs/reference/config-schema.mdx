@@ -1,0 +1,562 @@
+---
+title: Configuration Schema
+description: Complete reference for .starlark/config.json configuration file
+sidebar:
+  order: 1
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+# Configuration Schema Reference
+
+This document provides the complete schema for `.starlark/config.json`, the configuration file for skyls dialect support.
+
+## File Location
+
+skyls searches for configuration in this order:
+
+1. `.starlark/config.json` (preferred)
+2. `starlark.config.json` (root-level alternative)
+3. Walk up parent directories looking for either file
+4. Fall back to auto-detection
+
+<Aside type="tip">
+Place the config file at your workspace root alongside `WORKSPACE`, `MODULE.bazel`, or `.git`.
+</Aside>
+
+## Complete Schema
+
+```json
+{
+  "$schema": "https://sky.dev/schemas/starlark-config.json",
+  "version": 1,
+  "dialect": "string",
+  "rules": [
+    {
+      "files": ["string"],
+      "dialect": "string"
+    }
+  ],
+  "dialects": {
+    "dialect-name": {
+      "builtins": ["string"],
+      "extends": "string"
+    }
+  },
+  "settings": {
+    "reportUndefinedNames": true,
+    "reportUnusedBindings": true,
+    "checkLoadStatements": false
+  }
+}
+```
+
+## Field Reference
+
+### `$schema`
+
+| Property | Value |
+|----------|-------|
+| Type | `string` |
+| Required | No |
+| Default | None |
+
+JSON Schema URL for editor validation and autocompletion.
+
+```json
+{
+  "$schema": "https://sky.dev/schemas/starlark-config.json"
+}
+```
+
+### `version`
+
+| Property | Value |
+|----------|-------|
+| Type | `number` |
+| Required | **Yes** |
+| Valid values | `1` |
+
+Schema version number. Currently only version `1` is supported.
+
+```json
+{
+  "version": 1
+}
+```
+
+### `dialect`
+
+| Property | Value |
+|----------|-------|
+| Type | `string` |
+| Required | No |
+| Default | Auto-detected or `"starlark"` |
+
+Default dialect for all files not matched by `rules`.
+
+Built-in dialect values:
+- `"starlark"` - Core Starlark (no extensions)
+- `"bazel"` - Bazel build system
+- `"bazel-build"` - Bazel BUILD files specifically
+- `"bazel-bzl"` - Bazel .bzl files specifically
+- `"buck2"` - Buck2 build system
+- `"tilt"` - Tilt local development
+
+Or any custom dialect name defined in `dialects`.
+
+```json
+{
+  "dialect": "bazel"
+}
+```
+
+### `rules`
+
+| Property | Value |
+|----------|-------|
+| Type | `array` of rule objects |
+| Required | No |
+| Default | `[]` |
+
+Ordered list of file pattern rules. First matching rule wins.
+
+```json
+{
+  "rules": [
+    {
+      "files": ["Tiltfile"],
+      "dialect": "tilt"
+    },
+    {
+      "files": ["**/*.bzl"],
+      "dialect": "bazel-bzl"
+    }
+  ]
+}
+```
+
+#### Rule Object
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `files` | `string[]` | **Yes** | Glob patterns to match |
+| `dialect` | `string` | **Yes** | Dialect ID to apply |
+
+### `dialects`
+
+| Property | Value |
+|----------|-------|
+| Type | `object` (map of dialect name to definition) |
+| Required | No |
+| Default | `{}` |
+
+Custom dialect definitions.
+
+```json
+{
+  "dialects": {
+    "my-dialect": {
+      "builtins": [".starlark/builtins/my.builtins.json"],
+      "extends": "starlark"
+    }
+  }
+}
+```
+
+#### Dialect Definition Object
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `builtins` | `string[]` | No | Paths to builtin definition files |
+| `extends` | `string` | No | Parent dialect to inherit from |
+
+### `settings`
+
+| Property | Value |
+|----------|-------|
+| Type | `object` |
+| Required | No |
+| Default | See individual settings |
+
+Analysis and diagnostic settings.
+
+```json
+{
+  "settings": {
+    "reportUndefinedNames": true,
+    "reportUnusedBindings": true,
+    "checkLoadStatements": false
+  }
+}
+```
+
+#### Settings Fields
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `reportUndefinedNames` | `boolean` | `true` | Report references to undefined names |
+| `reportUnusedBindings` | `boolean` | `true` | Report unused local variables |
+| `checkLoadStatements` | `boolean` | `false` | Validate that load targets exist |
+
+## Glob Pattern Syntax
+
+The `files` field in rules uses glob patterns:
+
+| Pattern | Description | Example |
+|---------|-------------|---------|
+| `*` | Match any characters except `/` | `*.bzl` matches `foo.bzl` |
+| `**` | Match any characters including `/` | `**/*.bzl` matches `a/b/c.bzl` |
+| `?` | Match single character | `test?.star` matches `test1.star` |
+| `[abc]` | Character class | `[Bb]UILD` matches `BUILD` and `bUILD` |
+| `[a-z]` | Character range | `[a-z].star` matches `a.star` |
+| `{a,b}` | Alternatives | `*.{bzl,star}` matches `.bzl` and `.star` |
+
+### Pattern Examples
+
+```json
+{
+  "rules": [
+    // Exact filename
+    {"files": ["Tiltfile"], "dialect": "tilt"},
+
+    // Extension match
+    {"files": ["*.bzl"], "dialect": "bazel-bzl"},
+
+    // Recursive match
+    {"files": ["**/*.star"], "dialect": "starlark"},
+
+    // Directory prefix
+    {"files": ["tilt_modules/**/*.star"], "dialect": "tilt"},
+
+    // Multiple patterns
+    {"files": ["BUILD", "BUILD.bazel"], "dialect": "bazel-build"},
+
+    // Alternatives
+    {"files": ["*.{bzl,bazel}"], "dialect": "bazel"},
+
+    // Negation (by ordering - put specific before general)
+    {"files": ["*_test.star"], "dialect": "test"},
+    {"files": ["*.star"], "dialect": "starlark"}
+  ]
+}
+```
+
+## Builtin Paths
+
+The `builtins` array supports several path formats:
+
+### Relative Paths
+
+Relative to the config file location:
+
+```json
+{
+  "builtins": [
+    "builtins/tilt.builtins.json",
+    "../shared/common.builtins.json"
+  ]
+}
+```
+
+### Absolute Paths
+
+Full filesystem paths:
+
+```json
+{
+  "builtins": [
+    "/usr/local/share/starlark/tilt.builtins.json"
+  ]
+}
+```
+
+### Remote URLs (Planned)
+
+<Aside type="caution">
+Remote URL loading is planned but not yet implemented.
+</Aside>
+
+```json
+{
+  "builtins": [
+    "https://example.com/builtins/v1/tilt.builtins.json"
+  ]
+}
+```
+
+## Configuration Examples
+
+### Minimal Bazel Project
+
+```json
+{
+  "version": 1,
+  "dialect": "bazel"
+}
+```
+
+### Tilt Project
+
+```json
+{
+  "version": 1,
+  "rules": [
+    {
+      "files": ["Tiltfile", "tilt_modules/**/*.star"],
+      "dialect": "tilt"
+    }
+  ],
+  "dialects": {
+    "tilt": {
+      "builtins": [".starlark/builtins/tilt.builtins.json"],
+      "extends": "starlark"
+    }
+  }
+}
+```
+
+### Bazel Monorepo with Custom Rules
+
+```json
+{
+  "version": 1,
+  "rules": [
+    {
+      "files": ["BUILD", "BUILD.bazel", "**/BUILD", "**/BUILD.bazel"],
+      "dialect": "bazel-build"
+    },
+    {
+      "files": ["**/*.bzl"],
+      "dialect": "bazel-bzl"
+    }
+  ],
+  "dialects": {
+    "bazel-build": {
+      "builtins": [".starlark/builtins/internal-rules.builtins.json"],
+      "extends": "starlark"
+    },
+    "bazel-bzl": {
+      "builtins": [],
+      "extends": "bazel-build"
+    }
+  },
+  "settings": {
+    "reportUndefinedNames": true,
+    "reportUnusedBindings": false
+  }
+}
+```
+
+### Multi-Tool Monorepo
+
+```json
+{
+  "$schema": "https://sky.dev/schemas/starlark-config.json",
+  "version": 1,
+
+  "rules": [
+    {
+      "files": ["Tiltfile"],
+      "dialect": "tilt"
+    },
+    {
+      "files": ["*.bara.sky"],
+      "dialect": "copybara"
+    },
+    {
+      "files": ["tools/codegen/**/*.star"],
+      "dialect": "codegen"
+    },
+    {
+      "files": ["BUILD", "BUILD.bazel", "**/BUILD", "**/BUILD.bazel"],
+      "dialect": "bazel-build"
+    },
+    {
+      "files": ["**/*.bzl"],
+      "dialect": "bazel-bzl"
+    },
+    {
+      "files": ["**/*.star"],
+      "dialect": "starlark"
+    }
+  ],
+
+  "dialects": {
+    "tilt": {
+      "builtins": [".starlark/builtins/tilt.builtins.json"],
+      "extends": "starlark"
+    },
+    "copybara": {
+      "builtins": [".starlark/builtins/copybara.builtins.json"],
+      "extends": "starlark"
+    },
+    "codegen": {
+      "builtins": [".starlark/builtins/codegen.builtins.json"],
+      "extends": "starlark"
+    },
+    "bazel-build": {
+      "builtins": [".starlark/builtins/custom-bazel.builtins.json"],
+      "extends": "starlark"
+    },
+    "bazel-bzl": {
+      "builtins": [],
+      "extends": "bazel-build"
+    }
+  },
+
+  "settings": {
+    "reportUndefinedNames": true,
+    "reportUnusedBindings": true,
+    "checkLoadStatements": false
+  }
+}
+```
+
+### Disabling Diagnostics
+
+```json
+{
+  "version": 1,
+  "dialect": "bazel",
+  "settings": {
+    "reportUndefinedNames": false,
+    "reportUnusedBindings": false
+  }
+}
+```
+
+## Validation
+
+### JSON Syntax Check
+
+```bash
+python3 -m json.tool .starlark/config.json > /dev/null && echo "Valid JSON"
+```
+
+### Schema Validation
+
+With editors that support JSON Schema (VS Code, JetBrains IDEs), add the `$schema` field for validation:
+
+```json
+{
+  "$schema": "https://sky.dev/schemas/starlark-config.json",
+  "version": 1
+}
+```
+
+### Common Errors
+
+**Invalid version:**
+```json
+{"version": 2}  // Error: version must be 1
+```
+
+**Missing required field:**
+```json
+{}  // Error: 'version' is required
+```
+
+**Invalid rule (missing files):**
+```json
+{
+  "rules": [{"dialect": "tilt"}]  // Error: 'files' is required
+}
+```
+
+**Invalid glob pattern:**
+```json
+{
+  "rules": [{"files": ["[invalid"], "dialect": "x"}]  // Error: unclosed bracket
+}
+```
+
+## Migration
+
+### From starpls `--ext-paths`
+
+If you were using starpls with `--ext-paths`:
+
+```bash
+starpls --ext-paths=.starlark/builtins
+```
+
+Create `.starlark/config.json`:
+
+```json
+{
+  "version": 1,
+  "dialects": {
+    "custom": {
+      "builtins": [".starlark/builtins/custom.builtins.json"]
+    }
+  },
+  "rules": [
+    {"files": ["**/*.star"], "dialect": "custom"}
+  ]
+}
+```
+
+### From Hirschgarten `.starlark-dialects.json`
+
+If you have a Hirschgarten config:
+
+```json
+{
+  "version": 1,
+  "rules": [
+    {"glob": "Tiltfile", "dialectId": "tilt", "priority": 100}
+  ],
+  "builtinFilesByDialect": {
+    "tilt": ["starlark/tilt.builtins.json"]
+  }
+}
+```
+
+Convert to `.starlark/config.json`:
+
+```json
+{
+  "version": 1,
+  "rules": [
+    {"files": ["Tiltfile"], "dialect": "tilt"}
+  ],
+  "dialects": {
+    "tilt": {
+      "builtins": ["starlark/tilt.builtins.json"],
+      "extends": "starlark"
+    }
+  }
+}
+```
+
+### From Tilt `--builtin-paths`
+
+If you were using Tilt's starlark-lsp with `--builtin-paths`:
+
+```bash
+starlark-lsp --builtin-paths=stubs/
+```
+
+Move stubs to `.starlark/builtins/` and create config:
+
+```json
+{
+  "version": 1,
+  "rules": [
+    {"files": ["Tiltfile", "**/*.star"], "dialect": "tilt"}
+  ],
+  "dialects": {
+    "tilt": {
+      "builtins": [".starlark/builtins/tilt.builtins.pyi"],
+      "extends": "starlark"
+    }
+  }
+}
+```
+
+## Related Documentation
+
+- [Custom Dialects Guide](/sky/lsp/custom-dialects/) - How to use dialect configuration
+- [Builtin Formats Reference](/sky/lsp/builtin-formats/) - Builtin file format specifications
+- [Language Server Overview](/sky/lsp/) - LSP features and setup

@@ -1,0 +1,344 @@
+---
+title: Language Server (skyls)
+description: LSP server for Starlark with dialect-aware diagnostics, completion, and formatting
+sidebar:
+  order: 1
+---
+
+import { Aside, Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+# Sky Language Server
+
+`skyls` is a Language Server Protocol (LSP) implementation for Starlark files. It provides IDE features like diagnostics, completion, hover documentation, go-to-definition, and formatting.
+
+## Features
+
+<CardGrid>
+  <Card title="Diagnostics" icon="warning">
+    Real-time error detection including undefined names, unused variables, and style issues via skylint rules.
+  </Card>
+  <Card title="Completion" icon="pencil">
+    Autocomplete for keywords, builtins, modules, and document symbols. Context-aware suggestions.
+  </Card>
+  <Card title="Hover" icon="information">
+    Documentation on hover for functions and variables defined in the current file.
+  </Card>
+  <Card title="Formatting" icon="document">
+    Format documents using buildifier-compatible formatting via skyfmt.
+  </Card>
+  <Card title="Go to Definition" icon="right-arrow">
+    Jump to function definitions, variable assignments, and load statement sources.
+  </Card>
+  <Card title="Document Symbols" icon="list-format">
+    Outline view showing all functions and top-level variables in a file.
+  </Card>
+</CardGrid>
+
+## Installation
+
+```bash
+go install github.com/albertocavalcante/sky/cmd/skyls@latest
+```
+
+Verify the installation:
+
+```bash
+skyls --version
+```
+
+## Editor Setup
+
+### VS Code
+
+Install the [Sky Starlark extension](https://marketplace.visualstudio.com/items?itemName=sky.starlark) from the VS Code marketplace, or configure the generic LSP client:
+
+1. Install the [vscode-languageclient](https://github.com/AidenNeale/vscode-starlark) extension
+2. Add to your `settings.json`:
+
+```json
+{
+  "starlark.lsp.enabled": true,
+  "starlark.lsp.path": "skyls"
+}
+```
+
+### Neovim (nvim-lspconfig)
+
+Add to your Neovim configuration:
+
+```lua
+-- lua/plugins/lsp.lua or init.lua
+local lspconfig = require('lspconfig')
+local configs = require('lspconfig.configs')
+
+-- Register skyls if not already defined
+if not configs.skyls then
+  configs.skyls = {
+    default_config = {
+      cmd = { 'skyls' },
+      filetypes = { 'starlark', 'bzl', 'bazel', 'star' },
+      root_dir = lspconfig.util.root_pattern(
+        'WORKSPACE',
+        'WORKSPACE.bazel',
+        'MODULE.bazel',
+        '.buckconfig',
+        'Tiltfile',
+        '.git'
+      ),
+      settings = {},
+    },
+  }
+end
+
+lspconfig.skyls.setup({
+  on_attach = on_attach,  -- your on_attach function
+  capabilities = capabilities,  -- your capabilities
+})
+```
+
+Add filetype detection in `~/.config/nvim/filetype.lua`:
+
+```lua
+vim.filetype.add({
+  extension = {
+    star = 'starlark',
+    bzl = 'bzl',
+    bazel = 'bazel',
+  },
+  filename = {
+    ['BUILD'] = 'bazel',
+    ['BUILD.bazel'] = 'bazel',
+    ['WORKSPACE'] = 'bazel',
+    ['WORKSPACE.bazel'] = 'bazel',
+    ['MODULE.bazel'] = 'bazel',
+    ['BUCK'] = 'bzl',
+    ['Tiltfile'] = 'starlark',
+  },
+})
+```
+
+### Helix
+
+Add to `~/.config/helix/languages.toml`:
+
+```toml
+[[language]]
+name = "starlark"
+scope = "source.starlark"
+injection-regex = "starlark"
+file-types = ["star", "bzl", "bazel", "BUILD", "WORKSPACE", "Tiltfile"]
+comment-token = "#"
+indent = { tab-width = 4, unit = "    " }
+language-servers = ["skyls"]
+
+[language-server.skyls]
+command = "skyls"
+```
+
+### Zed
+
+Add to your Zed settings (`~/.config/zed/settings.json`):
+
+```json
+{
+  "lsp": {
+    "skyls": {
+      "binary": {
+        "path": "skyls"
+      }
+    }
+  },
+  "languages": {
+    "Starlark": {
+      "language_servers": ["skyls"]
+    }
+  }
+}
+```
+
+### Sublime Text (LSP package)
+
+Install the [LSP](https://packagecontrol.io/packages/LSP) package, then add to LSP settings:
+
+```json
+{
+  "clients": {
+    "skyls": {
+      "enabled": true,
+      "command": ["skyls"],
+      "selector": "source.starlark | source.bazel"
+    }
+  }
+}
+```
+
+### Emacs (lsp-mode)
+
+Add to your Emacs configuration:
+
+```elisp
+(use-package lsp-mode
+  :hook ((starlark-mode . lsp)
+         (bazel-mode . lsp))
+  :config
+  (lsp-register-client
+   (make-lsp-client
+    :new-connection (lsp-stdio-connection '("skyls"))
+    :major-modes '(starlark-mode bazel-mode)
+    :server-id 'skyls)))
+```
+
+## Command Line Options
+
+```bash
+skyls [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--version` | Print version and exit |
+| `--help` | Show help message |
+
+The server communicates over stdin/stdout using the JSON-RPC 2.0 protocol as defined by the LSP specification.
+
+## Supported LSP Methods
+
+### Lifecycle
+
+| Method | Support |
+|--------|---------|
+| `initialize` | Full |
+| `initialized` | Full |
+| `shutdown` | Full |
+| `exit` | Full |
+
+### Text Document Synchronization
+
+| Method | Support |
+|--------|---------|
+| `textDocument/didOpen` | Full |
+| `textDocument/didChange` | Full (full sync) |
+| `textDocument/didClose` | Full |
+| `textDocument/didSave` | Full |
+
+### Language Features
+
+| Method | Support |
+|--------|---------|
+| `textDocument/hover` | Functions and globals in current file |
+| `textDocument/completion` | Keywords, builtins, modules, document symbols |
+| `textDocument/definition` | Same-file definitions |
+| `textDocument/documentSymbol` | Functions and top-level assignments |
+| `textDocument/formatting` | Full document formatting |
+
+## Diagnostics
+
+skyls provides two types of diagnostics:
+
+### Semantic Checks (skycheck)
+
+- **undefined-name**: Reference to undefined variable or function
+- **unused-variable**: Local variable defined but never used
+
+### Style Checks (skylint)
+
+Buildtools-compatible lint rules including:
+- Docstring requirements
+- Load statement ordering
+- Naming conventions
+- And more (see [skylint documentation](/sky/tools/skylint/))
+
+<Aside type="tip">
+Diagnostics are published on file open and save. Changes trigger re-analysis automatically.
+</Aside>
+
+## Completion
+
+skyls provides context-aware completions:
+
+### Global Scope
+
+- **Keywords**: `def`, `if`, `for`, `return`, `load`, etc.
+- **Builtins**: `len`, `range`, `str`, `dict`, `list`, etc.
+- **Modules**: `json`, `math`, `time`
+- **Document symbols**: Functions and variables defined in the current file
+
+### Module Members
+
+When typing after a dot (e.g., `json.`), skyls completes module members:
+
+```starlark
+json.  # Completes: decode, encode, indent
+math.  # Completes: ceil, floor, round, sqrt, pow, log, exp, pi, e, inf
+```
+
+### Function Parameters
+
+Inside a function body, parameters are included in completions:
+
+```starlark
+def process(input_data, config):
+    # Typing 'in' suggests 'input_data'
+    # Typing 'co' suggests 'config'
+```
+
+## File Kind Detection
+
+skyls automatically detects the file type based on filename patterns:
+
+| Pattern | File Kind | Parser Mode |
+|---------|-----------|-------------|
+| `BUILD`, `BUILD.bazel` | BUILD | Bazel BUILD |
+| `*.bzl` | Bzl | Bazel extension |
+| `WORKSPACE`, `WORKSPACE.bazel` | WORKSPACE | Bazel workspace |
+| `MODULE.bazel` | MODULE | Bazel module |
+| `BUCK` | BUCK | Buck2 BUILD |
+| `Tiltfile` | Starlark | Generic |
+| `*.star`, `*.sky` | Starlark | Generic |
+
+## Current Limitations
+
+<Aside type="caution">
+The following features are planned but not yet implemented:
+</Aside>
+
+1. **Cross-file navigation**: Go-to-definition only works within the same file
+2. **Dialect-specific builtins**: Custom dialect support is being implemented (see [Custom Dialects](/sky/lsp/custom-dialects/))
+3. **Signature help**: Parameter hints while typing function calls
+4. **Code actions**: Quick fixes for diagnostics
+5. **Workspace symbols**: Find symbols across all files
+6. **Rename**: Refactoring support
+
+## Troubleshooting
+
+### Server not starting
+
+1. Verify `skyls` is in your PATH:
+   ```bash
+   which skyls
+   ```
+
+2. Check the server runs manually:
+   ```bash
+   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | skyls
+   ```
+
+### No diagnostics appearing
+
+1. Ensure the file is saved (diagnostics run on save)
+2. Check the editor's LSP logs for errors
+3. Verify the file type is correctly detected
+
+### Slow performance
+
+skyls caches parsed documents and only re-analyzes on changes. If you experience slowness:
+
+1. Check if the file is very large (>10,000 lines)
+2. Ensure you're not editing in a directory with thousands of Starlark files
+3. Check system resources (memory, CPU)
+
+## Related Documentation
+
+- [Custom Dialects](/sky/lsp/custom-dialects/) - Configure dialect-specific builtins
+- [Builtin Formats](/sky/lsp/builtin-formats/) - Reference for builtin definition formats
+- [Configuration Reference](/sky/reference/config-schema/) - Full config file schema

@@ -1,0 +1,657 @@
+---
+title: Builtin Definition Formats
+description: Complete reference for JSON, textproto, and Python stub formats for defining Starlark builtins
+sidebar:
+  order: 3
+---
+
+import { Aside, Tabs, TabItem, Badge } from '@astrojs/starlight/components';
+
+# Builtin Definition Formats
+
+skyls supports three formats for defining custom builtins. Each format has different strengths:
+
+| Format | Extension | Strengths | Weaknesses |
+|--------|-----------|-----------|------------|
+| **JSON** | `.builtins.json` | Easy to write, widely supported | Verbose, no schema validation at runtime |
+| **Textproto** | `.builtins.textproto` | starpls compatible, proto validation | Requires proto knowledge |
+| **Python Stub** | `.builtins.pyi` | Familiar syntax, IDE support | Requires parser, limited to what Python syntax can express |
+
+<Aside type="tip">
+Start with JSON format. It's the easiest to author and most widely supported. Use textproto for starpls compatibility or Python stubs for Tilt LSP compatibility.
+</Aside>
+
+## JSON Format
+
+The JSON format maps directly to skyls internal data structures.
+
+### File Naming
+
+Use the compound extension pattern: `{dialect-name}.builtins.json`
+
+Examples:
+- `tilt.builtins.json`
+- `copybara.builtins.json`
+- `internal.builtins.json`
+
+### Complete Schema
+
+```json
+{
+  "$schema": "https://sky.dev/schemas/starlark-builtins.json",
+  "version": 1,
+  "name": "dialect-name",
+  "description": "Human-readable description of this dialect",
+
+  "functions": [
+    {
+      "name": "function_name",
+      "doc": "Function documentation.\n\nMultiple paragraphs supported.",
+      "deprecated": "Use new_function instead",
+      "params": [
+        {
+          "name": "param_name",
+          "type": "param_type",
+          "doc": "Parameter documentation",
+          "required": true,
+          "default": "default_value",
+          "variadic": false,
+          "kwargs": false
+        }
+      ],
+      "return_type": "ReturnType"
+    }
+  ],
+
+  "types": [
+    {
+      "name": "TypeName",
+      "doc": "Type documentation",
+      "fields": [
+        {
+          "name": "field_name",
+          "type": "field_type",
+          "doc": "Field documentation"
+        }
+      ],
+      "methods": [
+        {
+          "name": "method_name",
+          "doc": "Method documentation",
+          "params": [],
+          "return_type": "ReturnType"
+        }
+      ]
+    }
+  ],
+
+  "globals": [
+    {
+      "name": "GLOBAL_NAME",
+      "type": "global_type",
+      "doc": "Global documentation"
+    }
+  ],
+
+  "modules": {
+    "module_name": {
+      "functions": [],
+      "types": [],
+      "globals": []
+    }
+  }
+}
+```
+
+### Top-Level Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `$schema` | string | No | JSON Schema URL for editor validation |
+| `version` | number | Yes | Schema version (currently `1`) |
+| `name` | string | No | Dialect identifier |
+| `description` | string | No | Human-readable description |
+| `functions` | array | No | Builtin function definitions |
+| `types` | array | No | Type/class definitions |
+| `globals` | array | No | Global variable definitions |
+| `modules` | object | No | Module namespaces (e.g., `json.encode`) |
+
+### Function Definition
+
+```json
+{
+  "name": "docker_build",
+  "doc": "Build a Docker image from a Dockerfile.\n\nThis is the most common way to build images in Tilt.",
+  "deprecated": "",
+  "params": [
+    {"name": "ref", "type": "string", "doc": "Image reference", "required": true},
+    {"name": "context", "type": "string", "doc": "Build context", "default": "'.'"},
+    {"name": "dockerfile", "type": "string", "default": "'Dockerfile'"},
+    {"name": "build_args", "type": "dict[string, string]"},
+    {"name": "kwargs", "kwargs": true}
+  ],
+  "return_type": "None"
+}
+```
+
+#### Function Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | **Yes** | Function name |
+| `doc` | string | No | Documentation (supports Markdown) |
+| `deprecated` | string | No | Deprecation message (if set, function is deprecated) |
+| `params` | array | No | Parameter list |
+| `return_type` | string | No | Return type annotation |
+
+#### Parameter Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | **Yes** | Parameter name |
+| `type` | string | No | Type annotation (e.g., `string`, `list[int]`) |
+| `doc` | string | No | Parameter documentation |
+| `required` | boolean | No | `true` if parameter must be provided |
+| `default` | string | No | Default value as string |
+| `variadic` | boolean | No | `true` for `*args` parameter |
+| `kwargs` | boolean | No | `true` for `**kwargs` parameter |
+
+<Aside type="note">
+A parameter is considered optional if it has a `default` value OR if `required` is `false`. You don't need to specify both.
+</Aside>
+
+### Type Definition
+
+```json
+{
+  "name": "PortForward",
+  "doc": "Port forward specification.",
+  "fields": [
+    {"name": "local_port", "type": "int", "doc": "Local port number"},
+    {"name": "container_port", "type": "int", "doc": "Container port number"}
+  ],
+  "methods": [
+    {
+      "name": "to_string",
+      "doc": "Format as 'local:container' string",
+      "params": [],
+      "return_type": "string"
+    }
+  ]
+}
+```
+
+#### Type Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | **Yes** | Type name |
+| `doc` | string | No | Type documentation |
+| `fields` | array | No | Instance fields/attributes |
+| `methods` | array | No | Instance methods (same format as functions) |
+
+#### Field Definition
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | **Yes** | Field name |
+| `type` | string | No | Type annotation |
+| `doc` | string | No | Field documentation |
+
+### Global Definition
+
+```json
+{
+  "name": "TILT_VERSION",
+  "type": "string",
+  "doc": "Current Tilt version string"
+}
+```
+
+#### Global Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | **Yes** | Global variable name |
+| `type` | string | No | Type annotation |
+| `doc` | string | No | Documentation |
+
+### Module Definition
+
+For namespaced functions like `json.encode` or `os.getcwd`:
+
+```json
+{
+  "modules": {
+    "os": {
+      "functions": [
+        {"name": "getcwd", "doc": "Get current directory", "return_type": "string"},
+        {"name": "getenv", "params": [{"name": "key", "type": "string", "required": true}], "return_type": "string"}
+      ],
+      "globals": [
+        {"name": "name", "type": "string", "doc": "Operating system name"}
+      ]
+    },
+    "json": {
+      "functions": [
+        {"name": "encode", "params": [{"name": "obj", "type": "any", "required": true}], "return_type": "string"},
+        {"name": "decode", "params": [{"name": "s", "type": "string", "required": true}], "return_type": "any"}
+      ]
+    }
+  }
+}
+```
+
+### Type Annotation Syntax
+
+Type annotations use a Python-inspired syntax:
+
+| Annotation | Meaning |
+|------------|---------|
+| `string` | String value |
+| `int` | Integer value |
+| `float` | Floating-point value |
+| `bool` | Boolean value |
+| `None` | None/null value |
+| `any` | Any type |
+| `list[T]` | List of T |
+| `dict[K, V]` | Dictionary with K keys and V values |
+| `tuple[T, U]` | Tuple of T and U |
+| `T \| U` | Union of T or U |
+| `T \| None` | Optional T |
+| `CustomType` | Custom type defined in `types` |
+
+Examples:
+```
+string
+list[string]
+dict[string, int]
+string | int
+list[string] | None
+dict[string, list[Label]]
+```
+
+### Complete Example
+
+A full example for Tilt:
+
+```json
+{
+  "$schema": "https://sky.dev/schemas/starlark-builtins.json",
+  "version": 1,
+  "name": "tilt",
+  "description": "Tilt Starlark builtins for local Kubernetes development",
+
+  "functions": [
+    {
+      "name": "docker_build",
+      "doc": "Build a Docker image from a Dockerfile.\n\nThis is the most common way to build images in Tilt.",
+      "params": [
+        {"name": "ref", "type": "string", "doc": "Image reference (e.g., 'myimage:latest')", "required": true},
+        {"name": "context", "type": "string", "doc": "Build context path", "default": "'.'"},
+        {"name": "dockerfile", "type": "string", "doc": "Path to Dockerfile", "default": "'Dockerfile'"},
+        {"name": "build_args", "type": "dict[string, string]", "doc": "Build arguments"},
+        {"name": "live_update", "type": "list[LiveUpdateStep]", "doc": "Live update rules"},
+        {"name": "ignore", "type": "list[string]", "doc": "Patterns to ignore"},
+        {"name": "kwargs", "variadic": true, "kwargs": true}
+      ],
+      "return_type": "None"
+    },
+    {
+      "name": "k8s_yaml",
+      "doc": "Deploy Kubernetes YAML manifests.",
+      "params": [
+        {"name": "yaml", "type": "string | list[string] | Blob", "doc": "YAML content or file paths", "required": true},
+        {"name": "allow_duplicates", "type": "bool", "doc": "Allow duplicate resource names", "default": "False"}
+      ],
+      "return_type": "None"
+    },
+    {
+      "name": "local",
+      "doc": "Run a local command and return output.",
+      "params": [
+        {"name": "cmd", "type": "string | list[string]", "doc": "Command to run", "required": true},
+        {"name": "quiet", "type": "bool", "doc": "Suppress output", "default": "False"},
+        {"name": "echo_off", "type": "bool", "doc": "Don't echo command", "default": "False"}
+      ],
+      "return_type": "Blob"
+    },
+    {
+      "name": "read_file",
+      "doc": "Read file contents as a Blob.",
+      "params": [
+        {"name": "path", "type": "string", "doc": "File path", "required": true},
+        {"name": "default", "type": "string", "doc": "Default if file not found"}
+      ],
+      "return_type": "Blob"
+    }
+  ],
+
+  "types": [
+    {
+      "name": "Blob",
+      "doc": "Binary large object - file contents or command output.",
+      "methods": [
+        {"name": "__str__", "doc": "Convert to string", "return_type": "string"}
+      ]
+    },
+    {
+      "name": "LiveUpdateStep",
+      "doc": "A step in the live update process."
+    },
+    {
+      "name": "PortForward",
+      "doc": "Port forward specification.",
+      "fields": [
+        {"name": "local_port", "type": "int", "doc": "Local port number"},
+        {"name": "container_port", "type": "int", "doc": "Container port number"}
+      ]
+    }
+  ],
+
+  "globals": [
+    {"name": "os", "type": "OsModule", "doc": "Operating system utilities"},
+    {"name": "config", "type": "ConfigModule", "doc": "Tilt configuration settings"}
+  ],
+
+  "modules": {
+    "os": {
+      "functions": [
+        {"name": "getcwd", "doc": "Get current working directory", "return_type": "string"},
+        {"name": "getenv", "doc": "Get environment variable", "params": [{"name": "key", "type": "string", "required": true}, {"name": "default", "type": "string"}], "return_type": "string"},
+        {"name": "environ", "doc": "Get all environment variables", "return_type": "dict[string, string]"}
+      ]
+    }
+  }
+}
+```
+
+## Textproto Format <Badge text="Planned" variant="caution" />
+
+The textproto format is compatible with starpls and uses the protobuf text format.
+
+### File Naming
+
+Use the compound extension: `{dialect-name}.builtins.textproto`
+
+### Schema
+
+```textproto
+# tilt.builtins.textproto
+
+values {
+  name: "docker_build"
+  doc: "Build a Docker image from a Dockerfile."
+  callable {
+    params {
+      name: "ref"
+      type: "string"
+      doc: "Image reference"
+      is_mandatory: true
+    }
+    params {
+      name: "context"
+      type: "string"
+      default_value: "'.'"
+    }
+    params {
+      name: "dockerfile"
+      type: "string"
+      default_value: "'Dockerfile'"
+    }
+    return_type: "None"
+  }
+}
+
+values {
+  name: "k8s_yaml"
+  doc: "Deploy Kubernetes YAML manifests."
+  callable {
+    params {
+      name: "yaml"
+      type: "string | list[string] | Blob"
+      is_mandatory: true
+    }
+    return_type: "None"
+  }
+}
+
+types {
+  name: "Blob"
+  doc: "Binary large object"
+}
+
+types {
+  name: "PortForward"
+  doc: "Port forward specification"
+  fields {
+    name: "local_port"
+    type: "int"
+  }
+  fields {
+    name: "container_port"
+    type: "int"
+  }
+}
+```
+
+### Textproto vs JSON Mapping
+
+| Textproto | JSON |
+|-----------|------|
+| `values { name: "x" callable { ... } }` | `functions: [{ "name": "x", ... }]` |
+| `values { name: "x" type: "T" }` | `globals: [{ "name": "x", "type": "T" }]` |
+| `types { name: "T" }` | `types: [{ "name": "T" }]` |
+| `is_mandatory: true` | `required: true` |
+| `default_value: "x"` | `default: "x"` |
+
+## Python Stub Format <Badge text="Planned" variant="caution" />
+
+Python stubs (`.pyi` files) use standard Python type annotation syntax. This format is compatible with Tilt's starlark-lsp.
+
+### File Naming
+
+Use the compound extension: `{dialect-name}.builtins.pyi`
+
+### Syntax
+
+```python
+# tilt.builtins.pyi
+"""Tilt Starlark builtins for local Kubernetes development."""
+
+from typing import Any, Dict, List, Optional, Union
+
+
+class Blob:
+    """Binary large object - file contents or command output."""
+
+    def __str__(self) -> str:
+        """Convert to string."""
+        ...
+
+
+class LiveUpdateStep:
+    """A step in the live update process."""
+    ...
+
+
+class PortForward:
+    """Port forward specification."""
+    local_port: int
+    container_port: int
+
+
+class OsModule:
+    """Operating system utilities."""
+
+    def getcwd(self) -> str:
+        """Get current working directory."""
+        ...
+
+    def getenv(self, key: str, default: Optional[str] = None) -> str:
+        """Get environment variable."""
+        ...
+
+    def environ(self) -> Dict[str, str]:
+        """Get all environment variables."""
+        ...
+
+
+# Global modules
+os: OsModule
+"""Operating system utilities."""
+
+config: Dict[str, Any]
+"""Tilt configuration settings."""
+
+
+def docker_build(
+    ref: str,
+    context: str = ".",
+    dockerfile: str = "Dockerfile",
+    build_args: Optional[Dict[str, str]] = None,
+    live_update: Optional[List[LiveUpdateStep]] = None,
+    ignore: Optional[List[str]] = None,
+    **kwargs,
+) -> None:
+    """
+    Build a Docker image from a Dockerfile.
+
+    This is the most common way to build images in Tilt.
+
+    Args:
+        ref: Image reference (e.g., 'myimage:latest')
+        context: Build context path
+        dockerfile: Path to Dockerfile
+        build_args: Build arguments
+        live_update: Live update rules
+        ignore: Patterns to ignore
+        **kwargs: Additional arguments
+    """
+    ...
+
+
+def k8s_yaml(
+    yaml: Union[str, List[str], Blob],
+    allow_duplicates: bool = False,
+) -> None:
+    """
+    Deploy Kubernetes YAML manifests.
+
+    Args:
+        yaml: YAML content or file paths
+        allow_duplicates: Allow duplicate resource names
+    """
+    ...
+
+
+def local(
+    cmd: Union[str, List[str]],
+    quiet: bool = False,
+    echo_off: bool = False,
+) -> Blob:
+    """
+    Run a local command and return output.
+
+    Args:
+        cmd: Command to run
+        quiet: Suppress output
+        echo_off: Don't echo command
+
+    Returns:
+        Command output as Blob
+    """
+    ...
+
+
+def read_file(
+    path: str,
+    default: Optional[str] = None,
+) -> Blob:
+    """
+    Read file contents as a Blob.
+
+    Args:
+        path: File path
+        default: Default if file not found
+
+    Returns:
+        File contents as Blob
+    """
+    ...
+```
+
+### Python Stub Rules
+
+1. **Functions**: Defined with `def`, types from annotations, docs from docstrings
+2. **Classes**: Defined with `class`, fields as class attributes, methods as usual
+3. **Globals**: Module-level variables with type annotations
+4. **`...` body**: Use ellipsis for stub implementations
+5. **Docstrings**: Use Google-style or numpy-style docstring format
+
+### Converting Between Formats
+
+#### JSON to Python Stub
+
+```bash
+# Planned: conversion tool
+sky builtins convert tilt.builtins.json --to pyi > tilt.builtins.pyi
+```
+
+Manual mapping:
+
+| JSON | Python Stub |
+|------|-------------|
+| Function | `def name(...) -> T: ...` |
+| Type | `class Name: ...` |
+| Type field | Class attribute |
+| Type method | Class method |
+| Global | Module variable |
+| `required: true` | No default value |
+| `default: "x"` | `= x` in signature |
+
+#### Python Stub to JSON
+
+```bash
+# Planned: conversion tool
+sky builtins convert tilt.builtins.pyi --to json > tilt.builtins.json
+```
+
+## Best Practices
+
+### Documentation
+
+1. **Write meaningful `doc` strings**: First sentence is summary, rest is description
+2. **Document parameters**: Explain what each parameter does
+3. **Include examples**: Show usage in doc strings where helpful
+
+```json
+{
+  "name": "k8s_resource",
+  "doc": "Configure a Kubernetes resource.\n\nUse this after k8s_yaml to customize resource behavior.\n\nExample:\n```\nk8s_yaml('deployment.yaml')\nk8s_resource('my-app', port_forwards='8080:80')\n```",
+  "params": [...]
+}
+```
+
+### Type Annotations
+
+1. **Be specific**: Use `list[string]` not just `list`
+2. **Use union types**: `string | int` for parameters accepting multiple types
+3. **Mark optional**: Use `T | None` for nullable types
+
+### Organization
+
+1. **One file per dialect**: Keep related builtins together
+2. **Group by category**: Functions first, then types, then globals
+3. **Alphabetize within sections**: Easier to find specific items
+
+### Maintenance
+
+1. **Version your builtins**: Include in VCS, track changes
+2. **Update with tool updates**: When the tool adds new builtins, update your files
+3. **Validate JSON**: Use a linter or `python3 -m json.tool file.json`
+
+## Related Documentation
+
+- [Custom Dialects Guide](/sky/lsp/custom-dialects/) - How to configure dialects
+- [Configuration Schema](/sky/reference/config-schema/) - Full config file reference

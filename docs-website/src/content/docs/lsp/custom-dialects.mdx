@@ -1,0 +1,810 @@
+---
+title: Custom Dialects
+description: Configure skyls for Tilt, Copybara, Buck2, and custom Starlark dialects
+sidebar:
+  order: 2
+---
+
+import { Aside, Tabs, TabItem, FileTree, Steps, Card, CardGrid } from '@astrojs/starlight/components';
+
+# Custom Dialect Support
+
+Starlark is a configuration language used by many build systems and tools. Each tool extends Starlark with its own builtin functions, types, and globals. This creates a challenge for tooling: how do you provide accurate completions, hover documentation, and diagnostics when different files use different builtins?
+
+skyls solves this with **custom dialect support**. You can configure which files use which dialect, and provide builtin definitions for each dialect.
+
+## What is a Dialect?
+
+A dialect is a specific extension of Starlark with predefined functions, types, and globals. Common dialects include:
+
+| Dialect | Tool | Files | Example Builtins |
+|---------|------|-------|------------------|
+| **Bazel** | Bazel build system | `BUILD`, `*.bzl`, `WORKSPACE`, `MODULE.bazel` | `cc_library`, `java_binary`, `rule`, `provider` |
+| **Buck2** | Buck2 build system | `BUCK`, `*.bzl` | `cxx_library`, `genrule`, `bxl` functions |
+| **Tilt** | Tilt local dev | `Tiltfile`, `*.star` | `docker_build`, `k8s_yaml`, `local_resource` |
+| **Copybara** | Copybara migration | `*.bara.sky` | `core.workflow`, `git.origin`, transformations |
+| **Custom** | Your own tools | Any pattern | Your DSL functions |
+
+Without dialect awareness, skyls would report errors like `undefined: docker_build` when editing a Tiltfile, because it doesn't know about Tilt's builtins.
+
+## Configuration File
+
+Dialect support is configured via `.starlark/config.json` in your workspace root.
+
+### File Discovery
+
+skyls searches for configuration in this order:
+
+1. CLI flag: `--config path/to/config.json` (planned)
+2. Environment: `STARLARK_CONFIG=/path/to/config.json` (planned)
+3. `.starlark/config.json` (walking up from the file being edited)
+4. `starlark.config.json` in workspace root
+5. Auto-detection based on workspace markers (`WORKSPACE`, `.buckconfig`, `Tiltfile`)
+
+### Minimal Configuration
+
+For simple cases, specify just the dialect:
+
+```json
+{
+  "$schema": "https://sky.dev/schemas/starlark-config.json",
+  "version": 1,
+  "dialect": "bazel"
+}
+```
+
+This tells skyls to use Bazel builtins for all Starlark files in the workspace.
+
+### Full Configuration
+
+For complex workspaces with multiple dialects:
+
+```json
+{
+  "$schema": "https://sky.dev/schemas/starlark-config.json",
+  "version": 1,
+
+  "rules": [
+    {
+      "files": ["Tiltfile", "tilt_modules/**/*.star"],
+      "dialect": "tilt"
+    },
+    {
+      "files": ["*.bara.sky", "copy.bara.sky"],
+      "dialect": "copybara"
+    },
+    {
+      "files": ["**/*.bzl"],
+      "dialect": "bazel-bzl"
+    },
+    {
+      "files": ["BUILD", "BUILD.bazel", "**/BUILD", "**/BUILD.bazel"],
+      "dialect": "bazel-build"
+    },
+    {
+      "files": ["**/*.star"],
+      "dialect": "starlark"
+    }
+  ],
+
+  "dialects": {
+    "tilt": {
+      "builtins": [
+        ".starlark/builtins/tilt.builtins.json"
+      ],
+      "extends": "starlark"
+    },
+    "copybara": {
+      "builtins": [
+        ".starlark/builtins/copybara.builtins.json"
+      ],
+      "extends": "starlark"
+    },
+    "bazel-build": {
+      "builtins": [],
+      "extends": "starlark"
+    },
+    "bazel-bzl": {
+      "builtins": [],
+      "extends": "bazel-build"
+    }
+  },
+
+  "settings": {
+    "reportUndefinedNames": true,
+    "reportUnusedBindings": true,
+    "checkLoadStatements": true
+  }
+}
+```
+
+## Configuration Schema
+
+### Top-Level Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `$schema` | string | No | JSON Schema URL for validation |
+| `version` | number | Yes | Schema version (currently `1`) |
+| `dialect` | string | No | Default dialect for all files |
+| `rules` | array | No | File pattern to dialect mapping |
+| `dialects` | object | No | Custom dialect definitions |
+| `settings` | object | No | Analysis settings |
+
+### Rules Array
+
+Rules map file patterns to dialects. The first matching rule wins.
+
+```json
+{
+  "rules": [
+    {
+      "files": ["Tiltfile", "tilt_modules/**/*.star"],
+      "dialect": "tilt"
+    }
+  ]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `files` | string[] | Glob patterns to match (relative to config file) |
+| `dialect` | string | Dialect ID to apply |
+
+#### Glob Pattern Syntax
+
+| Pattern | Matches |
+|---------|---------|
+| `*` | Any characters except `/` |
+| `**` | Any characters including `/` (recursive) |
+| `?` | Any single character |
+| `[abc]` | Character class |
+| `{a,b}` | Alternatives |
+
+Examples:
+
+```json
+{
+  "rules": [
+    {"files": ["BUILD"], "dialect": "bazel"},
+    {"files": ["BUILD.bazel"], "dialect": "bazel"},
+    {"files": ["**/BUILD"], "dialect": "bazel"},
+    {"files": ["**/*.bzl"], "dialect": "bazel"},
+    {"files": ["src/**/*.star"], "dialect": "custom"},
+    {"files": ["tests/**/*_test.star"], "dialect": "custom"}
+  ]
+}
+```
+
+### Dialects Object
+
+Define custom dialects with builtin sources and inheritance:
+
+```json
+{
+  "dialects": {
+    "my-dialect": {
+      "builtins": [
+        ".starlark/builtins/core.builtins.json",
+        ".starlark/builtins/extensions.builtins.json",
+        "https://example.com/builtins/v1.json"
+      ],
+      "extends": "starlark"
+    }
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `builtins` | string[] | Paths or URLs to builtin definition files |
+| `extends` | string | Parent dialect to inherit builtins from |
+
+#### Builtin Sources
+
+Builtins can be loaded from:
+
+1. **Local files**: Relative to config file or absolute paths
+2. **Remote URLs**: HTTPS URLs (planned, not yet implemented)
+3. **Embedded data**: Built-in definitions for Bazel, Buck2 (automatic)
+
+### Settings Object
+
+Control analysis behavior:
+
+```json
+{
+  "settings": {
+    "reportUndefinedNames": true,
+    "reportUnusedBindings": true,
+    "checkLoadStatements": true
+  }
+}
+```
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `reportUndefinedNames` | boolean | `true` | Report undefined variable/function references |
+| `reportUnusedBindings` | boolean | `true` | Report unused local variables |
+| `checkLoadStatements` | boolean | `false` | Validate load statement targets exist |
+
+## Dialect Inheritance
+
+Dialects can extend other dialects using the `extends` field. This creates a chain of builtin providers:
+
+```
+starlark (core builtins)
+    |
+    +-- bazel-build (BUILD file builtins)
+    |       |
+    |       +-- bazel-bzl (.bzl file builtins)
+    |
+    +-- tilt (Tilt builtins)
+    |
+    +-- copybara (Copybara builtins)
+```
+
+When resolving builtins:
+
+1. Start with the specified dialect's builtins
+2. Walk up the inheritance chain
+3. Merge all builtins (child overrides parent on collision)
+
+Example:
+
+```json
+{
+  "dialects": {
+    "internal-build": {
+      "builtins": [".starlark/builtins/internal.builtins.json"],
+      "extends": "bazel-build"
+    }
+  }
+}
+```
+
+The `internal-build` dialect gets:
+1. Core Starlark builtins (`len`, `range`, `str`, ...)
+2. Bazel BUILD builtins (`cc_library`, `glob`, ...)
+3. Internal builtins (your custom rules)
+
+## Builtin Definition Formats
+
+skyls supports three formats for defining builtins:
+
+| Format | Extension | Best For |
+|--------|-----------|----------|
+| **JSON** | `.builtins.json` | Easy authoring, human-readable |
+| **Textproto** | `.builtins.textproto` | starpls compatibility, proto validation |
+| **Python Stub** | `.builtins.pyi` | Tilt LSP compatibility, familiar syntax |
+
+See [Builtin Formats Reference](/sky/lsp/builtin-formats/) for complete format specifications.
+
+### Quick JSON Example
+
+```json
+{
+  "$schema": "https://sky.dev/schemas/starlark-builtins.json",
+  "version": 1,
+  "name": "my-dialect",
+  "description": "Custom Starlark dialect for my tool",
+
+  "functions": [
+    {
+      "name": "my_function",
+      "doc": "Does something useful.\n\nThis is a longer description.",
+      "params": [
+        {"name": "name", "type": "string", "doc": "Resource name", "required": true},
+        {"name": "config", "type": "dict", "doc": "Configuration options", "default": "{}"}
+      ],
+      "return_type": "MyResult"
+    }
+  ],
+
+  "types": [
+    {
+      "name": "MyResult",
+      "doc": "Result of my_function",
+      "fields": [
+        {"name": "status", "type": "string", "doc": "Success or failure"}
+      ]
+    }
+  ],
+
+  "globals": [
+    {"name": "VERSION", "type": "string", "doc": "Tool version"}
+  ]
+}
+```
+
+## Project Structure
+
+Recommended directory layout for dialect configuration:
+
+<FileTree>
+- project/
+  - .starlark/
+    - config.json
+    - builtins/
+      - tilt.builtins.json
+      - copybara.builtins.json
+      - internal.builtins.json
+  - BUILD
+  - Tiltfile
+  - copy.bara.sky
+  - src/
+    - lib.bzl
+</FileTree>
+
+For monorepos with nested configurations:
+
+<FileTree>
+- monorepo/
+  - .starlark/
+    - config.json (root config)
+  - projects/
+    - frontend/
+      - .starlark/
+        - config.json (overrides for frontend)
+      - BUILD
+    - backend/
+      - BUILD
+</FileTree>
+
+## Step-by-Step Tutorial
+
+<Steps>
+
+1. **Create the configuration directory**
+
+   ```bash
+   mkdir -p .starlark/builtins
+   ```
+
+2. **Create the config file**
+
+   Create `.starlark/config.json`:
+
+   ```json
+   {
+     "$schema": "https://sky.dev/schemas/starlark-config.json",
+     "version": 1,
+     "rules": [
+       {
+         "files": ["Tiltfile", "**/*.tilt.star"],
+         "dialect": "tilt"
+       }
+     ],
+     "dialects": {
+       "tilt": {
+         "builtins": [".starlark/builtins/tilt.builtins.json"],
+         "extends": "starlark"
+       }
+     }
+   }
+   ```
+
+3. **Create the builtins file**
+
+   Create `.starlark/builtins/tilt.builtins.json`:
+
+   ```json
+   {
+     "$schema": "https://sky.dev/schemas/starlark-builtins.json",
+     "version": 1,
+     "name": "tilt",
+     "functions": [
+       {
+         "name": "docker_build",
+         "doc": "Build a Docker image from a Dockerfile.",
+         "params": [
+           {"name": "ref", "type": "string", "required": true, "doc": "Image reference"},
+           {"name": "context", "type": "string", "default": "'.'", "doc": "Build context path"},
+           {"name": "dockerfile", "type": "string", "default": "'Dockerfile'", "doc": "Dockerfile path"}
+         ],
+         "return_type": "None"
+       },
+       {
+         "name": "k8s_yaml",
+         "doc": "Deploy Kubernetes YAML manifests.",
+         "params": [
+           {"name": "yaml", "type": "string | list[string]", "required": true, "doc": "YAML content or paths"}
+         ],
+         "return_type": "None"
+       }
+     ]
+   }
+   ```
+
+4. **Verify the configuration**
+
+   Open your Tiltfile in an editor with skyls. You should see:
+   - No "undefined" errors for `docker_build` and `k8s_yaml`
+   - Completions for these functions
+   - Hover documentation
+
+5. **Add more builtins as needed**
+
+   When you use a new Tilt function, add it to the builtins file.
+
+</Steps>
+
+## Real-World Examples
+
+### Tilt Configuration
+
+Complete configuration for Tilt development:
+
+<Tabs>
+<TabItem label="config.json">
+```json
+{
+  "$schema": "https://sky.dev/schemas/starlark-config.json",
+  "version": 1,
+  "rules": [
+    {
+      "files": ["Tiltfile", "tilt_modules/**/*.star"],
+      "dialect": "tilt"
+    }
+  ],
+  "dialects": {
+    "tilt": {
+      "builtins": [".starlark/builtins/tilt.builtins.json"],
+      "extends": "starlark"
+    }
+  }
+}
+```
+</TabItem>
+<TabItem label="tilt.builtins.json">
+```json
+{
+  "$schema": "https://sky.dev/schemas/starlark-builtins.json",
+  "version": 1,
+  "name": "tilt",
+  "description": "Tilt Starlark builtins for local Kubernetes development",
+
+  "functions": [
+    {
+      "name": "docker_build",
+      "doc": "Build a Docker image from a Dockerfile.\n\nThis is the most common way to build images in Tilt.",
+      "params": [
+        {"name": "ref", "type": "string", "doc": "Image reference (e.g., 'myimage:latest')", "required": true},
+        {"name": "context", "type": "string", "doc": "Build context path", "default": "'.'"},
+        {"name": "dockerfile", "type": "string", "doc": "Path to Dockerfile", "default": "'Dockerfile'"},
+        {"name": "build_args", "type": "dict[string, string]", "doc": "Build arguments"},
+        {"name": "live_update", "type": "list[LiveUpdateStep]", "doc": "Live update rules"},
+        {"name": "ignore", "type": "list[string]", "doc": "Patterns to ignore"}
+      ],
+      "return_type": "None"
+    },
+    {
+      "name": "k8s_yaml",
+      "doc": "Deploy Kubernetes YAML manifests.",
+      "params": [
+        {"name": "yaml", "type": "string | list[string] | Blob", "doc": "YAML content or file paths", "required": true},
+        {"name": "allow_duplicates", "type": "bool", "doc": "Allow duplicate resource names", "default": "False"}
+      ],
+      "return_type": "None"
+    },
+    {
+      "name": "k8s_resource",
+      "doc": "Configure a Kubernetes resource.",
+      "params": [
+        {"name": "workload", "type": "string", "doc": "Workload name", "required": true},
+        {"name": "port_forwards", "type": "list[string | int | PortForward]", "doc": "Port forward specifications"},
+        {"name": "resource_deps", "type": "list[string]", "doc": "Resource dependencies"},
+        {"name": "labels", "type": "list[string]", "doc": "Labels for grouping"}
+      ],
+      "return_type": "None"
+    },
+    {
+      "name": "local_resource",
+      "doc": "Run a command on the host machine.",
+      "params": [
+        {"name": "name", "type": "string", "doc": "Resource name", "required": true},
+        {"name": "cmd", "type": "string | list[string]", "doc": "Command to run", "required": true},
+        {"name": "serve_cmd", "type": "string | list[string]", "doc": "Long-running serve command"},
+        {"name": "deps", "type": "list[string]", "doc": "File dependencies"},
+        {"name": "resource_deps", "type": "list[string]", "doc": "Resource dependencies"}
+      ],
+      "return_type": "None"
+    },
+    {
+      "name": "local",
+      "doc": "Run a local command and return output.",
+      "params": [
+        {"name": "cmd", "type": "string | list[string]", "doc": "Command to run", "required": true},
+        {"name": "quiet", "type": "bool", "doc": "Suppress output", "default": "False"},
+        {"name": "echo_off", "type": "bool", "doc": "Don't echo command", "default": "False"}
+      ],
+      "return_type": "Blob"
+    },
+    {
+      "name": "read_file",
+      "doc": "Read file contents as a Blob.",
+      "params": [
+        {"name": "path", "type": "string", "doc": "File path", "required": true},
+        {"name": "default", "type": "string", "doc": "Default if file not found"}
+      ],
+      "return_type": "Blob"
+    },
+    {
+      "name": "helm",
+      "doc": "Deploy a Helm chart.",
+      "params": [
+        {"name": "chart", "type": "string", "doc": "Chart path or name", "required": true},
+        {"name": "name", "type": "string", "doc": "Release name"},
+        {"name": "namespace", "type": "string", "doc": "Kubernetes namespace"},
+        {"name": "values", "type": "list[string]", "doc": "Values files"},
+        {"name": "set", "type": "list[string]", "doc": "Set values on command line"}
+      ],
+      "return_type": "Blob"
+    }
+  ],
+
+  "types": [
+    {
+      "name": "Blob",
+      "doc": "Binary large object - file contents or command output."
+    },
+    {
+      "name": "LiveUpdateStep",
+      "doc": "A step in the live update process."
+    },
+    {
+      "name": "PortForward",
+      "doc": "Port forward specification.",
+      "fields": [
+        {"name": "local_port", "type": "int", "doc": "Local port number"},
+        {"name": "container_port", "type": "int", "doc": "Container port number"}
+      ]
+    }
+  ],
+
+  "globals": [
+    {"name": "os", "type": "OsModule", "doc": "Operating system utilities"},
+    {"name": "config", "type": "ConfigModule", "doc": "Tilt configuration settings"}
+  ]
+}
+```
+</TabItem>
+</Tabs>
+
+### Copybara Configuration
+
+<Tabs>
+<TabItem label="config.json">
+```json
+{
+  "$schema": "https://sky.dev/schemas/starlark-config.json",
+  "version": 1,
+  "rules": [
+    {
+      "files": ["*.bara.sky", "copy.bara.sky"],
+      "dialect": "copybara"
+    }
+  ],
+  "dialects": {
+    "copybara": {
+      "builtins": [".starlark/builtins/copybara.builtins.json"],
+      "extends": "starlark"
+    }
+  }
+}
+```
+</TabItem>
+<TabItem label="copybara.builtins.json">
+```json
+{
+  "$schema": "https://sky.dev/schemas/starlark-builtins.json",
+  "version": 1,
+  "name": "copybara",
+  "description": "Copybara Starlark builtins for code migration",
+
+  "functions": [
+    {
+      "name": "core.workflow",
+      "doc": "Defines a migration workflow from origin to destination.",
+      "params": [
+        {"name": "name", "type": "string", "required": true, "doc": "Workflow identifier"},
+        {"name": "origin", "type": "origin", "required": true, "doc": "Source repository"},
+        {"name": "destination", "type": "destination", "required": true, "doc": "Target repository"},
+        {"name": "authoring", "type": "authoring", "required": true, "doc": "Author mapping"},
+        {"name": "transformations", "type": "list[transformation]", "default": "[]", "doc": "List of transformations"}
+      ],
+      "return_type": "None"
+    },
+    {
+      "name": "git.origin",
+      "doc": "Defines a Git repository as the source of truth.",
+      "params": [
+        {"name": "url", "type": "string", "required": true, "doc": "Git repository URL"},
+        {"name": "ref", "type": "string", "default": "'master'", "doc": "Branch, tag, or commit"}
+      ],
+      "return_type": "origin"
+    },
+    {
+      "name": "git.destination",
+      "doc": "Defines a Git repository as the migration destination.",
+      "params": [
+        {"name": "url", "type": "string", "required": true, "doc": "Git repository URL"},
+        {"name": "push", "type": "string", "default": "'master'", "doc": "Branch to push to"}
+      ],
+      "return_type": "destination"
+    },
+    {
+      "name": "authoring.pass_thru",
+      "doc": "Use original commit authors.",
+      "params": [
+        {"name": "default", "type": "string", "required": true, "doc": "Default author for commits without author info"}
+      ],
+      "return_type": "authoring"
+    },
+    {
+      "name": "core.replace",
+      "doc": "Replace text in files.",
+      "params": [
+        {"name": "before", "type": "string", "required": true, "doc": "Text to find"},
+        {"name": "after", "type": "string", "required": true, "doc": "Replacement text"},
+        {"name": "paths", "type": "glob", "default": "glob(['**'])", "doc": "Files to process"}
+      ],
+      "return_type": "transformation"
+    },
+    {
+      "name": "core.move",
+      "doc": "Move or rename files.",
+      "params": [
+        {"name": "before", "type": "string", "required": true, "doc": "Source path"},
+        {"name": "after", "type": "string", "required": true, "doc": "Destination path"}
+      ],
+      "return_type": "transformation"
+    }
+  ],
+
+  "types": [
+    {"name": "origin", "doc": "Source repository for a workflow"},
+    {"name": "destination", "doc": "Target repository for a workflow"},
+    {"name": "authoring", "doc": "Author mapping configuration"},
+    {"name": "transformation", "doc": "A code transformation step"},
+    {"name": "glob", "doc": "File glob pattern"}
+  ]
+}
+```
+</TabItem>
+</Tabs>
+
+### Multi-Dialect Monorepo
+
+For a monorepo with Bazel, Tilt, and custom tools:
+
+```json
+{
+  "$schema": "https://sky.dev/schemas/starlark-config.json",
+  "version": 1,
+
+  "rules": [
+    {"files": ["Tiltfile"], "dialect": "tilt"},
+    {"files": ["tools/codegen/**/*.star"], "dialect": "codegen"},
+    {"files": ["BUILD", "BUILD.bazel", "**/BUILD", "**/BUILD.bazel"], "dialect": "bazel-build"},
+    {"files": ["**/*.bzl"], "dialect": "bazel-bzl"},
+    {"files": ["**/*.star"], "dialect": "starlark"}
+  ],
+
+  "dialects": {
+    "tilt": {
+      "builtins": [".starlark/builtins/tilt.builtins.json"],
+      "extends": "starlark"
+    },
+    "codegen": {
+      "builtins": [".starlark/builtins/codegen.builtins.json"],
+      "extends": "starlark"
+    },
+    "bazel-build": {
+      "builtins": [".starlark/builtins/bazel-custom-rules.builtins.json"],
+      "extends": "starlark"
+    },
+    "bazel-bzl": {
+      "builtins": [],
+      "extends": "bazel-build"
+    }
+  }
+}
+```
+
+## Collision Handling
+
+When multiple builtin sources define the same symbol, the resolution order is:
+
+1. **Local builtins** (from `dialects[name].builtins`) - highest priority
+2. **Inherited builtins** (from `extends` chain)
+3. **Core builtins** (built into skyls) - lowest priority
+
+Within the `builtins` array, later files override earlier ones:
+
+```json
+{
+  "builtins": [
+    "base.builtins.json",      // Loaded first
+    "overrides.builtins.json"  // Overrides 'base' on conflict
+  ]
+}
+```
+
+<Aside type="note">
+When a collision occurs, the winning definition completely replaces the losing one. Parameters and documentation are not merged.
+</Aside>
+
+## Auto-Detection
+
+When no config file is found, skyls auto-detects the dialect based on workspace markers:
+
+| Marker File | Detected Dialect |
+|-------------|------------------|
+| `WORKSPACE` or `WORKSPACE.bazel` | `bazel` |
+| `MODULE.bazel` | `bazel` |
+| `.buckconfig` | `buck2` |
+| `Tiltfile` | `tilt` |
+| (none) | `starlark` |
+
+Auto-detection uses built-in builtins for standard dialects. For custom dialects, create a config file.
+
+## Troubleshooting
+
+### Config file not found
+
+Check the file location and name:
+- `.starlark/config.json` (preferred)
+- `starlark.config.json` (root-level alternative)
+
+Verify with:
+```bash
+ls -la .starlark/
+cat .starlark/config.json
+```
+
+### Builtins not loading
+
+1. Check paths are relative to the config file
+2. Verify JSON syntax:
+   ```bash
+   python3 -m json.tool .starlark/builtins/my.builtins.json
+   ```
+3. Check file extension is `.builtins.json`, `.builtins.textproto`, or `.builtins.pyi`
+
+### Wrong dialect applied
+
+Check rule order - first match wins:
+
+```json
+{
+  "rules": [
+    {"files": ["**/*.star"], "dialect": "starlark"},  // Matches everything!
+    {"files": ["Tiltfile"], "dialect": "tilt"}        // Never reached
+  ]
+}
+```
+
+Fix by putting specific patterns first:
+
+```json
+{
+  "rules": [
+    {"files": ["Tiltfile"], "dialect": "tilt"},       // Specific first
+    {"files": ["**/*.star"], "dialect": "starlark"}   // General last
+  ]
+}
+```
+
+### Completions not appearing
+
+1. Ensure the function is defined in builtins
+2. Check the file matches a rule for the correct dialect
+3. Verify the config file is valid JSON
+4. Restart the language server
+
+## Related Documentation
+
+- [Builtin Formats Reference](/sky/lsp/builtin-formats/) - Complete format specifications
+- [Configuration Schema](/sky/reference/config-schema/) - Full config file reference
+- [Language Server Overview](/sky/lsp/) - LSP features and setup
