@@ -194,13 +194,16 @@ test-examples: test-example-hello-native test-example-star-counter test-example-
 install_dir_unix := env_var_or_default("SKY_INSTALL_DIR", env_var("HOME") / ".local" / "bin")
 install_dir_windows := env_var_or_default("SKY_INSTALL_DIR", env_var_or_default("LOCALAPPDATA", "C:\\Users\\Default\\AppData\\Local") / "bin")
 
+# Binary name: "sk" to avoid conflicts with common shell aliases (e.g., `alias sky='cd ~/dev/ws/sky'`)
+bin_name := "sk"
+
 # Install sky (full) to ~/.local/bin on macOS
 [macos]
 install:
     @echo "Building sky (full) for macOS..."
     @mkdir -p {{install_dir_unix}}
-    go build -tags=sky_full -o {{install_dir_unix}}/sky ./cmd/sky
-    @echo "Installed sky to {{install_dir_unix}}/sky"
+    go build -tags=sky_full -o {{install_dir_unix}}/{{bin_name}} ./cmd/sky
+    @echo "Installed to {{install_dir_unix}}/{{bin_name}}"
     @echo "Make sure {{install_dir_unix}} is in your PATH"
 
 # Install sky (full) to ~/.local/bin on Linux
@@ -208,8 +211,8 @@ install:
 install:
     @echo "Building sky (full) for Linux..."
     @mkdir -p {{install_dir_unix}}
-    go build -tags=sky_full -o {{install_dir_unix}}/sky ./cmd/sky
-    @echo "Installed sky to {{install_dir_unix}}/sky"
+    go build -tags=sky_full -o {{install_dir_unix}}/{{bin_name}} ./cmd/sky
+    @echo "Installed to {{install_dir_unix}}/{{bin_name}}"
     @echo "Make sure {{install_dir_unix}} is in your PATH"
 
 # Install sky (full) to %LOCALAPPDATA%\bin on Windows
@@ -217,8 +220,8 @@ install:
 install:
     @echo "Building sky (full) for Windows..."
     @if not exist "{{install_dir_windows}}" mkdir "{{install_dir_windows}}"
-    go build -tags=sky_full -o {{install_dir_windows}}\sky.exe ./cmd/sky
-    @echo "Installed sky to {{install_dir_windows}}\sky.exe"
+    go build -tags=sky_full -o {{install_dir_windows}}\{{bin_name}}.exe ./cmd/sky
+    @echo "Installed to {{install_dir_windows}}\{{bin_name}}.exe"
     @echo "Make sure {{install_dir_windows}} is in your PATH"
 
 # ============================================================================
