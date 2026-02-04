@@ -1,0 +1,5 @@
+# Copybara config in multi-dialect project
+core.workflow(
+    name="sync",
+    origin=git.origin(url="https://github.com/example/repo"),
+)

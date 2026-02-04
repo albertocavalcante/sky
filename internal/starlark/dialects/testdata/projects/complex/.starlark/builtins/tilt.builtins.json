@@ -1,0 +1,8 @@
+{
+  "functions": [
+    {"name": "docker_build", "doc": "Build Docker image", "params": [{"name": "ref", "required": true}, {"name": "context", "default": "'.'"}]},
+    {"name": "k8s_yaml", "doc": "Deploy K8s YAML", "params": [{"name": "yaml", "required": true}]},
+    {"name": "k8s_resource", "doc": "Configure resource", "params": [{"name": "workload", "required": true}]},
+    {"name": "local_resource", "doc": "Local resource", "params": [{"name": "name", "required": true}, {"name": "cmd", "required": true}]}
+  ]
+}

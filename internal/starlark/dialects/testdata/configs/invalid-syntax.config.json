@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "dialect": "bazel"
+  // This comment is not valid JSON
+  "rules": [
+}

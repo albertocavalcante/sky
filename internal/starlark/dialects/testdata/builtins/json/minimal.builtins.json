@@ -1,0 +1,12 @@
+{
+  "functions": [
+    {
+      "name": "hello",
+      "doc": "A simple test function",
+      "params": [
+        {"name": "name", "type": "string", "required": true}
+      ],
+      "return_type": "string"
+    }
+  ]
+}

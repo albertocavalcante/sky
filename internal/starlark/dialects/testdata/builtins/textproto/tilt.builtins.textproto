@@ -1,0 +1,166 @@
+# Tilt builtins in textproto format
+# Compatible with Bazel's builtins.proto schema
+
+values {
+  name: "docker_build"
+  doc: "Build a Docker image from a Dockerfile."
+  callable {
+    params {
+      name: "ref"
+      type: "string"
+      doc: "Image reference (e.g., 'myimage:latest')"
+      is_mandatory: true
+    }
+    params {
+      name: "context"
+      type: "string"
+      doc: "Build context path"
+      default_value: "'.'"
+    }
+    params {
+      name: "dockerfile"
+      type: "string"
+      doc: "Path to Dockerfile"
+      default_value: "'Dockerfile'"
+    }
+    params {
+      name: "build_args"
+      type: "dict[string, string]"
+      doc: "Build arguments"
+    }
+    params {
+      name: "live_update"
+      type: "list[LiveUpdateStep]"
+      doc: "Live update rules"
+    }
+    return_type: "None"
+  }
+}
+
+values {
+  name: "k8s_yaml"
+  doc: "Deploy Kubernetes YAML manifests."
+  callable {
+    params {
+      name: "yaml"
+      type: "string | list[string] | Blob"
+      doc: "YAML content or file paths"
+      is_mandatory: true
+    }
+    params {
+      name: "allow_duplicates"
+      type: "bool"
+      doc: "Allow duplicate resource names"
+      default_value: "False"
+    }
+    return_type: "None"
+  }
+}
+
+values {
+  name: "k8s_resource"
+  doc: "Configure a Kubernetes resource."
+  callable {
+    params {
+      name: "workload"
+      type: "string"
+      doc: "Workload name"
+      is_mandatory: true
+    }
+    params {
+      name: "port_forwards"
+      type: "list[string | int | PortForward]"
+      doc: "Port forward specifications"
+    }
+    params {
+      name: "resource_deps"
+      type: "list[string]"
+      doc: "Resource dependencies"
+    }
+    return_type: "None"
+  }
+}
+
+values {
+  name: "local_resource"
+  doc: "Run a command on the host machine."
+  callable {
+    params {
+      name: "name"
+      type: "string"
+      doc: "Resource name"
+      is_mandatory: true
+    }
+    params {
+      name: "cmd"
+      type: "string | list[string]"
+      doc: "Command to run"
+      is_mandatory: true
+    }
+    params {
+      name: "serve_cmd"
+      type: "string | list[string]"
+      doc: "Long-running serve command"
+    }
+    return_type: "None"
+  }
+}
+
+values {
+  name: "local"
+  doc: "Run a local command and return output."
+  callable {
+    params {
+      name: "cmd"
+      type: "string | list[string]"
+      doc: "Command to run"
+      is_mandatory: true
+    }
+    params {
+      name: "quiet"
+      type: "bool"
+      doc: "Suppress output"
+      default_value: "False"
+    }
+    return_type: "Blob"
+  }
+}
+
+values {
+  name: "read_file"
+  doc: "Read file contents as a Blob."
+  callable {
+    params {
+      name: "path"
+      type: "string"
+      doc: "File path"
+      is_mandatory: true
+    }
+    return_type: "Blob"
+  }
+}
+
+types {
+  name: "Blob"
+  doc: "Binary large object - file contents or command output."
+}
+
+types {
+  name: "LiveUpdateStep"
+  doc: "A step in the live update process."
+}
+
+types {
+  name: "PortForward"
+  doc: "Port forward specification."
+  fields {
+    name: "local_port"
+    type: "int"
+    doc: "Local port number"
+  }
+  fields {
+    name: "container_port"
+    type: "int"
+    doc: "Container port number"
+  }
+}

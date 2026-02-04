@@ -1,0 +1,155 @@
+{
+  "$schema": "https://sky.dev/schemas/starlark-builtins.json",
+  "version": 1,
+  "name": "copybara",
+  "description": "Copybara Starlark builtins for code transformation",
+
+  "functions": [
+    {
+      "name": "core.workflow",
+      "doc": "Defines a migration workflow from origin to destination.\n\nThis is the main entry point for defining a Copybara workflow.",
+      "params": [
+        {"name": "name", "type": "string", "doc": "Workflow name", "required": true},
+        {"name": "origin", "type": "Origin", "doc": "Source repository", "required": true},
+        {"name": "destination", "type": "Destination", "doc": "Target repository", "required": true},
+        {"name": "authoring", "type": "Authoring", "doc": "Author mapping", "required": true},
+        {"name": "transformations", "type": "list[Transformation]", "doc": "Transformations to apply", "default": "[]"},
+        {"name": "origin_files", "type": "Glob", "doc": "Files to copy from origin"},
+        {"name": "destination_files", "type": "Glob", "doc": "Files to consider in destination"},
+        {"name": "mode", "type": "string", "doc": "Workflow mode: SQUASH, ITERATIVE, CHANGE_REQUEST", "default": "'SQUASH'"}
+      ],
+      "return_type": "None"
+    },
+    {
+      "name": "core.move",
+      "doc": "Move or rename files.",
+      "params": [
+        {"name": "before", "type": "string", "doc": "Source path pattern", "required": true},
+        {"name": "after", "type": "string", "doc": "Destination path pattern", "required": true},
+        {"name": "paths", "type": "Glob", "doc": "Files to apply to"},
+        {"name": "overwrite", "type": "bool", "doc": "Overwrite existing files", "default": "False"}
+      ],
+      "return_type": "Transformation"
+    },
+    {
+      "name": "core.replace",
+      "doc": "Replace text content in files.",
+      "params": [
+        {"name": "before", "type": "string", "doc": "Text to find", "required": true},
+        {"name": "after", "type": "string", "doc": "Replacement text", "required": true},
+        {"name": "regex_groups", "type": "dict[string, string]", "doc": "Named regex groups"},
+        {"name": "paths", "type": "Glob", "doc": "Files to apply to"},
+        {"name": "multiline", "type": "bool", "doc": "Multiline mode", "default": "False"}
+      ],
+      "return_type": "Transformation"
+    },
+    {
+      "name": "core.transform",
+      "doc": "Apply a sequence of transformations.",
+      "params": [
+        {"name": "transformations", "type": "list[Transformation]", "doc": "Transformations to apply", "required": true},
+        {"name": "ignore_noop", "type": "bool", "doc": "Ignore if no changes", "default": "False"}
+      ],
+      "return_type": "Transformation"
+    },
+    {
+      "name": "git.origin",
+      "doc": "Defines a Git repository as the source of truth.",
+      "params": [
+        {"name": "url", "type": "string", "doc": "Git repository URL", "required": true},
+        {"name": "ref", "type": "string", "doc": "Branch, tag, or commit", "default": "'master'"},
+        {"name": "submodules", "type": "string", "doc": "Submodule handling: NO, YES, RECURSIVE", "default": "'NO'"},
+        {"name": "include_branch_commit_logs", "type": "bool", "doc": "Include branch commit logs", "default": "False"}
+      ],
+      "return_type": "Origin"
+    },
+    {
+      "name": "git.github_origin",
+      "doc": "Defines a GitHub repository as origin with PR support.",
+      "params": [
+        {"name": "url", "type": "string", "doc": "GitHub repository URL", "required": true},
+        {"name": "ref", "type": "string", "doc": "Branch, tag, or commit", "default": "'master'"},
+        {"name": "review_state", "type": "string", "doc": "PR review state filter"},
+        {"name": "required_labels", "type": "list[string]", "doc": "Required PR labels"}
+      ],
+      "return_type": "Origin"
+    },
+    {
+      "name": "git.destination",
+      "doc": "Defines a Git repository as the destination.",
+      "params": [
+        {"name": "url", "type": "string", "doc": "Git repository URL", "required": true},
+        {"name": "push", "type": "string", "doc": "Branch to push to", "required": true},
+        {"name": "fetch", "type": "string", "doc": "Branch to fetch from"},
+        {"name": "integrates", "type": "list[Integration]", "doc": "Integrations to apply"}
+      ],
+      "return_type": "Destination"
+    },
+    {
+      "name": "git.github_pr_destination",
+      "doc": "Creates GitHub pull requests as destination.",
+      "params": [
+        {"name": "url", "type": "string", "doc": "GitHub repository URL", "required": true},
+        {"name": "destination_ref", "type": "string", "doc": "Base branch for PRs", "required": true},
+        {"name": "pr_branch", "type": "string", "doc": "PR branch name pattern"},
+        {"name": "title", "type": "string", "doc": "PR title template"},
+        {"name": "body", "type": "string", "doc": "PR body template"}
+      ],
+      "return_type": "Destination"
+    },
+    {
+      "name": "authoring.pass_thru",
+      "doc": "Pass through original author information.",
+      "params": [
+        {"name": "default", "type": "string", "doc": "Default author if not available", "required": true}
+      ],
+      "return_type": "Authoring"
+    },
+    {
+      "name": "authoring.overwrite",
+      "doc": "Overwrite author with a fixed value.",
+      "params": [
+        {"name": "default", "type": "string", "doc": "Author to use", "required": true}
+      ],
+      "return_type": "Authoring"
+    },
+    {
+      "name": "glob",
+      "doc": "Create a glob pattern for file matching.",
+      "params": [
+        {"name": "include", "type": "list[string]", "doc": "Patterns to include", "required": true},
+        {"name": "exclude", "type": "list[string]", "doc": "Patterns to exclude", "default": "[]"}
+      ],
+      "return_type": "Glob"
+    }
+  ],
+
+  "types": [
+    {
+      "name": "Origin",
+      "doc": "Source repository configuration."
+    },
+    {
+      "name": "Destination",
+      "doc": "Target repository configuration."
+    },
+    {
+      "name": "Transformation",
+      "doc": "A code transformation operation."
+    },
+    {
+      "name": "Authoring",
+      "doc": "Author mapping configuration."
+    },
+    {
+      "name": "Glob",
+      "doc": "File pattern matcher."
+    },
+    {
+      "name": "Integration",
+      "doc": "Integration configuration for destinations."
+    }
+  ],
+
+  "globals": []
+}

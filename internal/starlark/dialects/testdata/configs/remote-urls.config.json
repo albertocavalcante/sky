@@ -1,0 +1,28 @@
+{
+  "$schema": "https://sky.dev/schemas/starlark-config.json",
+  "version": 1,
+
+  "rules": [
+    {"files": ["Tiltfile"], "dialect": "tilt"},
+    {"files": ["*.bara.sky"], "dialect": "copybara"}
+  ],
+
+  "dialects": {
+    "tilt": {
+      "builtins": [
+        "https://raw.githubusercontent.com/tilt-dev/tilt/master/starlark/builtins.json",
+        "file:///usr/local/share/tilt/extensions.json"
+      ]
+    },
+    "copybara": {
+      "builtins": [
+        "https://copybara.dev/builtins/v1.builtins.json"
+      ]
+    }
+  },
+
+  "settings": {
+    "cacheRemoteBuiltins": true,
+    "cacheExpiry": "24h"
+  }
+}

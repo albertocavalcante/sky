@@ -1,0 +1,13 @@
+{
+  "functions": [
+    {
+      "name": 123,
+      "doc": "Invalid - name should be string"
+    },
+    {
+      "params": "not an array"
+    }
+  ],
+  "types": "not an array",
+  "extra_unknown_field": true
+}

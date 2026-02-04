@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "rules": [
+    {"files": ["Tiltfile"], "dialect": "tilt"},
+    {"files": ["*.bara.sky"], "dialect": "copybara"},
+    {"files": ["BUILD", "BUILD.bazel", "**/*.bzl"], "dialect": "bazel"}
+  ],
+  "dialects": {
+    "tilt": {
+      "builtins": [".starlark/builtins/tilt.builtins.json"]
+    },
+    "copybara": {
+      "builtins": [".starlark/builtins/copybara.builtins.json"]
+    },
+    "bazel": {
+      "builtins": [".starlark/builtins/bazel.builtins.json"]
+    }
+  }
+}

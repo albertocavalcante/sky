@@ -1,0 +1,42 @@
+# Sample Tiltfile for testing dialect support
+# This file uses Tilt-specific builtins
+
+# Build the main application
+docker_build(
+    ref="myapp:latest",
+    context=".",
+    dockerfile="Dockerfile",
+    live_update=[
+        # sync would go here
+    ],
+)
+
+# Deploy Kubernetes manifests
+k8s_yaml("k8s/deployment.yaml")
+
+# Configure the resource
+k8s_resource(
+    workload="myapp",
+    port_forwards=["8080:80"],
+    resource_deps=["database"],
+)
+
+# Local development resource
+local_resource(
+    name="generate-protos",
+    cmd="make protos",
+    deps=["proto/*.proto"],
+)
+
+# Read configuration
+config_data = read_json("config.json", default={})
+
+# Use os module
+cwd = os.getcwd()
+env_value = os.getenv("MY_ENV_VAR", "default")
+
+# Run local command
+output = local("echo hello")
+
+# Load an extension
+load_dynamic("./tilt_modules/helper.star")

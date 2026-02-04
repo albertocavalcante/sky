@@ -1,0 +1,9 @@
+# Invalid textproto for testing error handling
+values {
+  name: "broken_function
+  doc: "Missing closing quote"
+}
+
+this is not valid protobuf syntax at all {
+  random: garbage
+}

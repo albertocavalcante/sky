@@ -1,0 +1,5 @@
+{
+  "$schema": "https://sky.dev/schemas/starlark-config.json",
+  "version": 1,
+  "dialect": "bazel"
+}

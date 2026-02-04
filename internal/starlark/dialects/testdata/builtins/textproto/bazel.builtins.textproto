@@ -1,0 +1,162 @@
+# Bazel BUILD file builtins subset (for testing)
+# Full Bazel builtins come from embedded proto files
+
+values {
+  name: "cc_library"
+  doc: "Creates a C++ library."
+  callable {
+    params {
+      name: "name"
+      type: "string"
+      doc: "Target name"
+      is_mandatory: true
+    }
+    params {
+      name: "srcs"
+      type: "list[Label]"
+      doc: "Source files"
+      default_value: "[]"
+    }
+    params {
+      name: "hdrs"
+      type: "list[Label]"
+      doc: "Header files"
+      default_value: "[]"
+    }
+    params {
+      name: "deps"
+      type: "list[Label]"
+      doc: "Dependencies"
+      default_value: "[]"
+    }
+    params {
+      name: "copts"
+      type: "list[string]"
+      doc: "Compiler options"
+      default_value: "[]"
+    }
+    params {
+      name: "visibility"
+      type: "list[string]"
+      doc: "Visibility specification"
+    }
+    return_type: "None"
+  }
+}
+
+values {
+  name: "cc_binary"
+  doc: "Creates a C++ binary."
+  callable {
+    params {
+      name: "name"
+      type: "string"
+      doc: "Target name"
+      is_mandatory: true
+    }
+    params {
+      name: "srcs"
+      type: "list[Label]"
+      doc: "Source files"
+      default_value: "[]"
+    }
+    params {
+      name: "deps"
+      type: "list[Label]"
+      doc: "Dependencies"
+      default_value: "[]"
+    }
+    return_type: "None"
+  }
+}
+
+values {
+  name: "glob"
+  doc: "Returns files matching patterns."
+  callable {
+    params {
+      name: "include"
+      type: "list[string]"
+      doc: "Patterns to include"
+      is_mandatory: true
+    }
+    params {
+      name: "exclude"
+      type: "list[string]"
+      doc: "Patterns to exclude"
+      default_value: "[]"
+    }
+    params {
+      name: "allow_empty"
+      type: "bool"
+      doc: "Allow empty result"
+      default_value: "False"
+    }
+    return_type: "list[string]"
+  }
+}
+
+values {
+  name: "select"
+  doc: "Conditional selection based on configuration."
+  callable {
+    params {
+      name: "conditions"
+      type: "dict[string, any]"
+      doc: "Condition to value mapping"
+      is_mandatory: true
+    }
+    params {
+      name: "no_match_error"
+      type: "string"
+      doc: "Error message if no match"
+    }
+    return_type: "any"
+  }
+}
+
+values {
+  name: "package"
+  doc: "Sets default attributes for all rules in this BUILD file."
+  callable {
+    params {
+      name: "default_visibility"
+      type: "list[string]"
+      doc: "Default visibility"
+    }
+    params {
+      name: "default_testonly"
+      type: "bool"
+      doc: "Default testonly value"
+    }
+    return_type: "None"
+  }
+}
+
+# Global constants
+values {
+  name: "PACKAGE_NAME"
+  type: "string"
+  doc: "Name of the current package"
+}
+
+values {
+  name: "REPOSITORY_NAME"
+  type: "string"
+  doc: "Name of the current repository"
+}
+
+types {
+  name: "Label"
+  doc: "A build target label."
+  fields {
+    name: "name"
+    type: "string"
+    doc: "Target name"
+  }
+  fields {
+    name: "package"
+    type: "string"
+    doc: "Package path"
+  }
+}

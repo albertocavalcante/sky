@@ -1,0 +1,1 @@
+{"functions": [{"name": "cc_library", "params": [{"name": "name", "required": true}]}, {"name": "cc_binary", "params": [{"name": "name", "required": true}]}, {"name": "glob", "params": [{"name": "include", "required": true}]}]}

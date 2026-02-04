@@ -1,0 +1,167 @@
+{
+  "$schema": "https://sky.dev/schemas/starlark-builtins.json",
+  "version": 1,
+  "name": "comprehensive",
+  "description": "Comprehensive test fixture covering all schema features",
+
+  "functions": [
+    {
+      "name": "func_minimal",
+      "doc": "Minimal function with no params"
+    },
+    {
+      "name": "func_required_param",
+      "doc": "Function with required parameter",
+      "params": [
+        {"name": "arg1", "type": "string", "required": true}
+      ]
+    },
+    {
+      "name": "func_optional_param",
+      "doc": "Function with optional parameter",
+      "params": [
+        {"name": "arg1", "type": "string", "default": "'default'"}
+      ]
+    },
+    {
+      "name": "func_mixed_params",
+      "doc": "Function with mixed required and optional parameters",
+      "params": [
+        {"name": "required1", "type": "string", "required": true},
+        {"name": "required2", "type": "int", "required": true},
+        {"name": "optional1", "type": "bool", "default": "True"},
+        {"name": "optional2", "type": "list[string]", "default": "[]"}
+      ],
+      "return_type": "dict[string, any]"
+    },
+    {
+      "name": "func_variadic",
+      "doc": "Function with *args",
+      "params": [
+        {"name": "first", "type": "string", "required": true},
+        {"name": "args", "type": "any", "variadic": true}
+      ]
+    },
+    {
+      "name": "func_kwargs",
+      "doc": "Function with **kwargs",
+      "params": [
+        {"name": "first", "type": "string", "required": true},
+        {"name": "kwargs", "type": "dict[string, any]", "kwargs": true}
+      ]
+    },
+    {
+      "name": "func_all_param_types",
+      "doc": "Function demonstrating all parameter types",
+      "params": [
+        {"name": "positional_required", "type": "string", "required": true, "positional": true},
+        {"name": "positional_optional", "type": "string", "default": "'default'", "positional": true},
+        {"name": "named_required", "type": "int", "required": true, "named": true},
+        {"name": "named_optional", "type": "int", "default": "0", "named": true},
+        {"name": "args", "type": "any", "variadic": true},
+        {"name": "kwargs", "type": "dict[string, any]", "kwargs": true}
+      ],
+      "return_type": "None"
+    },
+    {
+      "name": "func_deprecated",
+      "doc": "A deprecated function",
+      "deprecated": "Use func_new instead. Will be removed in v2.0.",
+      "params": [],
+      "return_type": "None"
+    },
+    {
+      "name": "func_complex_types",
+      "doc": "Function with complex type annotations",
+      "params": [
+        {"name": "nested_list", "type": "list[list[int]]"},
+        {"name": "dict_of_lists", "type": "dict[string, list[string]]"},
+        {"name": "union_type", "type": "string | int | None"},
+        {"name": "callable_type", "type": "(string, int) -> bool"}
+      ],
+      "return_type": "tuple[string, int, bool]"
+    }
+  ],
+
+  "types": [
+    {
+      "name": "SimpleType",
+      "doc": "A simple type with only fields",
+      "fields": [
+        {"name": "name", "type": "string", "doc": "The name field"},
+        {"name": "value", "type": "int", "doc": "The value field"}
+      ]
+    },
+    {
+      "name": "TypeWithMethods",
+      "doc": "A type with both fields and methods",
+      "fields": [
+        {"name": "data", "type": "dict[string, any]", "doc": "Internal data storage"}
+      ],
+      "methods": [
+        {
+          "name": "get",
+          "doc": "Get a value by key",
+          "params": [
+            {"name": "key", "type": "string", "required": true},
+            {"name": "default", "type": "any"}
+          ],
+          "return_type": "any"
+        },
+        {
+          "name": "set",
+          "doc": "Set a value by key",
+          "params": [
+            {"name": "key", "type": "string", "required": true},
+            {"name": "value", "type": "any", "required": true}
+          ],
+          "return_type": "None"
+        },
+        {
+          "name": "keys",
+          "doc": "Get all keys",
+          "params": [],
+          "return_type": "list[string]"
+        }
+      ]
+    },
+    {
+      "name": "ProviderType",
+      "doc": "A provider-like type (commonly used in Bazel)",
+      "fields": [
+        {"name": "files", "type": "depset[File]", "doc": "Set of files"},
+        {"name": "transitive_files", "type": "depset[File]", "doc": "Transitive files"}
+      ]
+    }
+  ],
+
+  "globals": [
+    {"name": "VERSION", "type": "string", "doc": "Current version string"},
+    {"name": "DEBUG", "type": "bool", "doc": "Debug mode flag"},
+    {"name": "CONFIG", "type": "dict[string, any]", "doc": "Global configuration"},
+    {"name": "EMPTY_DEPSET", "type": "depset", "doc": "An empty depset singleton"}
+  ],
+
+  "modules": {
+    "util": {
+      "doc": "Utility module",
+      "functions": [
+        {
+          "name": "format",
+          "doc": "Format a string",
+          "params": [{"name": "template", "type": "string", "required": true}, {"name": "kwargs", "kwargs": true}],
+          "return_type": "string"
+        }
+      ],
+      "globals": [
+        {"name": "UTIL_VERSION", "type": "string", "doc": "Util module version"}
+      ]
+    },
+    "nested.deep": {
+      "doc": "Deeply nested module",
+      "functions": [
+        {"name": "deep_func", "doc": "A deeply nested function", "return_type": "None"}
+      ]
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "rules": [
+    {"files": ["Tiltfile"], "dialect": "tilt"},
+    {"files": ["**/*.star"], "dialect": "tilt"}
+  ],
+  "dialects": {
+    "tilt": {
+      "builtins": [".starlark/builtins/tilt.builtins.json"]
+    }
+  }
+}

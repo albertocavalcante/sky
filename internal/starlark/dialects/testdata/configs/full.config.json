@@ -1,0 +1,58 @@
+{
+  "$schema": "https://sky.dev/schemas/starlark-config.json",
+  "version": 1,
+
+  "rules": [
+    {
+      "files": ["Tiltfile", "tilt_modules/**/*.star"],
+      "dialect": "tilt"
+    },
+    {
+      "files": ["*.bara.sky", "copy.bara.sky"],
+      "dialect": "copybara"
+    },
+    {
+      "files": ["**/*.bzl"],
+      "dialect": "bazel-bzl"
+    },
+    {
+      "files": ["BUILD", "BUILD.bazel", "**/BUILD", "**/BUILD.bazel"],
+      "dialect": "bazel-build"
+    },
+    {
+      "files": ["**/*.star"],
+      "dialect": "starlark"
+    }
+  ],
+
+  "dialects": {
+    "tilt": {
+      "builtins": [
+        "builtins/json/tilt.builtins.json"
+      ],
+      "extends": "starlark"
+    },
+    "copybara": {
+      "builtins": [
+        "builtins/json/copybara.builtins.json"
+      ],
+      "extends": "starlark"
+    },
+    "bazel-build": {
+      "builtins": [
+        "builtins/textproto/bazel.builtins.textproto"
+      ],
+      "extends": "starlark"
+    },
+    "bazel-bzl": {
+      "builtins": [],
+      "extends": "bazel-build"
+    }
+  },
+
+  "settings": {
+    "reportUndefinedNames": true,
+    "reportUnusedBindings": true,
+    "checkLoadStatements": true
+  }
+}

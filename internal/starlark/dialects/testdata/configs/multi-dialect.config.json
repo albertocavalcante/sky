@@ -1,0 +1,31 @@
+{
+  "$schema": "https://sky.dev/schemas/starlark-config.json",
+  "version": 1,
+
+  "rules": [
+    {"files": ["Tiltfile"], "dialect": "tilt", "priority": 100},
+    {"files": ["*.bara.sky"], "dialect": "copybara", "priority": 100},
+    {"files": ["BUILD", "BUILD.bazel"], "dialect": "bazel", "priority": 90},
+    {"files": ["**/*.bzl"], "dialect": "bazel", "priority": 80},
+    {"files": ["scripts/**/*.star"], "dialect": "custom", "priority": 70},
+    {"files": ["**/*.star"], "dialect": "starlark", "priority": 0}
+  ],
+
+  "dialects": {
+    "tilt": {
+      "builtins": ["builtins/json/tilt.builtins.json"],
+      "extends": "starlark"
+    },
+    "copybara": {
+      "builtins": ["builtins/json/copybara.builtins.json"],
+      "extends": "starlark"
+    },
+    "custom": {
+      "builtins": [
+        "builtins/json/minimal.builtins.json",
+        "builtins/json/comprehensive.builtins.json"
+      ],
+      "extends": "starlark"
+    }
+  }
+}

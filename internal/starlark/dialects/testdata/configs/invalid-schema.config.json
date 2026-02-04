@@ -1,0 +1,12 @@
+{
+  "version": "not-a-number",
+  "dialect": 123,
+  "rules": "should-be-array",
+  "dialects": {
+    "bad": {
+      "builtins": "should-be-array",
+      "extends": ["should-be-string"]
+    }
+  },
+  "unknown_field": true
+}

@@ -1,0 +1,1 @@
+{"functions": [{"name": "docker_build", "params": [{"name": "ref", "required": true}]}, {"name": "k8s_yaml", "params": [{"name": "yaml", "required": true}]}]}

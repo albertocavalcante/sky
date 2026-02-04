@@ -1,0 +1,57 @@
+# Sample Copybara configuration
+# Tests Copybara dialect builtins
+
+# Define the workflow
+core.workflow(
+    name="default",
+    origin=git.github_origin(
+        url="https://github.com/example/source",
+        ref="main",
+    ),
+    destination=git.github_pr_destination(
+        url="https://github.com/example/dest",
+        destination_ref="main",
+        pr_branch="copybara/${CONTEXT_REFERENCE}",
+    ),
+    authoring=authoring.pass_thru(
+        default="Copybara <copybara@example.com>",
+    ),
+    origin_files=glob(
+        include=["src/**", "README.md"],
+        exclude=["src/internal/**"],
+    ),
+    transformations=[
+        core.move("src/", "lib/"),
+        core.replace(
+            before="example.com",
+            after="newdomain.com",
+            paths=glob(include=["**/*.md"]),
+        ),
+        core.transform(
+            transformations=[
+                # Additional transforms
+            ],
+            ignore_noop=True,
+        ),
+    ],
+    mode="SQUASH",
+)
+
+# Another workflow for iterative sync
+core.workflow(
+    name="iterative",
+    origin=git.origin(
+        url="https://github.com/example/source.git",
+        ref="develop",
+        submodules="YES",
+    ),
+    destination=git.destination(
+        url="https://github.com/example/dest.git",
+        push="main",
+        fetch="main",
+    ),
+    authoring=authoring.overwrite(
+        default="Bot <bot@example.com>",
+    ),
+    mode="ITERATIVE",
+)

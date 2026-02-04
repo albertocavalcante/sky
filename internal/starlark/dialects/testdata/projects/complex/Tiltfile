@@ -1,0 +1,10 @@
+# Complex project Tiltfile
+load("modules/base.star", "setup_base")
+load("modules/services.star", "setup_services")
+
+setup_base()
+setup_services()
+
+docker_build("api", "./api")
+k8s_yaml(["k8s/api.yaml", "k8s/database.yaml"])
+k8s_resource("api", port_forwards=["8080:80"])

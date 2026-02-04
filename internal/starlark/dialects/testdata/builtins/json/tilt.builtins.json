@@ -1,0 +1,151 @@
+{
+  "$schema": "https://sky.dev/schemas/starlark-builtins.json",
+  "version": 1,
+  "name": "tilt",
+  "description": "Tilt Starlark builtins for local Kubernetes development",
+
+  "functions": [
+    {
+      "name": "docker_build",
+      "doc": "Build a Docker image from a Dockerfile.\n\nThis is the most common way to build images in Tilt.",
+      "params": [
+        {"name": "ref", "type": "string", "doc": "Image reference (e.g., 'myimage:latest')", "required": true},
+        {"name": "context", "type": "string", "doc": "Build context path", "default": "'.'"},
+        {"name": "dockerfile", "type": "string", "doc": "Path to Dockerfile", "default": "'Dockerfile'"},
+        {"name": "build_args", "type": "dict[string, string]", "doc": "Build arguments"},
+        {"name": "live_update", "type": "list[LiveUpdateStep]", "doc": "Live update rules"},
+        {"name": "ignore", "type": "list[string]", "doc": "Patterns to ignore"},
+        {"name": "kwargs", "variadic": "kwargs"}
+      ],
+      "return_type": "None"
+    },
+    {
+      "name": "k8s_yaml",
+      "doc": "Deploy Kubernetes YAML manifests.",
+      "params": [
+        {"name": "yaml", "type": "string | list[string] | Blob", "doc": "YAML content or file paths", "required": true},
+        {"name": "allow_duplicates", "type": "bool", "doc": "Allow duplicate resource names", "default": "False"}
+      ],
+      "return_type": "None"
+    },
+    {
+      "name": "k8s_resource",
+      "doc": "Configure a Kubernetes resource.",
+      "params": [
+        {"name": "workload", "type": "string", "doc": "Workload name", "required": true},
+        {"name": "port_forwards", "type": "list[string | int | PortForward]", "doc": "Port forward specifications"},
+        {"name": "resource_deps", "type": "list[string]", "doc": "Resource dependencies"},
+        {"name": "labels", "type": "list[string]", "doc": "Labels for grouping"}
+      ],
+      "return_type": "None"
+    },
+    {
+      "name": "local_resource",
+      "doc": "Run a command on the host machine.",
+      "params": [
+        {"name": "name", "type": "string", "doc": "Resource name", "required": true},
+        {"name": "cmd", "type": "string | list[string]", "doc": "Command to run", "required": true},
+        {"name": "serve_cmd", "type": "string | list[string]", "doc": "Long-running serve command"},
+        {"name": "deps", "type": "list[string]", "doc": "File dependencies"},
+        {"name": "resource_deps", "type": "list[string]", "doc": "Resource dependencies"}
+      ],
+      "return_type": "None"
+    },
+    {
+      "name": "load_dynamic",
+      "doc": "Dynamically load a Tiltfile extension.",
+      "params": [
+        {"name": "path", "type": "string", "doc": "Path to extension", "required": true}
+      ],
+      "return_type": "None"
+    },
+    {
+      "name": "read_file",
+      "doc": "Read file contents as a Blob.",
+      "params": [
+        {"name": "path", "type": "string", "doc": "File path", "required": true},
+        {"name": "default", "type": "string", "doc": "Default if file not found"}
+      ],
+      "return_type": "Blob"
+    },
+    {
+      "name": "read_json",
+      "doc": "Read and parse a JSON file.",
+      "params": [
+        {"name": "path", "type": "string", "doc": "File path", "required": true},
+        {"name": "default", "type": "any", "doc": "Default if file not found"}
+      ],
+      "return_type": "any"
+    },
+    {
+      "name": "read_yaml",
+      "doc": "Read and parse a YAML file.",
+      "params": [
+        {"name": "path", "type": "string", "doc": "File path", "required": true},
+        {"name": "default", "type": "any", "doc": "Default if file not found"}
+      ],
+      "return_type": "any"
+    },
+    {
+      "name": "helm",
+      "doc": "Deploy a Helm chart.",
+      "params": [
+        {"name": "chart", "type": "string", "doc": "Chart path or name", "required": true},
+        {"name": "name", "type": "string", "doc": "Release name"},
+        {"name": "namespace", "type": "string", "doc": "Kubernetes namespace"},
+        {"name": "values", "type": "list[string]", "doc": "Values files"},
+        {"name": "set", "type": "list[string]", "doc": "Set values on command line"}
+      ],
+      "return_type": "Blob"
+    },
+    {
+      "name": "local",
+      "doc": "Run a local command and return output.",
+      "params": [
+        {"name": "cmd", "type": "string | list[string]", "doc": "Command to run", "required": true},
+        {"name": "quiet", "type": "bool", "doc": "Suppress output", "default": "False"},
+        {"name": "echo_off", "type": "bool", "doc": "Don't echo command", "default": "False"}
+      ],
+      "return_type": "Blob"
+    }
+  ],
+
+  "types": [
+    {
+      "name": "Blob",
+      "doc": "Binary large object - file contents or command output.",
+      "methods": [
+        {"name": "__str__", "doc": "Convert to string", "returns": "string"}
+      ]
+    },
+    {
+      "name": "LiveUpdateStep",
+      "doc": "A step in the live update process.",
+      "fields": []
+    },
+    {
+      "name": "PortForward",
+      "doc": "Port forward specification.",
+      "fields": [
+        {"name": "local_port", "type": "int", "doc": "Local port number"},
+        {"name": "container_port", "type": "int", "doc": "Container port number"}
+      ]
+    }
+  ],
+
+  "globals": [
+    {"name": "os", "type": "OsModule", "doc": "Operating system utilities"},
+    {"name": "config", "type": "ConfigModule", "doc": "Tilt configuration settings"}
+  ],
+
+  "modules": {
+    "os": {
+      "functions": [
+        {"name": "getcwd", "doc": "Get current working directory", "returns": "string"},
+        {"name": "getenv", "doc": "Get environment variable", "params": [{"name": "key", "type": "string", "required": true}, {"name": "default", "type": "string"}], "returns": "string"},
+        {"name": "environ", "doc": "Get all environment variables", "returns": "dict[string, string]"},
+        {"name": "path", "type": "OsPathModule", "doc": "Path utilities"}
+      ]
+    }
+  }
+}
