@@ -8,20 +8,8 @@ timeout = "5m"
 modules-download-mode = "readonly"
 
 [linters]
+# Use standard preset which includes most common linters
 default = "standard"
-enable = [
-  "errcheck",
-  "govet",
-  "ineffassign",
-  "staticcheck",
-  "unused",
-  "gosimple",
-]
-disable = [
-  "godot",
-  "wsl",
-  "nlreturn",
-]
 
 [linters.settings.errcheck]
 check-type-assertions = false
