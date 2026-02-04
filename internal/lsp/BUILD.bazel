@@ -3,9 +3,16 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "lsp",
     srcs = [
+        "codeaction.go",
+        "folding.go",
         "jsonrpc.go",
+        "links.go",
         "provider.go",
+        "references.go",
+        "rename.go",
         "server.go",
+        "signature.go",
+        "workspace.go",
     ],
     importpath = "github.com/albertocavalcante/sky/internal/lsp",
     visibility = ["//:__subpackages__"],
@@ -29,10 +36,15 @@ go_test(
     name = "lsp_test",
     srcs = [
         "builtins_integration_test.go",
+        "codeaction_test.go",
         "completion_test.go",
         "jsonrpc_test.go",
         "provider_test.go",
+        "references_test.go",
+        "rename_test.go",
         "server_test.go",
+        "signature_test.go",
+        "workspace_test.go",
     ],
     embed = [":lsp"],
     deps = [

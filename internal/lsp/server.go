@@ -41,6 +41,9 @@ type Server struct {
 	// Builtins provider for completion and hover
 	builtins builtins.Provider
 
+	// Workspace index for cross-file features
+	workspace *WorkspaceIndex
+
 	// Callbacks
 	onExit func()
 }
@@ -151,6 +154,18 @@ func (s *Server) Handle(ctx context.Context, req *Request) (any, error) {
 		return s.handleDocumentLink(ctx, req.Params)
 	case "textDocument/signatureHelp":
 		return s.handleSignatureHelp(ctx, req.Params)
+	case "textDocument/codeAction":
+		return s.handleCodeAction(ctx, req.Params)
+	case "textDocument/references":
+		return s.handleReferences(ctx, req.Params)
+	case "textDocument/rename":
+		return s.handleRename(ctx, req.Params)
+	case "textDocument/prepareRename":
+		return s.handlePrepareRename(ctx, req.Params)
+
+	// Workspace features
+	case "workspace/symbol":
+		return s.handleWorkspaceSymbol(ctx, req.Params)
 
 	default:
 		log.Printf("unhandled method: %s", req.Method)
@@ -198,6 +213,14 @@ func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (
 			},
 			FoldingRangeProvider: true,
 			DocumentLinkProvider: &protocol.DocumentLinkOptions{},
+			CodeActionProvider: &protocol.CodeActionOptions{
+				CodeActionKinds: []protocol.CodeActionKind{protocol.QuickFix},
+			},
+			ReferencesProvider: true,
+			RenameProvider: &protocol.RenameOptions{
+				PrepareProvider: true,
+			},
+			WorkspaceSymbolProvider: true,
 		},
 		ServerInfo: &protocol.ServerInfo{
 			Name:    "skyls",
@@ -212,6 +235,10 @@ func (s *Server) handleInitialized(ctx context.Context, params json.RawMessage) 
 	s.mu.Unlock()
 
 	log.Printf("initialized")
+
+	// Build workspace index in background
+	go s.buildWorkspaceIndex()
+
 	return nil, nil
 }
 
@@ -463,11 +490,29 @@ func (s *Server) handleDefinition(ctx context.Context, params json.RawMessage) (
 		}
 	}
 
-	// Check load statements for imported symbols
+	// Check load statements for imported symbols - try cross-file resolution
 	if defLine == 0 {
 		for _, load := range indexed.Loads {
-			for localName := range load.Symbols {
+			for localName, exportedName := range load.Symbols {
 				if localName == word {
+					// Try to resolve to actual definition via workspace index
+					if loc := s.resolveLoadedSymbol(word, p.TextDocument.URI); loc != nil {
+						return []protocol.Location{*loc}, nil
+					}
+					// Fall back to the load statement line if we can't resolve
+					// Try to resolve the module path
+					s.mu.RLock()
+					wsIndex := s.workspace
+					s.mu.RUnlock()
+					if wsIndex != nil {
+						resolvedPath := wsIndex.ResolveLoadPath(load.Module, path)
+						if resolvedPath != "" {
+							// Look up the exported symbol in that file
+							if loc := wsIndex.FindDefinitionInFile(exportedName, resolvedPath); loc != nil {
+								return []protocol.Location{*loc}, nil
+							}
+						}
+					}
 					defLine = load.Line
 					break
 				}
