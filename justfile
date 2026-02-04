@@ -187,6 +187,41 @@ test-examples: test-example-hello-native test-example-star-counter test-example-
     @echo "All example plugin tests passed"
 
 # ============================================================================
+# Install (platform-specific)
+# ============================================================================
+
+# Default install directory per platform
+install_dir_unix := env_var_or_default("SKY_INSTALL_DIR", env_var("HOME") / ".local" / "bin")
+install_dir_windows := env_var_or_default("SKY_INSTALL_DIR", env_var_or_default("LOCALAPPDATA", "C:\\Users\\Default\\AppData\\Local") / "bin")
+
+# Install sky (full) to ~/.local/bin on macOS
+[macos]
+install:
+    @echo "Building sky (full) for macOS..."
+    @mkdir -p {{install_dir_unix}}
+    go build -tags=sky_full -o {{install_dir_unix}}/sky ./cmd/sky
+    @echo "Installed sky to {{install_dir_unix}}/sky"
+    @echo "Make sure {{install_dir_unix}} is in your PATH"
+
+# Install sky (full) to ~/.local/bin on Linux
+[linux]
+install:
+    @echo "Building sky (full) for Linux..."
+    @mkdir -p {{install_dir_unix}}
+    go build -tags=sky_full -o {{install_dir_unix}}/sky ./cmd/sky
+    @echo "Installed sky to {{install_dir_unix}}/sky"
+    @echo "Make sure {{install_dir_unix}} is in your PATH"
+
+# Install sky (full) to %LOCALAPPDATA%\bin on Windows
+[windows]
+install:
+    @echo "Building sky (full) for Windows..."
+    @if not exist "{{install_dir_windows}}" mkdir "{{install_dir_windows}}"
+    go build -tags=sky_full -o {{install_dir_windows}}\sky.exe ./cmd/sky
+    @echo "Installed sky to {{install_dir_windows}}\sky.exe"
+    @echo "Make sure {{install_dir_windows}} is in your PATH"
+
+# ============================================================================
 # Release Management (uses tools/release)
 # ============================================================================
 
