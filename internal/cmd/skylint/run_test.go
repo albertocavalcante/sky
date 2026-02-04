@@ -43,7 +43,9 @@ func TestRun_LintCleanFile(t *testing.T) {
 	// Create a temporary clean Starlark file
 	dir := t.TempDir()
 	file := filepath.Join(dir, "clean.star")
-	content := `def greet(name):
+	content := `"""A clean module."""
+
+def greet(name):
     """Greet someone by name."""
     return "Hello, " + name
 `
@@ -86,10 +88,10 @@ func TestRun_LintMultipleFiles(t *testing.T) {
 	file1 := filepath.Join(dir, "a.star")
 	file2 := filepath.Join(dir, "b.star")
 
-	if err := os.WriteFile(file1, []byte("x = 1\n"), 0644); err != nil {
+	if err := os.WriteFile(file1, []byte("\"\"\"Module a.\"\"\"\n\nx = 1\n"), 0644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
-	if err := os.WriteFile(file2, []byte("y = 2\n"), 0644); err != nil {
+	if err := os.WriteFile(file2, []byte("\"\"\"Module b.\"\"\"\n\ny = 2\n"), 0644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
@@ -118,10 +120,10 @@ func TestRun_LintDirectory(t *testing.T) {
 	file1 := filepath.Join(dir, "a.star")
 	file2 := filepath.Join(dir, "b.star")
 
-	if err := os.WriteFile(file1, []byte("x = 1\n"), 0644); err != nil {
+	if err := os.WriteFile(file1, []byte("\"\"\"Module a.\"\"\"\n\nx = 1\n"), 0644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
-	if err := os.WriteFile(file2, []byte("y = 2\n"), 0644); err != nil {
+	if err := os.WriteFile(file2, []byte("\"\"\"Module b.\"\"\"\n\ny = 2\n"), 0644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
@@ -137,7 +139,7 @@ func TestRun_LintDirectory(t *testing.T) {
 func TestRun_OutputFormats(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "test.star")
-	if err := os.WriteFile(file, []byte("x = 1\n"), 0644); err != nil {
+	if err := os.WriteFile(file, []byte("\"\"\"Test module.\"\"\"\n\nx = 1\n"), 0644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 

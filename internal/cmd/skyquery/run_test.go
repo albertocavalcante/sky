@@ -30,7 +30,7 @@ func TestRun_Help(t *testing.T) {
 	}
 }
 
-func TestRun_QueryDeps(t *testing.T) {
+func TestRun_QueryLoads(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create a simple dependency graph
@@ -49,19 +49,19 @@ result = helper()
 	}
 
 	var stdout, stderr bytes.Buffer
-	code := RunWithIO(context.Background(), []string{"deps(" + mainFile + ")"}, nil, &stdout, &stderr)
+	code := RunWithIO(context.Background(), []string{"-workspace", dir, "loads(//...)"}, nil, &stdout, &stderr)
 
 	if code != 0 {
-		t.Errorf("RunWithIO(deps query) returned %d, want 0\nstderr: %s", code, stderr.String())
+		t.Errorf("RunWithIO(loads query) returned %d, want 0\nstderr: %s", code, stderr.String())
 	}
 
-	// Should list lib.star as dependency
+	// Should list lib.star as the loaded module
 	if !strings.Contains(stdout.String(), "lib.star") {
-		t.Errorf("deps query did not return lib.star\noutput: %s", stdout.String())
+		t.Errorf("loads query did not return lib.star\noutput: %s", stdout.String())
 	}
 }
 
-func TestRun_QueryRdeps(t *testing.T) {
+func TestRun_QueryLoadedBy(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create a dependency graph
@@ -79,19 +79,19 @@ result = helper()
 	}
 
 	var stdout, stderr bytes.Buffer
-	code := RunWithIO(context.Background(), []string{"rdeps(" + dir + ", " + libFile + ")"}, nil, &stdout, &stderr)
+	code := RunWithIO(context.Background(), []string{"-workspace", dir, `loadedby("lib.star")`}, nil, &stdout, &stderr)
 
 	if code != 0 {
-		t.Errorf("RunWithIO(rdeps query) returned %d, want 0\nstderr: %s", code, stderr.String())
+		t.Errorf("RunWithIO(loadedby query) returned %d, want 0\nstderr: %s", code, stderr.String())
 	}
 
-	// Should list main.star as reverse dependency
+	// Should list main.star as a file that loads lib.star
 	if !strings.Contains(stdout.String(), "main.star") {
-		t.Errorf("rdeps query did not return main.star\noutput: %s", stdout.String())
+		t.Errorf("loadedby query did not return main.star\noutput: %s", stdout.String())
 	}
 }
 
-func TestRun_QueryAllFiles(t *testing.T) {
+func TestRun_QueryFiles(t *testing.T) {
 	dir := t.TempDir()
 
 	file1 := filepath.Join(dir, "a.star")
@@ -105,22 +105,22 @@ func TestRun_QueryAllFiles(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	code := RunWithIO(context.Background(), []string{"allfiles(" + dir + ")"}, nil, &stdout, &stderr)
+	code := RunWithIO(context.Background(), []string{"-workspace", dir, "files(//...)"}, nil, &stdout, &stderr)
 
 	if code != 0 {
-		t.Errorf("RunWithIO(allfiles query) returned %d, want 0\nstderr: %s", code, stderr.String())
+		t.Errorf("RunWithIO(files query) returned %d, want 0\nstderr: %s", code, stderr.String())
 	}
 
 	output := stdout.String()
 	if !strings.Contains(output, "a.star") {
-		t.Errorf("allfiles query did not return a.star\noutput: %s", output)
+		t.Errorf("files query did not return a.star\noutput: %s", output)
 	}
 	if !strings.Contains(output, "b.star") {
-		t.Errorf("allfiles query did not return b.star\noutput: %s", output)
+		t.Errorf("files query did not return b.star\noutput: %s", output)
 	}
 }
 
-func TestRun_QueryKind(t *testing.T) {
+func TestRun_QueryCalls(t *testing.T) {
 	dir := t.TempDir()
 
 	file := filepath.Join(dir, "build.star")
@@ -138,10 +138,15 @@ binary(name = "mybin", deps = [":mylib"])
 	}
 
 	var stdout, stderr bytes.Buffer
-	code := RunWithIO(context.Background(), []string{"kind(library, " + dir + ")"}, nil, &stdout, &stderr)
+	code := RunWithIO(context.Background(), []string{"-workspace", dir, "calls(library, //...)"}, nil, &stdout, &stderr)
 
 	if code != 0 {
-		t.Errorf("RunWithIO(kind query) returned %d, want 0\nstderr: %s", code, stderr.String())
+		t.Errorf("RunWithIO(calls query) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+
+	// Should find the library call
+	if !strings.Contains(stdout.String(), "library") {
+		t.Errorf("calls query did not return library call\noutput: %s", stdout.String())
 	}
 }
 
@@ -163,7 +168,7 @@ func TestRun_QueryFilter(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	code := RunWithIO(context.Background(), []string{`filter(".*_test\.star", allfiles(` + dir + `))`}, nil, &stdout, &stderr)
+	code := RunWithIO(context.Background(), []string{"-workspace", dir, `filter(".*_test\.star", files(//...))`}, nil, &stdout, &stderr)
 
 	if code != 0 {
 		t.Errorf("RunWithIO(filter query) returned %d, want 0\nstderr: %s", code, stderr.String())
@@ -189,14 +194,20 @@ func TestRun_OutputFormats(t *testing.T) {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
-	formats := []string{"label", "json", "proto"}
+	// Test the supported output formats: name, location, json, count
+	formats := []string{"name", "location", "json", "count"}
 	for _, format := range formats {
 		t.Run(format, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
-			code := RunWithIO(context.Background(), []string{"-output", format, "allfiles(" + dir + ")"}, nil, &stdout, &stderr)
+			code := RunWithIO(context.Background(), []string{"-workspace", dir, "-output", format, "files(//...)"}, nil, &stdout, &stderr)
 
 			if code != 0 {
 				t.Errorf("RunWithIO(-output %s) returned %d, want 0\nstderr: %s", format, code, stderr.String())
+			}
+
+			// Verify output is not empty (should have at least one file)
+			if stdout.Len() == 0 {
+				t.Errorf("RunWithIO(-output %s) produced no output", format)
 			}
 		})
 	}

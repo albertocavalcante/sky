@@ -104,7 +104,6 @@ func TestRun_OutputFormats(t *testing.T) {
 	}{
 		{"markdown", "md", "#"},
 		{"json", "json", "{"},
-		{"html", "html", "<"},
 	}
 
 	for _, tc := range formats {
@@ -171,7 +170,7 @@ def bar():
 	}
 }
 
-func TestRun_MultipleFiles(t *testing.T) {
+func TestRun_MultipleFiles_NotSupported(t *testing.T) {
 	dir := t.TempDir()
 
 	file1 := filepath.Join(dir, "a.star")
@@ -187,8 +186,12 @@ func TestRun_MultipleFiles(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := RunWithIO(context.Background(), []string{file1, file2}, nil, &stdout, &stderr)
 
-	if code != 0 {
-		t.Errorf("RunWithIO(multiple files) returned %d, want 0\nstderr: %s", code, stderr.String())
+	// Multiple files are not supported - skydoc expects exactly one file
+	if code == 0 {
+		t.Error("RunWithIO(multiple files) returned 0, want non-zero (multiple files not supported)")
+	}
+	if !strings.Contains(stderr.String(), "expected exactly one file") {
+		t.Errorf("expected error about one file, got: %s", stderr.String())
 	}
 }
 

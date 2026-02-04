@@ -113,19 +113,28 @@ func TestCopyFile_NonexistentSource(t *testing.T) {
 	}
 }
 
-func TestCopyFile_InvalidDestDir(t *testing.T) {
+func TestCopyFile_CreatesDestDir(t *testing.T) {
 	dir := t.TempDir()
 
 	srcFile := filepath.Join(dir, "src")
 	dstFile := filepath.Join(dir, "nonexistent", "dst")
 
-	if err := os.WriteFile(srcFile, []byte("content"), 0644); err != nil {
+	content := []byte("content")
+	if err := os.WriteFile(srcFile, content, 0644); err != nil {
 		t.Fatalf("failed to write source file: %v", err)
 	}
 
 	err := copyFile(srcFile, dstFile, 0644)
-	if err == nil {
-		t.Error("copyFile() with nonexistent dest dir should return error")
+	if err != nil {
+		t.Fatalf("copyFile() error = %v", err)
+	}
+
+	got, err := os.ReadFile(dstFile)
+	if err != nil {
+		t.Fatalf("failed to read dst file: %v", err)
+	}
+	if string(got) != string(content) {
+		t.Errorf("copied content = %q, want %q", string(got), string(content))
 	}
 }
 

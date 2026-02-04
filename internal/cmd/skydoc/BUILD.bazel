@@ -1,4 +1,4 @@
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "skydoc",
@@ -9,4 +9,10 @@ go_library(
         "//internal/starlark/docgen",
         "//internal/version",
     ],
+)
+
+go_test(
+    name = "skydoc_test",
+    srcs = ["run_test.go"],
+    embed = [":skydoc"],
 )

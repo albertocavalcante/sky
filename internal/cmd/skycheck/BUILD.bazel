@@ -1,4 +1,4 @@
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "skycheck",
@@ -7,6 +7,13 @@ go_library(
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/starlark/checker",
+        "//internal/starlark/filekind",
         "//internal/version",
     ],
+)
+
+go_test(
+    name = "skycheck_test",
+    srcs = ["run_test.go"],
+    embed = [":skycheck"],
 )

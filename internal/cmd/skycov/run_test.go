@@ -33,39 +33,27 @@ func TestRun_Help(t *testing.T) {
 func TestRun_CoverageReport(t *testing.T) {
 	dir := t.TempDir()
 
-	// Create a library file
-	libFile := filepath.Join(dir, "lib.star")
-	libContent := `def add(a, b):
-    return a + b
-
-def subtract(a, b):
-    return a - b
-
-def multiply(a, b):
-    return a * b
-`
-	if err := os.WriteFile(libFile, []byte(libContent), 0644); err != nil {
-		t.Fatalf("failed to write lib file: %v", err)
-	}
-
-	// Create a test file that only covers some functions
-	testFile := filepath.Join(dir, "lib_test.star")
-	testContent := `load("lib.star", "add", "subtract")
-
-def test_add():
-    assert_eq(add(1, 2), 3)
-
-def test_subtract():
-    assert_eq(subtract(5, 3), 2)
-
-# Note: multiply is not tested
-`
-	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
+	// Create a JSON coverage data file (the format skycov expects)
+	covFile := filepath.Join(dir, "coverage.json")
+	covContent := `{
+  "files": {
+    "lib.star": {
+      "lines": {
+        "1": 5,
+        "2": 5,
+        "3": 3,
+        "4": 3,
+        "5": 0
+      }
+    }
+  }
+}`
+	if err := os.WriteFile(covFile, []byte(covContent), 0644); err != nil {
+		t.Fatalf("failed to write coverage file: %v", err)
 	}
 
 	var stdout, stderr bytes.Buffer
-	code := RunWithIO(context.Background(), []string{testFile}, nil, &stdout, &stderr)
+	code := RunWithIO(context.Background(), []string{covFile}, nil, &stdout, &stderr)
 
 	if code != 0 {
 		t.Errorf("RunWithIO(coverage) returned %d, want 0\nstderr: %s", code, stderr.String())
@@ -81,19 +69,20 @@ def test_subtract():
 func TestRun_CoverageOutputFormats(t *testing.T) {
 	dir := t.TempDir()
 
-	file := filepath.Join(dir, "lib.star")
-	if err := os.WriteFile(file, []byte("def foo():\n    return 1\n"), 0644); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
-	}
-
-	testFile := filepath.Join(dir, "lib_test.star")
-	testContent := `load("lib.star", "foo")
-
-def test_foo():
-    assert_eq(foo(), 1)
-`
-	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
+	// Create a JSON coverage data file (the format skycov expects)
+	covFile := filepath.Join(dir, "coverage.json")
+	covContent := `{
+  "files": {
+    "lib.star": {
+      "lines": {
+        "1": 5,
+        "2": 5
+      }
+    }
+  }
+}`
+	if err := os.WriteFile(covFile, []byte(covContent), 0644); err != nil {
+		t.Fatalf("failed to write coverage file: %v", err)
 	}
 
 	formats := []struct {
@@ -109,7 +98,7 @@ def test_foo():
 	for _, tc := range formats {
 		t.Run(tc.name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
-			code := RunWithIO(context.Background(), []string{"-format", tc.flag, testFile}, nil, &stdout, &stderr)
+			code := RunWithIO(context.Background(), []string{"-format", tc.flag, covFile}, nil, &stdout, &stderr)
 
 			if code != 0 {
 				t.Errorf("RunWithIO(-format %s) returned %d, want 0\nstderr: %s", tc.flag, code, stderr.String())
@@ -121,25 +110,26 @@ def test_foo():
 func TestRun_CoverageOutputToFile(t *testing.T) {
 	dir := t.TempDir()
 
-	file := filepath.Join(dir, "lib.star")
-	if err := os.WriteFile(file, []byte("def foo():\n    return 1\n"), 0644); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
+	// Create a JSON coverage data file (the format skycov expects)
+	covFile := filepath.Join(dir, "coverage.json")
+	covContent := `{
+  "files": {
+    "lib.star": {
+      "lines": {
+        "1": 5,
+        "2": 5
+      }
+    }
+  }
+}`
+	if err := os.WriteFile(covFile, []byte(covContent), 0644); err != nil {
+		t.Fatalf("failed to write coverage file: %v", err)
 	}
 
-	testFile := filepath.Join(dir, "lib_test.star")
-	testContent := `load("lib.star", "foo")
-
-def test_foo():
-    assert_eq(foo(), 1)
-`
-	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
-	}
-
-	outputFile := filepath.Join(dir, "coverage.txt")
+	outputFile := filepath.Join(dir, "output.txt")
 
 	var stdout, stderr bytes.Buffer
-	code := RunWithIO(context.Background(), []string{"-o", outputFile, testFile}, nil, &stdout, &stderr)
+	code := RunWithIO(context.Background(), []string{"-o", outputFile, covFile}, nil, &stdout, &stderr)
 
 	if code != 0 {
 		t.Errorf("RunWithIO(-o file) returned %d, want 0\nstderr: %s", code, stderr.String())
@@ -154,43 +144,42 @@ def test_foo():
 func TestRun_CoverageThreshold(t *testing.T) {
 	dir := t.TempDir()
 
-	// Create a file with partial coverage
-	file := filepath.Join(dir, "lib.star")
-	content := `def covered():
-    return 1
-
-def not_covered():
-    return 2
-`
-	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
-	}
-
-	testFile := filepath.Join(dir, "lib_test.star")
-	testContent := `load("lib.star", "covered")
-
-def test_covered():
-    assert_eq(covered(), 1)
-`
-	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
+	// Create a JSON coverage data file with partial coverage (50%)
+	// 2 lines covered out of 4 total
+	covFile := filepath.Join(dir, "coverage.json")
+	covContent := `{
+  "files": {
+    "lib.star": {
+      "lines": {
+        "1": 5,
+        "2": 5,
+        "3": 0,
+        "4": 0
+      }
+    }
+  }
+}`
+	if err := os.WriteFile(covFile, []byte(covContent), 0644); err != nil {
+		t.Fatalf("failed to write coverage file: %v", err)
 	}
 
 	t.Run("threshold met", func(t *testing.T) {
 		var stdout, stderr bytes.Buffer
-		code := RunWithIO(context.Background(), []string{"-threshold", "40", testFile}, nil, &stdout, &stderr)
+		// Use -min flag (not -threshold) and set to 40%, coverage is 50%
+		code := RunWithIO(context.Background(), []string{"-min", "40", covFile}, nil, &stdout, &stderr)
 
 		if code != 0 {
-			t.Errorf("RunWithIO(-threshold 40) returned %d, want 0\nstderr: %s", code, stderr.String())
+			t.Errorf("RunWithIO(-min 40) returned %d, want 0\nstderr: %s", code, stderr.String())
 		}
 	})
 
 	t.Run("threshold not met", func(t *testing.T) {
 		var stdout, stderr bytes.Buffer
-		code := RunWithIO(context.Background(), []string{"-threshold", "90", testFile}, nil, &stdout, &stderr)
+		// Use -min flag and set to 90%, coverage is 50%
+		code := RunWithIO(context.Background(), []string{"-min", "90", covFile}, nil, &stdout, &stderr)
 
 		if code == 0 {
-			t.Error("RunWithIO(-threshold 90) returned 0, want non-zero for low coverage")
+			t.Error("RunWithIO(-min 90) returned 0, want non-zero for low coverage")
 		}
 	})
 }
@@ -207,7 +196,7 @@ func TestRun_NoTestFiles(t *testing.T) {
 
 func TestRun_NonexistentFile(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	code := RunWithIO(context.Background(), []string{"/nonexistent/test.star"}, nil, &stdout, &stderr)
+	code := RunWithIO(context.Background(), []string{"/nonexistent/coverage.json"}, nil, &stdout, &stderr)
 
 	if code == 0 {
 		t.Error("RunWithIO(nonexistent file) returned 0, want non-zero")

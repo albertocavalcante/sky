@@ -1,4 +1,4 @@
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "skyrepl",
@@ -16,4 +16,10 @@ go_library(
         "@net_starlark_go//syntax",
         "@org_golang_x_term//:term",
     ],
+)
+
+go_test(
+    name = "skyrepl_test",
+    srcs = ["run_test.go"],
+    embed = [":skyrepl"],
 )

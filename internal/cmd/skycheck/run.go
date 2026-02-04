@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/albertocavalcante/sky/internal/starlark/checker"
+	"github.com/albertocavalcante/sky/internal/starlark/filekind"
 	"github.com/albertocavalcante/sky/internal/version"
 )
 
@@ -79,7 +80,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		return exitError
 	}
 
-	// Expand paths (handle globs on systems that don't expand them)
+	// Expand paths (handle globs and directories)
 	var files []string
 	for _, pattern := range paths {
 		matches, err := filepath.Glob(pattern)
@@ -89,10 +90,22 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		}
 		if len(matches) == 0 {
 			// No glob match, treat as literal path
-			files = append(files, pattern)
-		} else {
-			files = append(files, matches...)
+			matches = []string{pattern}
 		}
+		// Expand each match (handles directories)
+		for _, match := range matches {
+			expanded, err := expandPath(match)
+			if err != nil {
+				writef(stderr, "skycheck: %v\n", err)
+				return exitError
+			}
+			files = append(files, expanded...)
+		}
+	}
+
+	if len(files) == 0 {
+		writeln(stderr, "skycheck: no files to check")
+		return exitOK
 	}
 
 	// Create checker with default options
@@ -222,6 +235,38 @@ func outputJSON(w io.Writer, result checker.Result) int {
 		return exitWarning
 	}
 	return exitOK
+}
+
+// expandPath expands a path to a list of files to check.
+// If path is a directory, it recursively finds all Starlark files.
+func expandPath(path string) ([]string, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if !info.IsDir() {
+		return []string{path}, nil
+	}
+
+	var files []string
+	err = filepath.WalkDir(path, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			// Skip hidden directories
+			if strings.HasPrefix(d.Name(), ".") && d.Name() != "." {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filekind.IsStarlarkFile(d.Name()) {
+			files = append(files, p)
+		}
+		return nil
+	})
+	return files, err
 }
 
 // Helper functions for writing output.
