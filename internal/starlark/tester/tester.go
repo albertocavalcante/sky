@@ -117,6 +117,14 @@ type Options struct {
 	// CoverageCollector is the collector to use for coverage.
 	// If nil and Coverage is true, a default collector is created.
 	CoverageCollector *coverage.DefaultCollector
+
+	// Filter is a test name filter pattern.
+	// Supports "not <pattern>" to exclude tests matching pattern.
+	Filter string
+
+	// TestNames filters to specific test function names.
+	// If set, only these tests will run (used by :: syntax).
+	TestNames []string
 }
 
 // DefaultOptions returns sensible defaults.
@@ -193,8 +201,11 @@ func (r *Runner) RunFile(filename string, src []byte) (*FileResult, error) {
 	setupFn, _ := globals["setup"].(*starlark.Function)
 	teardownFn, _ := globals["teardown"].(*starlark.Function)
 
-	// Run tests
+	// Run tests (applying filter)
 	for _, name := range testFuncs {
+		if !r.matchesFilter(name) {
+			continue // Skip tests that don't match filter
+		}
 		fn := globals[name].(*starlark.Function)
 		testResult := r.runSingleTest(thread, name, fn, setupFn, teardownFn, predeclared)
 		testResult.File = filename
@@ -234,6 +245,42 @@ func (r *Runner) findTestFunctions(globals starlark.StringDict) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// matchesFilter checks if a test name matches the current filter options.
+func (r *Runner) matchesFilter(name string) bool {
+	// Check TestNames first (from :: syntax)
+	if len(r.opts.TestNames) > 0 {
+		for _, allowed := range r.opts.TestNames {
+			if name == allowed {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Check Filter pattern (from -k flag)
+	if r.opts.Filter == "" {
+		return true
+	}
+
+	filter := r.opts.Filter
+
+	// Handle "not <pattern>" syntax
+	negate := false
+	if strings.HasPrefix(strings.ToLower(filter), "not ") {
+		negate = true
+		filter = strings.TrimPrefix(filter, "not ")
+		filter = strings.TrimPrefix(filter, "NOT ")
+	}
+
+	// Simple substring match (case-insensitive)
+	matches := strings.Contains(strings.ToLower(name), strings.ToLower(filter))
+
+	if negate {
+		return !matches
+	}
+	return matches
 }
 
 // runSingleTest executes one test function with setup/teardown.

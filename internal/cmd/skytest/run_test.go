@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -166,9 +167,9 @@ func TestRun_TestDirectory(t *testing.T) {
 	}
 }
 
-func TestRun_FilterTests(t *testing.T) {
+func TestRun_MultipleTestFunctions(t *testing.T) {
 	dir := t.TempDir()
-	file := filepath.Join(dir, "test_filter.star")
+	file := filepath.Join(dir, "test_multiple.star")
 	content := `def test_foo():
     assert.eq(1, 1)
 
@@ -183,12 +184,10 @@ def test_baz():
 	}
 
 	var stdout, stderr bytes.Buffer
-	// Use -prefix to filter tests by changing the prefix to match only test_foo
-	// Note: -run flag is not implemented, so we test that all tests pass
 	code := RunWithIO(context.Background(), []string{file}, nil, &stdout, &stderr)
 
 	if code != 0 {
-		t.Errorf("RunWithIO(filter tests) returned %d, want 0\nstderr: %s", code, stderr.String())
+		t.Errorf("RunWithIO(multiple test functions) returned %d, want 0\nstderr: %s", code, stderr.String())
 	}
 }
 
@@ -258,7 +257,116 @@ x = helper()
 	var stdout, stderr bytes.Buffer
 	code := RunWithIO(context.Background(), []string{file}, nil, &stdout, &stderr)
 
-	// Should pass (no tests to fail) or warn about no tests
-	// Behavior depends on implementation
-	_ = code
+	// File with no test functions should pass (no tests to fail)
+	if code != 0 {
+		t.Errorf("RunWithIO(no test functions) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+}
+
+// Test Filtering (-k flag) tests
+
+func TestRun_FilterByName(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_filter.star")
+	content := `def test_parse_basic():
+    assert.eq(1, 1)
+
+def test_parse_advanced():
+    assert.eq(2, 2)
+
+def test_other_feature():
+    assert.eq(3, 3)
+
+def test_unrelated():
+    assert.eq(4, 4)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-k", "parse", "-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(-k parse) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+
+	output := stdout.String()
+	// Should run parse tests
+	if !strings.Contains(output, "test_parse_basic") {
+		t.Error("expected test_parse_basic to be run")
+	}
+	if !strings.Contains(output, "test_parse_advanced") {
+		t.Error("expected test_parse_advanced to be run")
+	}
+	// Should not run other tests
+	if strings.Contains(output, "test_other_feature") && !strings.Contains(output, "skipped") {
+		t.Error("expected test_other_feature to be skipped or not shown")
+	}
+}
+
+func TestRun_FilterWithNot(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_filter_not.star")
+	content := `def test_fast_unit():
+    assert.eq(1, 1)
+
+def test_slow_integration():
+    assert.eq(2, 2)
+
+def test_fast_other():
+    assert.eq(3, 3)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-k", "not slow", "-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(-k 'not slow') returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+
+	output := stdout.String()
+	// Should run non-slow tests
+	if !strings.Contains(output, "test_fast_unit") {
+		t.Error("expected test_fast_unit to be run")
+	}
+	if !strings.Contains(output, "test_fast_other") {
+		t.Error("expected test_fast_other to be run")
+	}
+}
+
+func TestRun_FilterSpecificTest(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_specific.star")
+	content := `def test_one():
+    assert.eq(1, 1)
+
+def test_two():
+    assert.eq(2, 2)
+
+def test_three():
+    assert.eq(3, 3)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	// Use :: syntax to select specific test
+	code := RunWithIO(context.Background(), []string{"-v", file + "::test_two"}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(file::test_two) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+
+	output := stdout.String()
+	// Should only run test_two
+	if !strings.Contains(output, "test_two") {
+		t.Error("expected test_two to be run")
+	}
+	// test_one and test_three should not appear in passed tests
+	// (they might appear as "skipped" in verbose mode, which is acceptable)
 }
