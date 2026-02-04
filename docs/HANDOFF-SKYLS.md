@@ -1,7 +1,7 @@
 # skyls LSP Server - Handoff Document
 
 **Date:** 2026-02-04
-**Status:** In Progress - Formatting Complete
+**Status:** Core Features Complete, Integrated into sky CLI
 
 ## Overview
 
@@ -10,7 +10,9 @@
 ## Architecture
 
 ```
-cmd/skyls/main.go                 # Entry point
+cmd/skyls/main.go                 # Standalone entry point
+cmd/sky/main.go                   # Fat binary (sky ls -> skyls)
+cmd/sky/embedded_full.go          # Embedded tools including skyls
 internal/cmd/skyls/run.go         # CLI handling, stdio server setup
 internal/lsp/
   ├── jsonrpc.go                  # Custom JSON-RPC 2.0 implementation (~200 lines)
@@ -36,21 +38,21 @@ internal/lsp/
 
 ### Completed ✅
 
-| Feature                                | Handler | Integration                   |
-| -------------------------------------- | ------- | ----------------------------- |
-| Initialize/Shutdown/Exit               | ✅      | -                             |
-| Document sync (open/change/close/save) | ✅      | -                             |
-| **Formatting**                         | ✅      | `internal/starlark/formatter` |
+| Feature                                | Handler                | Integration                            |
+| -------------------------------------- | ---------------------- | -------------------------------------- |
+| Initialize/Shutdown/Exit               | ✅                     | -                                      |
+| Document sync (open/change/close/save) | ✅                     | -                                      |
+| **Formatting**                         | ✅                     | `internal/starlark/formatter`          |
+| **Diagnostics**                        | `publishDiagnostics`   | `internal/starlark/linter` + `checker` |
+| **Hover**                              | `handleHover`          | `internal/starlark/docgen`             |
+| **Go to Definition**                   | `handleDefinition`     | `internal/starlark/query/index`        |
+| **Document Symbols**                   | `handleDocumentSymbol` | `internal/starlark/query/index`        |
 
 ### Stubbed (TODO) 🚧
 
-| Feature          | Handler                | Integration Needed                     |
-| ---------------- | ---------------------- | -------------------------------------- |
-| Hover            | `handleHover`          | `internal/starlark/docgen` (skydoc)    |
-| Go to Definition | `handleDefinition`     | `internal/starlark/query` (skyquery)   |
-| Document Symbols | `handleDocumentSymbol` | `internal/starlark/query` (skyquery)   |
-| Completion       | `handleCompletion`     | builtins + loaded symbols              |
-| Diagnostics      | on didSave             | `internal/starlark/linter` + `checker` |
+| Feature    | Handler            | Integration Needed        |
+| ---------- | ------------------ | ------------------------- |
+| Completion | `handleCompletion` | builtins + loaded symbols |
 
 ### Not Started ❌
 
@@ -69,22 +71,17 @@ internal/lsp/
 
 ## Next Steps (Priority Order)
 
-1. **Diagnostics on save** - Integrate skylint + skycheck
-   - Call linter on `didSave`
-   - Use `conn.Notify()` to publish diagnostics
-   - See `protocol.PublishDiagnosticsParams`
+1. **Completion** - Add code completion for:
+   - Starlark builtins (len, str, dict, etc.)
+   - Loaded symbols from load statements
+   - Local definitions and assignments
 
-2. **Document Symbols** - Integrate skyquery
-   - Look at `internal/starlark/query/` for symbol extraction
-   - Return `[]protocol.DocumentSymbol`
+2. **Code Actions** - Integrate skylint --fix
+   - Return `CodeAction` with `WorkspaceEdit` for auto-fixes
 
-3. **Hover** - Integrate skydoc
-   - Look at `internal/starlark/docgen/`
-   - Return `protocol.Hover` with markdown content
-
-4. **Go to Definition** - Integrate skyquery
-   - Need to resolve symbol at position to its definition location
-   - Return `[]protocol.Location`
+3. **Cross-file Go to Definition**
+   - Build workspace index on initialization
+   - Follow load statements to resolve imported symbols
 
 ## Testing
 
@@ -92,11 +89,19 @@ internal/lsp/
 # Run all LSP tests
 go test ./internal/lsp/... -v
 
-# Build the server
+# Run CLI integration tests (txtar-based)
+go test ./internal/cmdtest/... -v
+
+# Build standalone server
 go build ./cmd/skyls
+
+# Build fat binary with LSP
+go build -tags=sky_full ./cmd/sky
 
 # Test manually (will wait for JSON-RPC input on stdin)
 ./skyls -v
+# Or via fat binary:
+./sky ls -v
 ```
 
 ## Editor Testing

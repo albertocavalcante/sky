@@ -1,0 +1,10 @@
+# Test basic skyls functionality
+
+# Version flag should work
+exec skyls -version
+stdout 'skyls'
+
+# Help flag should work
+exec skyls -h
+stderr 'Language Server Protocol'
+stderr 'Starlark'

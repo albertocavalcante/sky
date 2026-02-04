@@ -119,9 +119,9 @@ func (s *stdioConn) Close() error {
 }
 
 func writef(w io.Writer, format string, args ...any) {
-	fmt.Fprintf(w, format, args...)
+	_, _ = fmt.Fprintf(w, format, args...)
 }
 
 func writeln(w io.Writer, args ...any) {
-	fmt.Fprintln(w, args...)
+	_, _ = fmt.Fprintln(w, args...)
 }

@@ -1,0 +1,27 @@
+# Test basic skydoc functionality
+
+# Generate markdown documentation
+exec skydoc -format markdown lib.star
+stdout '# lib.star'
+stdout 'hello'
+stdout 'Say hello'
+
+# Generate JSON documentation
+exec skydoc -format json lib.star
+stdout '"Name": "hello"'
+stdout '"Summary": "Say hello to someone."'
+
+-- lib.star --
+"""A simple greeting library."""
+
+def hello(name, greeting="Hello"):
+    """Say hello to someone.
+
+    Args:
+        name: The person's name.
+        greeting: The greeting to use.
+
+    Returns:
+        A greeting string.
+    """
+    return greeting + ", " + name

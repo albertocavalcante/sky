@@ -1,0 +1,21 @@
+# Test basic skyquery functionality
+
+# List function definitions in current workspace
+exec skyquery -workspace=. 'defs(//...)'
+stdout 'hello'
+stdout 'greet'
+
+# List with specific file
+exec skyquery -workspace=. 'defs(//lib.star)'
+stdout 'hello'
+! stdout 'greet'
+
+-- lib.star --
+def hello(name):
+    return "Hello, " + name
+
+-- main.star --
+load(":lib.star", "hello")
+
+def greet():
+    return hello("world")

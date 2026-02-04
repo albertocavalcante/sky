@@ -69,6 +69,11 @@ dist-sky-full:
     @mkdir -p {{dist_dir}}
     go build -tags=sky_full -o {{dist_dir}}/sky_full ./cmd/sky
 
+# Build skyls (LSP server) for current platform using Go
+dist-skyls:
+    @mkdir -p {{dist_dir}}
+    go build -o {{dist_dir}}/skyls ./cmd/skyls
+
 # Build sky_full for all supported platforms using Go
 dist-all: _dist-go-linux-amd64 _dist-go-linux-arm64 _dist-go-darwin-arm64 _dist-go-windows-amd64
     @echo "Built all platforms in {{dist_dir}}/"

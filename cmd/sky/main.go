@@ -29,6 +29,7 @@ var coreCommands = map[string]string{
 	"repl":  "skyrepl",
 	"test":  "skytest",
 	"doc":   "skydoc",
+	"ls":    "skyls",
 }
 
 func main() {
@@ -524,6 +525,7 @@ var coreCommandDescriptions = map[string]string{
 	"test":  "run Starlark tests",
 	"doc":   "generate documentation",
 	"repl":  "interactive REPL",
+	"ls":    "language server (LSP)",
 }
 
 // findSimilarCommands finds core commands similar to the input.
@@ -625,6 +627,7 @@ func printUsage(w io.Writer) {
 	writeln(w, "  test         run Starlark tests")
 	writeln(w, "  doc          generate documentation")
 	writeln(w, "  repl         interactive Starlark REPL")
+	writeln(w, "  ls           language server (LSP)")
 	writeln(w)
 	writeln(w, "management:")
 	writeln(w, "  plugin       manage plugins")

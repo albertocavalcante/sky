@@ -8,6 +8,7 @@ import (
 	"github.com/albertocavalcante/sky/internal/cmd/skydoc"
 	"github.com/albertocavalcante/sky/internal/cmd/skyfmt"
 	"github.com/albertocavalcante/sky/internal/cmd/skylint"
+	"github.com/albertocavalcante/sky/internal/cmd/skyls"
 	"github.com/albertocavalcante/sky/internal/cmd/skyquery"
 	"github.com/albertocavalcante/sky/internal/cmd/skyrepl"
 	"github.com/albertocavalcante/sky/internal/cmd/skytest"
@@ -24,6 +25,7 @@ func init() {
 		"test":  skytest.RunWithIO,
 		"doc":   skydoc.RunWithIO,
 		"cov":   skycov.RunWithIO,
+		"ls":    skyls.RunWithIO,
 
 		// Full binary names for direct access
 		"skyfmt":   skyfmt.RunWithIO,
@@ -34,5 +36,6 @@ func init() {
 		"skytest":  skytest.RunWithIO,
 		"skydoc":   skydoc.RunWithIO,
 		"skycov":   skycov.RunWithIO,
+		"skyls":    skyls.RunWithIO,
 	}
 }

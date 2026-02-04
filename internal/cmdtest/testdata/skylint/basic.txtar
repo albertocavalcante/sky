@@ -1,0 +1,20 @@
+# Test basic skylint functionality
+
+# File with unused load should report load warning (exit 2 = warnings)
+! exec skylint --disable=module-docstring unused_load.star
+stdout 'Loaded symbol'
+
+# Properly documented file should pass (exit 0)
+exec skylint --disable=module-docstring clean.star
+
+-- clean.star --
+def hello(name):
+    """Say hello."""
+    return "Hello, " + name
+
+-- unused_load.star --
+load("//lib:foo.bzl", "unused_symbol")
+
+def main():
+    """Main entry point."""
+    pass

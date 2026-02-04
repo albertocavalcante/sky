@@ -18,18 +18,18 @@ import (
 
 // Request is a JSON-RPC request or notification.
 type Request struct {
-	JSONRPC string          `json:"jsonrpc"`
+	JSONRPC string           `json:"jsonrpc"`
 	ID      *json.RawMessage `json:"id,omitempty"` // nil for notifications
-	Method  string          `json:"method"`
-	Params  json.RawMessage `json:"params,omitempty"`
+	Method  string           `json:"method"`
+	Params  json.RawMessage  `json:"params,omitempty"`
 }
 
 // Response is a JSON-RPC response.
 type Response struct {
-	JSONRPC string          `json:"jsonrpc"`
+	JSONRPC string           `json:"jsonrpc"`
 	ID      *json.RawMessage `json:"id,omitempty"`
-	Result  any             `json:"result,omitempty"`
-	Error   *ResponseError  `json:"error,omitempty"`
+	Result  any              `json:"result,omitempty"`
+	Error   *ResponseError   `json:"error,omitempty"`
 }
 
 // ResponseError is a JSON-RPC error.

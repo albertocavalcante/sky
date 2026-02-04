@@ -1,4 +1,4 @@
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "lsp",
@@ -9,6 +9,30 @@ go_library(
     importpath = "github.com/albertocavalcante/sky/internal/lsp",
     visibility = ["//:__subpackages__"],
     deps = [
+        "//internal/starlark/checker",
+        "//internal/starlark/classifier",
+        "//internal/starlark/docgen",
+        "//internal/starlark/filekind",
+        "//internal/starlark/formatter",
+        "//internal/starlark/linter",
+        "//internal/starlark/linter/buildtools",
+        "//internal/starlark/query/index",
+        "@com_github_bazelbuild_buildtools//build",
         "@dev_lsp_go_protocol//:protocol",
+    ],
+)
+
+go_test(
+    name = "lsp_test",
+    srcs = [
+        "jsonrpc_test.go",
+        "server_test.go",
+    ],
+    embed = [":lsp"],
+    deps = [
+        "//internal/starlark/checker",
+        "//internal/starlark/linter",
+        "@dev_lsp_go_protocol//:protocol",
+        "@net_starlark_go//syntax",
     ],
 )

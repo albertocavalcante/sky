@@ -8,8 +8,16 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/bazelbuild/buildtools/build"
+
+	"github.com/albertocavalcante/sky/internal/starlark/checker"
+	"github.com/albertocavalcante/sky/internal/starlark/classifier"
+	"github.com/albertocavalcante/sky/internal/starlark/docgen"
 	"github.com/albertocavalcante/sky/internal/starlark/filekind"
 	"github.com/albertocavalcante/sky/internal/starlark/formatter"
+	"github.com/albertocavalcante/sky/internal/starlark/linter"
+	"github.com/albertocavalcante/sky/internal/starlark/linter/buildtools"
+	"github.com/albertocavalcante/sky/internal/starlark/query/index"
 	"go.lsp.dev/protocol"
 )
 
@@ -24,6 +32,10 @@ type Server struct {
 	documents   map[protocol.DocumentURI]*Document
 	rootURI     protocol.DocumentURI
 
+	// Diagnostics
+	lintDriver *linter.Driver
+	checker    *checker.Checker
+
 	// Callbacks
 	onExit func()
 }
@@ -37,9 +49,19 @@ type Document struct {
 
 // NewServer creates a new LSP server.
 func NewServer(onExit func()) *Server {
+	// Set up linter with buildtools rules
+	registry := linter.NewRegistry()
+	_ = registry.Register(buildtools.AllRules()...)
+	lintDriver := linter.NewDriver(registry)
+
+	// Set up semantic checker
+	chk := checker.New(checker.DefaultOptions())
+
 	return &Server{
-		documents: make(map[protocol.DocumentURI]*Document),
-		onExit:    onExit,
+		documents:  make(map[protocol.DocumentURI]*Document),
+		lintDriver: lintDriver,
+		checker:    chk,
+		onExit:     onExit,
 	}
 }
 
@@ -202,7 +224,9 @@ func (s *Server) handleDidOpen(ctx context.Context, params json.RawMessage) (any
 
 	log.Printf("didOpen: %s", p.TextDocument.URI)
 
-	// TODO: Publish diagnostics
+	// Publish initial diagnostics
+	s.publishDiagnostics(ctx, p.TextDocument.URI, p.TextDocument.Text)
+
 	return nil, nil
 }
 
@@ -237,6 +261,17 @@ func (s *Server) handleDidClose(ctx context.Context, params json.RawMessage) (an
 	s.mu.Unlock()
 
 	log.Printf("didClose: %s", p.TextDocument.URI)
+
+	// Clear diagnostics for closed document
+	if s.conn != nil {
+		if err := s.conn.Notify(ctx, "textDocument/publishDiagnostics", protocol.PublishDiagnosticsParams{
+			URI:         p.TextDocument.URI,
+			Diagnostics: []protocol.Diagnostic{},
+		}); err != nil {
+			log.Printf("failed to clear diagnostics: %v", err)
+		}
+	}
+
 	return nil, nil
 }
 
@@ -248,7 +283,23 @@ func (s *Server) handleDidSave(ctx context.Context, params json.RawMessage) (any
 
 	log.Printf("didSave: %s", p.TextDocument.URI)
 
-	// TODO: Run diagnostics (skylint, skycheck)
+	// Get document content (either from save params or our cache)
+	var content string
+	if p.Text != "" {
+		content = p.Text
+	} else {
+		s.mu.RLock()
+		if doc, ok := s.documents[p.TextDocument.URI]; ok {
+			content = doc.Content
+		}
+		s.mu.RUnlock()
+	}
+
+	// Run diagnostics
+	if content != "" {
+		s.publishDiagnostics(ctx, p.TextDocument.URI, content)
+	}
+
 	return nil, nil
 }
 
@@ -268,14 +319,52 @@ func (s *Server) handleHover(ctx context.Context, params json.RawMessage) (any, 
 		return nil, nil
 	}
 
-	// TODO: Integrate with skydoc for actual hover info
-	_ = doc
+	path := uriToPath(p.TextDocument.URI)
 
-	// For now, return a placeholder
+	// Find the word at the cursor position
+	word := getWordAtPosition(doc.Content, int(p.Position.Line), int(p.Position.Character))
+	if word == "" {
+		return nil, nil
+	}
+
+	log.Printf("hover: %s @ %d:%d -> %q", path, p.Position.Line, p.Position.Character, word)
+
+	// Extract documentation
+	moduleDoc, err := docgen.ExtractFile(path, []byte(doc.Content), docgen.Options{IncludePrivate: true})
+	if err != nil {
+		log.Printf("hover: docgen error: %v", err)
+		return nil, nil
+	}
+
+	// Look up the symbol
+	var markdown string
+
+	// Check functions
+	for _, fn := range moduleDoc.Functions {
+		if fn.Name == word {
+			markdown = formatFunctionHover(fn)
+			break
+		}
+	}
+
+	// Check globals if not found in functions
+	if markdown == "" {
+		for _, g := range moduleDoc.Globals {
+			if g.Name == word {
+				markdown = formatGlobalHover(g)
+				break
+			}
+		}
+	}
+
+	if markdown == "" {
+		return nil, nil // No documentation found
+	}
+
 	return &protocol.Hover{
 		Contents: protocol.MarkupContent{
 			Kind:  protocol.Markdown,
-			Value: "**skyls** - hover not yet implemented",
+			Value: markdown,
 		},
 	}, nil
 }
@@ -286,10 +375,87 @@ func (s *Server) handleDefinition(ctx context.Context, params json.RawMessage) (
 		return nil, err
 	}
 
-	// TODO: Integrate with skyquery for go-to-definition
-	log.Printf("definition: %s @ %d:%d", p.TextDocument.URI, p.Position.Line, p.Position.Character)
+	s.mu.RLock()
+	doc, ok := s.documents[p.TextDocument.URI]
+	s.mu.RUnlock()
 
-	return nil, nil // No result yet
+	if !ok {
+		return nil, nil
+	}
+
+	path := uriToPath(p.TextDocument.URI)
+
+	// Find the word at the cursor position
+	word := getWordAtPosition(doc.Content, int(p.Position.Line), int(p.Position.Character))
+	if word == "" {
+		return nil, nil
+	}
+
+	log.Printf("definition: %s @ %d:%d -> %q", path, p.Position.Line, p.Position.Character, word)
+
+	// Classify and parse the file
+	cls := classifier.NewDefaultClassifier()
+	classification, err := cls.Classify(path)
+	if err != nil {
+		classification.FileKind = filekind.KindStarlark
+	}
+
+	file, err := parseStarlarkFile([]byte(doc.Content), path, classification.FileKind)
+	if err != nil {
+		log.Printf("definition: parse error: %v", err)
+		return nil, nil
+	}
+
+	// Extract symbols
+	indexed := index.ExtractFile(file, path, classification.FileKind)
+
+	// Look for definition
+	var defLine int
+
+	// Check function definitions
+	for _, def := range indexed.Defs {
+		if def.Name == word {
+			defLine = def.Line
+			break
+		}
+	}
+
+	// Check assignments if not found
+	if defLine == 0 {
+		for _, assign := range indexed.Assigns {
+			if assign.Name == word {
+				defLine = assign.Line
+				break
+			}
+		}
+	}
+
+	// Check load statements for imported symbols
+	if defLine == 0 {
+		for _, load := range indexed.Loads {
+			for localName := range load.Symbols {
+				if localName == word {
+					defLine = load.Line
+					break
+				}
+			}
+			if defLine > 0 {
+				break
+			}
+		}
+	}
+
+	if defLine == 0 {
+		return nil, nil // Not found
+	}
+
+	// Return location (same file for now)
+	return []protocol.Location{
+		{
+			URI:   p.TextDocument.URI,
+			Range: lineToRange(defLine),
+		},
+	}, nil
 }
 
 func (s *Server) handleCompletion(ctx context.Context, params json.RawMessage) (any, error) {
@@ -363,10 +529,87 @@ func (s *Server) handleDocumentSymbol(ctx context.Context, params json.RawMessag
 		return nil, err
 	}
 
-	// TODO: Integrate with skyquery for symbols
-	log.Printf("documentSymbol: %s", p.TextDocument.URI)
+	s.mu.RLock()
+	doc, ok := s.documents[p.TextDocument.URI]
+	s.mu.RUnlock()
 
-	return []protocol.DocumentSymbol{}, nil
+	if !ok {
+		return []protocol.DocumentSymbol{}, nil
+	}
+
+	path := uriToPath(p.TextDocument.URI)
+	log.Printf("documentSymbol: %s", path)
+
+	// Classify the file to determine its kind
+	cls := classifier.NewDefaultClassifier()
+	classification, err := cls.Classify(path)
+	if err != nil {
+		classification.FileKind = filekind.KindStarlark
+	}
+
+	// Parse the document
+	file, err := parseStarlarkFile([]byte(doc.Content), path, classification.FileKind)
+	if err != nil {
+		log.Printf("documentSymbol parse error: %v", err)
+		return []protocol.DocumentSymbol{}, nil
+	}
+
+	// Extract symbols using skyquery index
+	indexed := index.ExtractFile(file, path, classification.FileKind)
+
+	var symbols []protocol.DocumentSymbol
+
+	// Add function definitions
+	for _, def := range indexed.Defs {
+		detail := "def " + def.Name + "(" + strings.Join(def.Params, ", ") + ")"
+		symbols = append(symbols, protocol.DocumentSymbol{
+			Name:           def.Name,
+			Kind:           protocol.SymbolKindFunction,
+			Detail:         detail,
+			Range:          lineToRange(def.Line),
+			SelectionRange: lineToRange(def.Line),
+		})
+	}
+
+	// Add top-level assignments as variables
+	for _, assign := range indexed.Assigns {
+		symbols = append(symbols, protocol.DocumentSymbol{
+			Name:           assign.Name,
+			Kind:           protocol.SymbolKindVariable,
+			Range:          lineToRange(assign.Line),
+			SelectionRange: lineToRange(assign.Line),
+		})
+	}
+
+	return symbols, nil
+}
+
+// parseStarlarkFile parses content into a build.File based on file kind.
+func parseStarlarkFile(content []byte, path string, kind filekind.Kind) (*build.File, error) {
+	switch kind {
+	case filekind.KindBUILD, filekind.KindBUCK:
+		return build.ParseBuild(path, content)
+	case filekind.KindWORKSPACE:
+		return build.ParseWorkspace(path, content)
+	case filekind.KindMODULE:
+		return build.ParseModule(path, content)
+	case filekind.KindBzl, filekind.KindBzlmod, filekind.KindBzlBuck:
+		return build.ParseBzl(path, content)
+	default:
+		return build.ParseDefault(path, content)
+	}
+}
+
+// lineToRange creates a Range for a line number (1-based input, 0-based output).
+func lineToRange(line int) protocol.Range {
+	l := uint32(0)
+	if line > 0 {
+		l = uint32(line - 1)
+	}
+	return protocol.Range{
+		Start: protocol.Position{Line: l, Character: 0},
+		End:   protocol.Position{Line: l, Character: 1000}, // End of line approximation
+	}
 }
 
 // uriToPath converts a document URI to a file path.
@@ -377,4 +620,256 @@ func uriToPath(uri protocol.DocumentURI) string {
 		return s[7:] // Remove "file://"
 	}
 	return s
+}
+
+// --- Diagnostics ---
+
+// publishDiagnostics runs linter and checker on a document and publishes results.
+func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentURI, content string) {
+	// Guard against nil connection (e.g., in tests)
+	if s.conn == nil {
+		return
+	}
+
+	path := uriToPath(uri)
+	var diagnostics []protocol.Diagnostic
+
+	// Run linter (reads from disk - works for didSave)
+	if findings, err := s.lintDriver.RunFile(path); err == nil {
+		for _, f := range findings {
+			diagnostics = append(diagnostics, lintFindingToDiagnostic(f))
+		}
+	} else {
+		log.Printf("linter error: %v", err)
+	}
+
+	// Run semantic checker (uses content from memory)
+	if checkerDiags, err := s.checker.CheckFile(path, []byte(content)); err == nil {
+		for _, d := range checkerDiags {
+			diagnostics = append(diagnostics, checkerDiagnosticToLSP(d))
+		}
+	} else {
+		log.Printf("checker error: %v", err)
+	}
+
+	// Publish diagnostics to client
+	if err := s.conn.Notify(ctx, "textDocument/publishDiagnostics", protocol.PublishDiagnosticsParams{
+		URI:         uri,
+		Diagnostics: diagnostics,
+	}); err != nil {
+		log.Printf("failed to publish diagnostics: %v", err)
+	}
+
+	log.Printf("published %d diagnostics for %s", len(diagnostics), path)
+}
+
+// lintFindingToDiagnostic converts a linter finding to an LSP diagnostic.
+func lintFindingToDiagnostic(f linter.Finding) protocol.Diagnostic {
+	// Convert 1-based to 0-based positions
+	startLine := uint32(0)
+	if f.Line > 0 {
+		startLine = uint32(f.Line - 1)
+	}
+	startChar := uint32(0)
+	if f.Column > 0 {
+		startChar = uint32(f.Column - 1)
+	}
+	endLine := startLine
+	if f.EndLine > 0 {
+		endLine = uint32(f.EndLine - 1)
+	}
+	endChar := startChar + 1 // Default to single character
+	if f.EndColumn > 0 {
+		endChar = uint32(f.EndColumn - 1)
+	}
+
+	return protocol.Diagnostic{
+		Range: protocol.Range{
+			Start: protocol.Position{Line: startLine, Character: startChar},
+			End:   protocol.Position{Line: endLine, Character: endChar},
+		},
+		Severity: lintSeverityToLSP(f.Severity),
+		Code:     f.Rule,
+		Source:   "skylint",
+		Message:  f.Message,
+	}
+}
+
+// checkerDiagnosticToLSP converts a checker diagnostic to an LSP diagnostic.
+func checkerDiagnosticToLSP(d checker.Diagnostic) protocol.Diagnostic {
+	// Convert 1-based to 0-based positions
+	startLine := uint32(0)
+	if d.Pos.Line > 0 {
+		startLine = uint32(d.Pos.Line - 1)
+	}
+	startChar := uint32(0)
+	if d.Pos.Col > 0 {
+		startChar = uint32(d.Pos.Col - 1)
+	}
+	endLine := startLine
+	endChar := startChar + 1 // Default to single character
+	if d.End.Line > 0 {
+		endLine = uint32(d.End.Line - 1)
+		if d.End.Col > 0 {
+			endChar = uint32(d.End.Col - 1)
+		}
+	}
+
+	return protocol.Diagnostic{
+		Range: protocol.Range{
+			Start: protocol.Position{Line: startLine, Character: startChar},
+			End:   protocol.Position{Line: endLine, Character: endChar},
+		},
+		Severity: checkerSeverityToLSP(d.Severity),
+		Code:     d.Code,
+		Source:   "skycheck",
+		Message:  d.Message,
+	}
+}
+
+// lintSeverityToLSP converts linter severity to LSP severity.
+// Linter: Error=0, Warning=1, Info=2, Hint=3
+// LSP: Error=1, Warning=2, Information=3, Hint=4
+func lintSeverityToLSP(s linter.Severity) protocol.DiagnosticSeverity {
+	switch s {
+	case linter.SeverityError:
+		return protocol.DiagnosticSeverityError
+	case linter.SeverityWarning:
+		return protocol.DiagnosticSeverityWarning
+	case linter.SeverityInfo:
+		return protocol.DiagnosticSeverityInformation
+	case linter.SeverityHint:
+		return protocol.DiagnosticSeverityHint
+	default:
+		return protocol.DiagnosticSeverityWarning
+	}
+}
+
+// checkerSeverityToLSP converts checker severity to LSP severity.
+func checkerSeverityToLSP(s checker.Severity) protocol.DiagnosticSeverity {
+	switch s {
+	case checker.SeverityError:
+		return protocol.DiagnosticSeverityError
+	case checker.SeverityWarning:
+		return protocol.DiagnosticSeverityWarning
+	case checker.SeverityInfo:
+		return protocol.DiagnosticSeverityInformation
+	default:
+		return protocol.DiagnosticSeverityWarning
+	}
+}
+
+// --- Hover helpers ---
+
+// getWordAtPosition extracts the word at a given line and character position.
+func getWordAtPosition(content string, line, char int) string {
+	lines := strings.Split(content, "\n")
+	if line < 0 || line >= len(lines) {
+		return ""
+	}
+
+	lineContent := lines[line]
+	if char < 0 || char >= len(lineContent) {
+		return ""
+	}
+
+	// Find word boundaries (identifier characters: letters, digits, underscore)
+	isIdentChar := func(c byte) bool {
+		return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
+	}
+
+	// Find start of word
+	start := char
+	for start > 0 && isIdentChar(lineContent[start-1]) {
+		start--
+	}
+
+	// Find end of word
+	end := char
+	for end < len(lineContent) && isIdentChar(lineContent[end]) {
+		end++
+	}
+
+	if start == end {
+		return ""
+	}
+
+	return lineContent[start:end]
+}
+
+// formatFunctionHover formats a FunctionDoc as Markdown for hover display.
+func formatFunctionHover(fn docgen.FunctionDoc) string {
+	var b strings.Builder
+
+	// Signature
+	b.WriteString("```python\n")
+	b.WriteString("def ")
+	b.WriteString(fn.Name)
+	b.WriteString("(")
+	for i, p := range fn.Params {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(p.Name)
+		if p.HasDefault {
+			b.WriteString("=")
+			b.WriteString(p.Default)
+		}
+	}
+	b.WriteString(")\n```\n\n")
+
+	// Documentation
+	if fn.Parsed != nil && fn.Parsed.Summary != "" {
+		b.WriteString(fn.Parsed.Summary)
+		b.WriteString("\n")
+
+		if fn.Parsed.Description != "" {
+			b.WriteString("\n")
+			b.WriteString(fn.Parsed.Description)
+			b.WriteString("\n")
+		}
+
+		// Args
+		if len(fn.Parsed.Args) > 0 {
+			b.WriteString("\n**Args:**\n")
+			for name, desc := range fn.Parsed.Args {
+				b.WriteString("- `")
+				b.WriteString(name)
+				b.WriteString("`: ")
+				b.WriteString(desc)
+				b.WriteString("\n")
+			}
+		}
+
+		// Returns
+		if fn.Parsed.Returns != "" {
+			b.WriteString("\n**Returns:** ")
+			b.WriteString(fn.Parsed.Returns)
+			b.WriteString("\n")
+		}
+
+		// Example
+		if fn.Parsed.Example != "" {
+			b.WriteString("\n**Example:**\n```python\n")
+			b.WriteString(fn.Parsed.Example)
+			b.WriteString("\n```\n")
+		}
+	} else if fn.Docstring != "" {
+		// Raw docstring if not parsed
+		b.WriteString(fn.Docstring)
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+// formatGlobalHover formats a GlobalDoc as Markdown for hover display.
+func formatGlobalHover(g docgen.GlobalDoc) string {
+	var b strings.Builder
+	b.WriteString("```python\n")
+	b.WriteString(g.Name)
+	b.WriteString(" = ")
+	b.WriteString(g.Value)
+	b.WriteString("\n```\n")
+	return b.String()
 }

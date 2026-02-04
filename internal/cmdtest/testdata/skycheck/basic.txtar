@@ -1,0 +1,28 @@
+# Test basic skycheck functionality
+
+# Clean file should pass
+exec skycheck clean.star
+stdout 'no issues found'
+
+# File with undefined name should report error (exit 1)
+! exec skycheck undefined.star
+stdout 'undefined'
+
+# File with unused variable should report warning (exit 2 for warnings)
+! exec skycheck unused.star
+stdout 'unused'
+
+-- clean.star --
+def hello(name):
+    return "Hello, " + name
+
+x = hello("world")
+
+-- undefined.star --
+def main():
+    return undefined_name
+
+-- unused.star --
+def main():
+    unused_var = 1
+    return 0

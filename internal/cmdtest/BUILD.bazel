@@ -1,0 +1,23 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "cmdtest",
+    srcs = ["cmdtest.go"],
+    importpath = "github.com/albertocavalcante/sky/internal/cmdtest",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/cmd/skycheck",
+        "//internal/cmd/skydoc",
+        "//internal/cmd/skyfmt",
+        "//internal/cmd/skylint",
+        "//internal/cmd/skyquery",
+        "@com_github_rogpeppe_go_internal//testscript",
+    ],
+)
+
+go_test(
+    name = "cmdtest_test",
+    srcs = ["cmdtest_test.go"],
+    data = glob(["testdata/**"]),
+    embed = [":cmdtest"],
+)
