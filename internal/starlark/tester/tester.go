@@ -15,7 +15,9 @@ import (
 
 	"github.com/albertocavalcante/sky/internal/starlark/coverage"
 
+	"go.starlark.net/lib/json"
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 	"go.starlark.net/syntax"
 )
 
@@ -500,6 +502,12 @@ func (r *Runner) buildPredeclared() starlark.StringDict {
 	if !r.opts.DisableAssert {
 		predeclared["assert"] = NewAssertModule()
 	}
+
+	// Add struct builtin (ubiquitous in Bazel/Starlark codebases)
+	predeclared["struct"] = starlark.NewBuiltin("struct", starlarkstruct.Make)
+
+	// Add json module for JSON parsing/serialization in tests
+	predeclared["json"] = json.Module
 
 	return predeclared
 }

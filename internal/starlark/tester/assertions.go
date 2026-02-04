@@ -17,20 +17,26 @@ import (
 //   - assert.false(cond, msg=None) - Assert cond is falsy
 //   - assert.contains(container, item, msg=None) - Assert item in container
 //   - assert.fails(fn, pattern=None) - Assert fn() raises error matching pattern
+//   - assert.len(container, expected, msg=None) - Assert len(container) == expected
+//   - assert.empty(container, msg=None) - Assert container is empty
+//   - assert.not_empty(container, msg=None) - Assert container is not empty
 func NewAssertModule() *starlarkstruct.Module {
 	return &starlarkstruct.Module{
 		Name: "assert",
 		Members: starlark.StringDict{
-			"eq":       starlark.NewBuiltin("assert.eq", assertEq),
-			"ne":       starlark.NewBuiltin("assert.ne", assertNe),
-			"true":     starlark.NewBuiltin("assert.true", assertTrue),
-			"false":    starlark.NewBuiltin("assert.false", assertFalse),
-			"contains": starlark.NewBuiltin("assert.contains", assertContains),
-			"fails":    starlark.NewBuiltin("assert.fails", assertFails),
-			"lt":       starlark.NewBuiltin("assert.lt", assertLt),
-			"le":       starlark.NewBuiltin("assert.le", assertLe),
-			"gt":       starlark.NewBuiltin("assert.gt", assertGt),
-			"ge":       starlark.NewBuiltin("assert.ge", assertGe),
+			"eq":        starlark.NewBuiltin("assert.eq", assertEq),
+			"ne":        starlark.NewBuiltin("assert.ne", assertNe),
+			"true":      starlark.NewBuiltin("assert.true", assertTrue),
+			"false":     starlark.NewBuiltin("assert.false", assertFalse),
+			"contains":  starlark.NewBuiltin("assert.contains", assertContains),
+			"fails":     starlark.NewBuiltin("assert.fails", assertFails),
+			"lt":        starlark.NewBuiltin("assert.lt", assertLt),
+			"le":        starlark.NewBuiltin("assert.le", assertLe),
+			"gt":        starlark.NewBuiltin("assert.gt", assertGt),
+			"ge":        starlark.NewBuiltin("assert.ge", assertGe),
+			"len":       starlark.NewBuiltin("assert.len", assertLen),
+			"empty":     starlark.NewBuiltin("assert.empty", assertEmpty),
+			"not_empty": starlark.NewBuiltin("assert.not_empty", assertNotEmpty),
 		},
 	}
 }
@@ -239,6 +245,90 @@ func assertGe(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple,
 		return nil, assertionError(msg, "expected %s >= %s", a, expected)
 	}
 	return starlark.None, nil
+}
+
+// assertLen asserts that a container has the expected length.
+func assertLen(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var container starlark.Value
+	var expected starlark.Int
+	var msg starlark.Value = starlark.None
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "container", &container, "expected", &expected, "msg?", &msg); err != nil {
+		return nil, err
+	}
+
+	// Get length of container
+	actualLen, err := getLength(container)
+	if err != nil {
+		return nil, fmt.Errorf("assert.len: %v", err)
+	}
+
+	expectedLen, ok := expected.Int64()
+	if !ok {
+		return nil, fmt.Errorf("assert.len: expected length too large")
+	}
+
+	if int64(actualLen) != expectedLen {
+		return nil, assertionError(msg, "expected len(%s) == %d, got %d", container.Type(), expectedLen, actualLen)
+	}
+	return starlark.None, nil
+}
+
+// assertEmpty asserts that a container is empty.
+func assertEmpty(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var container starlark.Value
+	var msg starlark.Value = starlark.None
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "container", &container, "msg?", &msg); err != nil {
+		return nil, err
+	}
+
+	actualLen, err := getLength(container)
+	if err != nil {
+		return nil, fmt.Errorf("assert.empty: %v", err)
+	}
+
+	if actualLen != 0 {
+		return nil, assertionError(msg, "expected %s to be empty, got length %d", container.Type(), actualLen)
+	}
+	return starlark.None, nil
+}
+
+// assertNotEmpty asserts that a container is not empty.
+func assertNotEmpty(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var container starlark.Value
+	var msg starlark.Value = starlark.None
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "container", &container, "msg?", &msg); err != nil {
+		return nil, err
+	}
+
+	actualLen, err := getLength(container)
+	if err != nil {
+		return nil, fmt.Errorf("assert.not_empty: %v", err)
+	}
+
+	if actualLen == 0 {
+		return nil, assertionError(msg, "expected %s to not be empty", container.Type())
+	}
+	return starlark.None, nil
+}
+
+// getLength returns the length of a Starlark value, or an error if it doesn't support len().
+func getLength(v starlark.Value) (int, error) {
+	switch c := v.(type) {
+	case *starlark.List:
+		return c.Len(), nil
+	case starlark.Tuple:
+		return c.Len(), nil
+	case *starlark.Dict:
+		return c.Len(), nil
+	case *starlark.Set:
+		return c.Len(), nil
+	case starlark.String:
+		return c.Len(), nil
+	case starlark.Bytes:
+		return c.Len(), nil
+	default:
+		return 0, fmt.Errorf("type %s has no len()", v.Type())
+	}
 }
 
 // assertionError creates an assertion error with optional custom message.
