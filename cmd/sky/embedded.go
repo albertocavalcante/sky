@@ -20,20 +20,3 @@ func getEmbeddedTool(name string) EmbeddedTool {
 	}
 	return embeddedTools[name]
 }
-
-// hasEmbeddedTools returns true if any tools are embedded.
-func hasEmbeddedTools() bool {
-	return len(embeddedTools) > 0
-}
-
-// listEmbeddedTools returns the names of all embedded tools.
-func listEmbeddedTools() []string {
-	if embeddedTools == nil {
-		return nil
-	}
-	names := make([]string, 0, len(embeddedTools))
-	for name := range embeddedTools {
-		names = append(names, name)
-	}
-	return names
-}

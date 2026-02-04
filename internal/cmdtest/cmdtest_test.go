@@ -1,7 +1,6 @@
 package cmdtest
 
 import (
-	"os"
 	"testing"
 )
 
@@ -31,13 +30,4 @@ func TestSkydoc(t *testing.T) {
 
 func TestSkyls(t *testing.T) {
 	Run(t, "testdata/skyls")
-}
-
-// testdataExists checks if a testdata directory exists and has files.
-func testdataExists(dir string) bool {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return false
-	}
-	return len(entries) > 0
 }

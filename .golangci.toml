@@ -27,14 +27,34 @@ paths = [
   "bazel-.*",
   "vendor",
 ]
+presets = [
+  "comments",
+  "std-error-handling",
+  "common-false-positives",
+]
 
 [[linters.exclusions.rules]]
 path = "_test\\.go"
-linters = ["funlen"]
+linters = ["funlen", "unused"]
 
 [[linters.exclusions.rules]]
 path = "\\.pb\\.go"
 linters = ["all"]
+
+# Allow deprecated starlark APIs (we'll update later)
+[[linters.exclusions.rules]]
+text = "SA1019.*starlark"
+linters = ["staticcheck"]
+
+# Allow deprecated syntax APIs
+[[linters.exclusions.rules]]
+text = "SA1019.*syntax"
+linters = ["staticcheck"]
+
+# QF suggestions are optional
+[[linters.exclusions.rules]]
+text = "QF1003"
+linters = ["staticcheck"]
 
 [issues]
 max-issues-per-linter = 50

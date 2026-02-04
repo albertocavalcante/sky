@@ -1,3 +1,4 @@
+// Package version provides build version information for sky tools.
 package version
 
 import "fmt"
