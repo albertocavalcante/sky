@@ -3,30 +3,207 @@ title: Output Formats
 description: Coverage output formats supported by skycov
 ---
 
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
 # Output Formats
 
-skycov supports multiple output formats for CI integration.
+skycov converts the raw `coverage.json` into formats compatible with various CI tools and coverage platforms.
 
 ## Text (default)
+
+Human-readable summary for terminal output.
 
 ```bash
 skycov coverage.json
 ```
 
+```
+Coverage Report
+===============
+File: math.star
+  Lines: 15/20 (75.0%)
+  Functions: 3/4 (75.0%)
+
+File: utils.star
+  Lines: 8/10 (80.0%)
+  Functions: 2/2 (100.0%)
+
+Total: 23/30 lines (76.7%)
+```
+
 ## JSON
+
+Machine-readable format for custom tooling.
 
 ```bash
 skycov --format=json coverage.json
 ```
 
+```json
+{
+  "summary": {
+    "totalLines": 30,
+    "coveredLines": 23,
+    "percentage": 76.7
+  },
+  "files": {
+    "math.star": {
+      "totalLines": 20,
+      "coveredLines": 15,
+      "percentage": 75.0,
+      "lines": {
+        "1": 5,
+        "2": 5,
+        "3": 0,
+        "4": 10
+      }
+    }
+  }
+}
+```
+
 ## Cobertura XML
+
+Standard format supported by most CI platforms (Jenkins, Azure DevOps, GitLab).
 
 ```bash
 skycov --format=cobertura coverage.json > coverage.xml
 ```
 
+```xml
+<?xml version="1.0" ?>
+<coverage version="1.0" timestamp="1704067200000"
+          lines-valid="30" lines-covered="23"
+          line-rate="0.767" branch-rate="0" complexity="0">
+  <packages>
+    <package name="." line-rate="0.767" branch-rate="0" complexity="0">
+      <classes>
+        <class name="math.star" filename="math.star" line-rate="0.75">
+          <lines>
+            <line number="1" hits="5"/>
+            <line number="2" hits="5"/>
+            <line number="3" hits="0"/>
+            <line number="4" hits="10"/>
+          </lines>
+        </class>
+      </classes>
+    </package>
+  </packages>
+</coverage>
+```
+
 ## LCOV
+
+Standard format supported by coverage visualization tools (Codecov, Coveralls, genhtml).
 
 ```bash
 skycov --format=lcov coverage.json > coverage.lcov
 ```
+
+```
+TN:
+SF:math.star
+DA:1,5
+DA:2,5
+DA:3,0
+DA:4,10
+LF:4
+LH:3
+end_of_record
+SF:utils.star
+DA:1,2
+DA:2,2
+LF:2
+LH:2
+end_of_record
+```
+
+### LCOV Field Reference
+
+| Field | Meaning |
+|-------|---------|
+| `TN:` | Test name (empty for aggregate) |
+| `SF:` | Source file path |
+| `DA:line,hits` | Line data: line number and hit count |
+| `LF:` | Lines found (total lines) |
+| `LH:` | Lines hit (covered lines) |
+
+## Filtering Output
+
+Filter coverage to specific files or directories:
+
+```bash
+# Only show files matching pattern
+skycov --include="src/**/*.star" coverage.json
+
+# Exclude test files
+skycov --exclude="*_test.star" coverage.json
+
+# Combine filters
+skycov --include="src/**" --exclude="**/vendor/**" coverage.json
+```
+
+## Threshold Checks
+
+Fail CI if coverage drops below a threshold:
+
+```bash
+# Fail if coverage < 80%
+skycov --min-coverage=80 coverage.json
+
+# Exit code: 0 if >= threshold, 1 if below
+echo $?
+```
+
+<Aside type="tip">
+Set `--min-coverage` in CI to prevent coverage regressions. Start with your current coverage and increase over time.
+</Aside>
+
+## Combining Coverage Files
+
+Merge coverage from multiple test runs:
+
+```bash
+# Run different test suites
+skytest --coverage tests/unit/ -o unit.json
+skytest --coverage tests/integration/ -o integration.json
+
+# Merge coverage
+skycov --merge unit.json integration.json > combined.json
+
+# Generate report from merged data
+skycov --format=cobertura combined.json > coverage.xml
+```
+
+## Generating HTML Reports
+
+Convert LCOV to HTML for local viewing:
+
+```bash
+# Generate LCOV
+skycov --format=lcov coverage.json > coverage.lcov
+
+# Use genhtml (from lcov package)
+genhtml coverage.lcov --output-directory coverage-html
+open coverage-html/index.html
+```
+
+Install genhtml:
+
+<Tabs>
+  <TabItem label="macOS">
+```bash
+brew install lcov
+```
+  </TabItem>
+  <TabItem label="Ubuntu/Debian">
+```bash
+apt-get install lcov
+```
+  </TabItem>
+  <TabItem label="Fedora">
+```bash
+dnf install lcov
+```
+  </TabItem>
+</Tabs>

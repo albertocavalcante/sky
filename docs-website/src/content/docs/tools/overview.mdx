@@ -1,98 +1,207 @@
 ---
 title: Tools Overview
-description: Overview of all Sky tools
+description: Overview of all Sky tools for Starlark development
 ---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 # Tools Overview
 
-Sky provides a comprehensive suite of tools for Starlark development.
+Sky provides a comprehensive suite of tools for Starlark development. Each tool is installable individually or all at once.
+
+## Quick Install
+
+```bash
+# Install all tools
+go install github.com/albertocavalcante/sky/cmd/...@latest
+
+# Or install individually
+go install github.com/albertocavalcante/sky/cmd/skylint@latest
+go install github.com/albertocavalcante/sky/cmd/skyfmt@latest
+go install github.com/albertocavalcante/sky/cmd/skytest@latest
+```
+
+## Tool Categories
+
+<CardGrid>
+  <Card title="Analysis" icon="magnifier">
+    **skylint** - Fast linting with 20+ rules
+
+    **skycheck** - Deep static analysis
+  </Card>
+  <Card title="Formatting" icon="document">
+    **skyfmt** - Consistent code formatting
+  </Card>
+  <Card title="Testing" icon="approve-check">
+    **skytest** - Test runner with coverage
+
+    **skycov** - Coverage reporting
+  </Card>
+  <Card title="Development" icon="laptop">
+    **skyrepl** - Interactive REPL
+
+    **skydoc** - Documentation generator
+
+    **skyquery** - Codebase queries
+  </Card>
+</CardGrid>
 
 ## Analysis Tools
 
 ### skylint
 
-Static linter with configurable rules.
+Fast static linter with 20+ configurable rules for code quality, style, and correctness.
 
 ```bash
-skylint --format=json src/
+skylint src/
+skylint --format=json src/       # Machine-readable output
+skylint --config=.skylint.yaml   # Custom configuration
 ```
+
+[Full documentation](/sky/tools/skylint/)
 
 ### skycheck
 
-Deep static analyzer with type inference.
+Deep static analyzer with type inference and cross-file analysis.
 
 ```bash
-skycheck --strict src/
+skycheck src/
+skycheck --strict src/           # Stricter checking
+skycheck --format=sarif src/     # SARIF output for GitHub
 ```
 
-## Formatting Tools
+[Full documentation](/sky/tools/skycheck/)
+
+## Formatting
 
 ### skyfmt
 
-Code formatter for consistent style.
+Code formatter for consistent style across your codebase. Compatible with Buildifier formatting.
 
 ```bash
-skyfmt --write src/
+skyfmt file.star                 # Format and print to stdout
+skyfmt --write src/              # Format files in place
+skyfmt --check src/              # Check without modifying (CI mode)
 ```
 
-## Testing Tools
+[Full documentation](/sky/tools/skyfmt/)
+
+## Testing
 
 ### skytest
 
-Test runner with built-in assertions.
+Test runner with built-in assertions, fixtures, and coverage collection.
 
 ```bash
-skytest --coverage tests/
+skytest tests/                   # Run all tests
+skytest --coverage tests/        # Collect coverage data
+skytest --filter="test_add*"     # Filter by test name
 ```
 
 Features:
 - Test discovery (`*_test.star`, `test_*.star`)
-- Built-in `assert` module
+- Built-in `assert` module with `eq`, `ne`, `true`, `fails`, etc.
 - `setup()` and `teardown()` support
+- Coverage collection via starlark-go-x hooks
 - JSON and JUnit output formats
+
+[Full documentation](/sky/tools/skytest/)
 
 ### skycov
 
-Coverage reporter supporting multiple output formats.
+Coverage reporter that converts raw coverage data to industry-standard formats.
 
 ```bash
-skycov --format=cobertura coverage.json > coverage.xml
+skycov coverage.json                       # Text summary
+skycov --format=cobertura coverage.json    # Cobertura XML
+skycov --format=lcov coverage.json         # LCOV format
+skycov --min-coverage=80 coverage.json     # Threshold check
 ```
 
-Formats:
-- Text (default)
-- JSON
-- Cobertura XML
-- LCOV
+[Full documentation](/sky/tools/skycov/)
 
-## Documentation Tools
+## Documentation
 
 ### skydoc
 
-Generate documentation from Starlark docstrings.
+Generate documentation from Starlark docstrings in Markdown or HTML.
 
 ```bash
-skydoc --output=docs src/
+skydoc src/                      # Generate docs
+skydoc --output=docs src/        # Specify output directory
+skydoc --format=html src/        # HTML output
 ```
+
+[Full documentation](/sky/tools/skydoc/)
 
 ## Query Tools
 
 ### skyquery
 
-Query Starlark codebases.
+Query Starlark codebases to understand dependencies and structure.
 
 ```bash
-skyquery 'deps(//src:lib)'
+skyquery 'deps(//src:lib)'       # Show dependencies
+skyquery 'rdeps(//src:util)'     # Show reverse dependencies
+skyquery 'allpaths(//a, //b)'    # Find paths between targets
 ```
 
-## Interactive Tools
+[Full documentation](/sky/tools/skyquery/)
+
+## Interactive
 
 ### skyrepl
 
-Interactive REPL for Starlark.
+Interactive REPL for experimenting with Starlark code.
 
 ```bash
 skyrepl
->>> 1 + 1
-2
+>>> x = [1, 2, 3]
+>>> [i * 2 for i in x]
+[2, 4, 6]
+>>> def greet(name): return "Hello, " + name
+>>> greet("World")
+"Hello, World"
 ```
+
+[Full documentation](/sky/tools/skyrepl/)
+
+## Tool Comparison
+
+| Tool | Purpose | Speed | Output Formats |
+|------|---------|-------|----------------|
+| skylint | Linting | Fast | Text, JSON, SARIF |
+| skycheck | Deep analysis | Slower | Text, JSON, SARIF |
+| skyfmt | Formatting | Fast | - |
+| skytest | Testing | Medium | Text, JSON, JUnit |
+| skycov | Coverage | Fast | Text, JSON, Cobertura, LCOV |
+| skydoc | Documentation | Medium | Markdown, HTML |
+
+## CI Integration
+
+All tools support CI-friendly output formats and exit codes:
+
+```yaml
+# GitHub Actions example
+- name: Lint
+  run: skylint --format=sarif src/ > results.sarif
+
+- name: Format check
+  run: skyfmt --check src/
+
+- name: Test with coverage
+  run: |
+    skytest --coverage tests/
+    skycov --min-coverage=80 coverage.json
+```
+
+See [CI Integration](/sky/coverage/ci-integration/) for complete examples.
+
+## Next Steps
+
+<CardGrid>
+  <LinkCard title="skylint" href="/sky/tools/skylint/" description="Configure linting rules" />
+  <LinkCard title="skytest" href="/sky/tools/skytest/" description="Write and run tests" />
+  <LinkCard title="Coverage" href="/sky/coverage/getting-started/" description="Collect code coverage" />
+  <LinkCard title="Plugins" href="/sky/plugins/" description="Extend Sky with plugins" />
+</CardGrid>

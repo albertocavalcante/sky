@@ -1,13 +1,17 @@
 ---
 title: Type Annotations
-description: Python-style type annotation support
+description: Python-style type annotation support in starlark-go-x
 ---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
 # Type Annotations
 
-starlark-go-x supports parsing Python-style type annotations.
+starlark-go-x extends the standard Starlark parser to support Python-style type annotations. These annotations are parsed and stored in the AST but are not enforced at runtime.
 
 ## Syntax
+
+### Function Parameters
 
 ```starlark
 def greet(name: str) -> str:
@@ -15,19 +19,241 @@ def greet(name: str) -> str:
 
 def add(a: int, b: int = 0) -> int:
     return a + b
+
+def process(items: list, callback: callable) -> None:
+    for item in items:
+        callback(item)
+```
+
+### Complex Types
+
+```starlark
+def transform(data: dict[str, list[int]]) -> list[str]:
+    results = []
+    for key, values in data.items():
+        results.append("{}: {}".format(key, sum(values)))
+    return results
+
+def find(items: list[str], predicate: callable) -> str | None:
+    for item in items:
+        if predicate(item):
+            return item
+    return None
+```
+
+### Variable Annotations
+
+```starlark
+# Variable type hints (parsed but not enforced)
+config: dict[str, str] = {}
+count: int = 0
+items: list[str] = ["a", "b", "c"]
 ```
 
 ## AST Nodes
 
-- `TypeExpr` - Type expression wrapper
-- `TypedParam` - Parameter with type annotation
-- `DefStmt.ReturnType` - Return type annotation
+The parser introduces new AST node types for type annotations:
 
-## Enabling
+### TypeExpr
+
+Wraps a type expression (identifier or parameterized type).
 
 ```go
-opts := &syntax.FileOptions{
-    TypeAnnotations: true,
+type TypeExpr struct {
+    Name   *Ident      // Base type name (e.g., "list", "dict", "str")
+    Params []*TypeExpr // Type parameters (e.g., [str] for list[str])
 }
-f, err := opts.Parse(filename, src, 0)
 ```
+
+### Annotated Parameter
+
+Parameters with type annotations store the annotation in the AST:
+
+```go
+type Param struct {
+    Name       *Ident    // Parameter name
+    Type       *TypeExpr // Type annotation (nil if not annotated)
+    Default    Expr      // Default value (nil if required)
+}
+```
+
+### Return Type
+
+Function definitions store the return type:
+
+```go
+type DefStmt struct {
+    Name       *Ident
+    Params     []*Param
+    ReturnType *TypeExpr  // Return type annotation (nil if not annotated)
+    Body       []Stmt
+}
+```
+
+## Enabling Type Annotations
+
+Type annotations are disabled by default. Enable them via `FileOptions`:
+
+```go
+import (
+    "go.starlark.net/syntax"
+)
+
+func parseWithTypes(filename string, src []byte) (*syntax.File, error) {
+    opts := &syntax.FileOptions{
+        TypeAnnotations: true,
+    }
+    return opts.Parse(filename, src, 0)
+}
+```
+
+Or when using `starlark.ExecFile`:
+
+```go
+import (
+    "go.starlark.net/starlark"
+    "go.starlark.net/syntax"
+)
+
+func execWithTypes(filename string, src []byte) (starlark.StringDict, error) {
+    opts := &syntax.FileOptions{
+        TypeAnnotations: true,
+    }
+    _, program, err := starlark.SourceProgramOptions(opts, filename, src, nil)
+    if err != nil {
+        return nil, err
+    }
+
+    thread := &starlark.Thread{Name: "main"}
+    return program.Init(thread, nil)
+}
+```
+
+## Use Cases
+
+### Documentation Generation
+
+Extract type information for documentation:
+
+```go
+func documentFunction(fn *syntax.DefStmt) string {
+    var params []string
+    for _, p := range fn.Params {
+        if p.Type != nil {
+            params = append(params, fmt.Sprintf("%s: %s", p.Name.Name, typeString(p.Type)))
+        } else {
+            params = append(params, p.Name.Name)
+        }
+    }
+
+    ret := ""
+    if fn.ReturnType != nil {
+        ret = " -> " + typeString(fn.ReturnType)
+    }
+
+    return fmt.Sprintf("def %s(%s)%s", fn.Name.Name, strings.Join(params, ", "), ret)
+}
+
+func typeString(t *syntax.TypeExpr) string {
+    if len(t.Params) == 0 {
+        return t.Name.Name
+    }
+    var params []string
+    for _, p := range t.Params {
+        params = append(params, typeString(p))
+    }
+    return fmt.Sprintf("%s[%s]", t.Name.Name, strings.Join(params, ", "))
+}
+```
+
+### Static Analysis
+
+Check for type consistency (custom linter):
+
+```go
+func checkTypeAnnotations(f *syntax.File) []error {
+    var errors []error
+
+    syntax.Walk(f, func(n syntax.Node) bool {
+        if def, ok := n.(*syntax.DefStmt); ok {
+            // Check that all parameters are annotated (or none)
+            annotated := 0
+            for _, p := range def.Params {
+                if p.Type != nil {
+                    annotated++
+                }
+            }
+            if annotated > 0 && annotated < len(def.Params) {
+                errors = append(errors, fmt.Errorf(
+                    "%s: partial type annotations (annotate all parameters or none)",
+                    def.Name.Name,
+                ))
+            }
+        }
+        return true
+    })
+
+    return errors
+}
+```
+
+### IDE Integration
+
+Provide type information for hover and completion:
+
+```go
+func getTypeAtPosition(f *syntax.File, line, col int) *syntax.TypeExpr {
+    var result *syntax.TypeExpr
+
+    syntax.Walk(f, func(n syntax.Node) bool {
+        pos := n.Span()
+        if pos.Start.Line == int32(line) {
+            if param, ok := n.(*syntax.Param); ok && param.Type != nil {
+                result = param.Type
+                return false
+            }
+        }
+        return true
+    })
+
+    return result
+}
+```
+
+## Limitations
+
+<Aside type="caution">
+
+Type annotations in starlark-go-x are **parsed only**, not enforced. Key limitations:
+
+1. **No runtime type checking** - Invalid types pass silently at runtime
+2. **No type inference** - Types are not inferred from usage
+3. **No import of type definitions** - Cannot define reusable types
+4. **No generic functions** - Cannot parameterize functions over types
+
+</Aside>
+
+For full type checking, consider:
+- Using starlark-rust which has experimental static type checking
+- Building a custom type checker using the AST information
+- Waiting for the upstream starlark spec to standardize types
+
+## Comparison with Other Implementations
+
+| Feature | starlark-go-x | starlark-rust | starlark-java |
+|---------|---------------|---------------|---------------|
+| Parse annotations | Yes | Yes | Yes |
+| Runtime checking | No | Partial | Partial |
+| Static checking | No | Experimental | WIP |
+| Generic types | Parse only | Full support | No |
+| Union types | Parse only | Full support | No |
+| Record types | No | Yes | No |
+
+## Future Work
+
+Type annotation support in starlark-go-x is designed to enable tooling. Future enhancements may include:
+
+1. **Upstream contribution** - Propose annotation parsing to google/starlark-go
+2. **Type inference** - Infer types from usage patterns
+3. **Static checker** - Optional compile-time type verification
+4. **Type stub files** - Define types for external modules

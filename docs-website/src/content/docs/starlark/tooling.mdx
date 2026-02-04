@@ -204,8 +204,8 @@ buildifier -mode=check -r .
 Sky includes a Starlark formatter:
 
 ```bash
-sky fmt path/to/file.star
-sky fmt --check .  # Check without modifying
+skyfmt path/to/file.star
+skyfmt --check .  # Check without modifying
 ```
 
 ## Linters
@@ -228,7 +228,7 @@ Common warnings:
 Sky provides additional Starlark-specific checks:
 
 ```bash
-sky lint path/to/file.star
+skylint path/to/file.star
 ```
 
 Checks include:
@@ -244,7 +244,7 @@ Checks include:
 Sky's test runner:
 
 ```bash
-sky test path/to/test.star
+skytest path/to/test.star
 ```
 
 **Test file format:**
@@ -285,7 +285,7 @@ add_test = unittest.make(_add_test_impl)
 Interactive Starlark shell:
 
 ```bash
-sky repl
+skyrepl
 ```
 
 ```
@@ -333,7 +333,7 @@ stardoc(
 Sky's documentation generator:
 
 ```bash
-sky doc path/to/module.star -o docs/
+skydoc path/to/module.star -o docs/
 ```
 
 Generates markdown from docstrings:
