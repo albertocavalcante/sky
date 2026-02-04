@@ -1,0 +1,12 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "skyls",
+    srcs = ["run.go"],
+    importpath = "github.com/albertocavalcante/sky/internal/cmd/skyls",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/lsp",
+        "//internal/version",
+    ],
+)

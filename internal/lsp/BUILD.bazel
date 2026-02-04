@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "lsp",
+    srcs = [
+        "jsonrpc.go",
+        "server.go",
+    ],
+    importpath = "github.com/albertocavalcante/sky/internal/lsp",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@dev_lsp_go_protocol//:protocol",
+    ],
+)
