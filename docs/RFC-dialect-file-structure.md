@@ -401,12 +401,109 @@ Tools should search for config in this order:
 | `--ext-paths` (starpls)                  | `.starlark/config.json` + `dialects` | Add config file                      |
 | `--builtin-paths` (Tilt)                 | `.starlark/builtins/*.pyi`           | Move stubs to standard location      |
 
+## Collision Handling
+
+### File-to-Dialect Collision
+
+When a file matches multiple rules:
+
+```json
+{
+  "rules": [
+    {"files": ["tilt_modules/**/*.star"], "dialect": "tilt", "priority": 100},
+    {"files": ["**/*.star"], "dialect": "custom", "priority": 50}
+  ]
+}
+```
+
+**Resolution order:**
+
+1. Higher `priority` wins
+2. If equal priority, first matching rule wins
+3. More specific patterns should have higher priority
+
+### Builtin Name Collision
+
+When multiple builtin files define the same function:
+
+```json
+{
+  "dialects": {
+    "combined": {
+      "builtins": [
+        "base.builtins.json",      // defines: foo, bar
+        "extension.builtins.json"  // defines: bar, baz (bar collides!)
+      ]
+    }
+  }
+}
+```
+
+**Resolution**: Last definition wins (like CSS cascade).
+
+- `foo` → from base
+- `bar` → from extension (overrides base)
+- `baz` → from extension
+
+**Rationale**: This allows extensions to intentionally override base definitions.
+
+### Combining Multiple Dialects
+
+To get builtins from multiple sources in one dialect:
+
+**Option A: Multiple builtins array**
+
+```json
+{
+  "dialects": {
+    "mega": {
+      "builtins": [
+        "tilt.builtins.json",
+        "bazel.builtins.json",
+        "custom.builtins.json"
+      ]
+    }
+  }
+}
+```
+
+**Option B: Inheritance chain**
+
+```json
+{
+  "dialects": {
+    "custom": {"extends": "tilt", "builtins": ["custom.builtins.json"]},
+    "tilt": {"extends": "bazel", "builtins": ["tilt.builtins.json"]},
+    "bazel": {"extends": "starlark", "builtins": ["bazel.builtins.json"]}
+  }
+}
+```
+
+Result: `custom` has all builtins from starlark → bazel → tilt → custom.
+
+### No Collision (Normal Case)
+
+Different file types using different dialects simultaneously:
+
+```json
+{
+  "rules": [
+    {"files": ["Tiltfile"], "dialect": "tilt"},
+    {"files": ["**/*.bzl", "BUILD"], "dialect": "bazel"},
+    {"files": ["scripts/**/*.star"], "dialect": "custom"}
+  ]
+}
+```
+
+Each file gets exactly one dialect. No collision, no merging needed.
+
 ## Open Questions
 
 1. **JSON Schema hosting**: Should `$schema` point to `sky.dev`, `json-schema.org`, or tool-specific?
 2. **Format priority**: When both `.json` and `.pyi` exist, which takes precedence?
 3. **Workspace vs User config**: Should user-level config extend or override project config?
 4. **Caching**: How to handle remote URL caching and invalidation?
+5. **Collision warnings**: Should we warn when builtins override each other?
 
 ## References
 
