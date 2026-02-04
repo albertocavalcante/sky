@@ -56,6 +56,7 @@ Sky already has infrastructure for this:
 internal/starlark/
 ├── builtins/
 │   ├── provider.go           # Provider interface + ChainProvider
+│   ├── proto/builtins.proto  # Proto schema definition
 │   └── loader/
 │       ├── proto_loader.go   # Binary proto format (Bazel, Buck2)
 │       ├── json_loader.go    # JSON format (custom dialects)
@@ -71,6 +72,215 @@ internal/starlark/
 ```
 
 **Gap**: The LSP server (`internal/lsp/server.go`) doesn't use any of this.
+
+## Multiple Format Support
+
+Based on research from [starpls#379](https://github.com/withered-magic/starpls/issues/379) and [tilt-dev/starlark-lsp](https://github.com/tilt-dev/starlark-lsp), we should support multiple builtin definition formats.
+
+### Supported Formats
+
+| Format           | Extension              | Use Case                             | Pros                            | Cons                     |
+| ---------------- | ---------------------- | ------------------------------------ | ------------------------------- | ------------------------ |
+| **Binary Proto** | `.pb`                  | Embedded standard dialects           | Fast, compact                   | Not human-editable       |
+| **JSON**         | `.json`                | Custom dialects, easy authoring      | Human-readable, no tools needed | Verbose                  |
+| **Textproto**    | `.textproto`, `.pbtxt` | Schema-validated, starpls-compatible | Readable + validated            | Requires proto knowledge |
+| **Python Stubs** | `.py`, `.pyi`          | Tilt-compatible, rich ecosystem      | Familiar syntax, docstrings     | Requires parser          |
+
+### Format Examples
+
+#### 1. JSON (Current)
+
+```json
+{
+  "functions": [
+    {
+      "name": "cc_library",
+      "doc": "Creates a C++ library target",
+      "params": [
+        { "name": "name", "type": "string", "required": true },
+        { "name": "srcs", "type": "list[str]", "default": "[]" }
+      ],
+      "return_type": "None"
+    }
+  ]
+}
+```
+
+#### 2. Textproto (Proposed)
+
+Compatible with starpls proto schema and Bazel's builtins.proto format:
+
+```textproto
+# copybara-builtins.textproto
+types {
+  name: "origin"
+  doc: "Source repository for a workflow"
+  fields {
+    name: "url"
+    type: "string"
+    doc: "Repository URL"
+  }
+}
+
+values {
+  name: "core.workflow"
+  doc: "Defines a migration workflow"
+  callable {
+    params {
+      name: "name"
+      type: "string"
+      is_mandatory: true
+    }
+    params {
+      name: "origin"
+      type: "origin"
+      is_mandatory: true
+    }
+    params {
+      name: "transformations"
+      type: "list[transformation]"
+      default_value: "[]"
+    }
+    return_type: "None"
+  }
+}
+```
+
+#### 3. Python Stubs (Proposed)
+
+Compatible with tilt-dev/starlark-lsp format:
+
+```python
+# copybara_builtins.py
+"""Copybara Starlark builtins."""
+
+class origin:
+    """Source repository for a workflow."""
+    url: str
+    ref: str
+
+class destination:
+    """Target repository for a workflow."""
+    pass
+
+def workflow(
+    name: str,
+    origin: origin,
+    destination: destination,
+    authoring: authoring,
+    transformations: list = [],
+) -> None:
+    """
+    Defines a migration workflow from origin to destination.
+
+    Args:
+        name: Workflow identifier
+        origin: Source repository
+        destination: Target repository
+        authoring: Author mapping configuration
+        transformations: List of transformations to apply
+    """
+    pass
+
+def git_origin(url: str, ref: str = "master") -> origin:
+    """
+    Defines a Git repository as the source of truth.
+
+    Args:
+        url: Git repository URL
+        ref: Branch, tag, or commit to use
+    """
+    pass
+```
+
+### Unified Loader Architecture
+
+```go
+// loader/multi_loader.go
+type MultiFormatLoader struct {
+    jsonLoader     *JSONProvider
+    protoLoader    *ProtoProvider
+    textprotoLoader *TextprotoProvider
+    pythonLoader   *PythonStubProvider
+}
+
+func (m *MultiFormatLoader) LoadFromPath(path string) (*Builtins, error) {
+    ext := filepath.Ext(path)
+    switch ext {
+    case ".json":
+        return m.jsonLoader.LoadFile(path)
+    case ".pb":
+        return m.protoLoader.LoadFile(path)
+    case ".textproto", ".pbtxt":
+        return m.textprotoLoader.LoadFile(path)
+    case ".py", ".pyi":
+        return m.pythonLoader.LoadFile(path)
+    default:
+        return nil, fmt.Errorf("unsupported format: %s", ext)
+    }
+}
+
+// Directory loading (like tilt-dev/starlark-lsp)
+func (m *MultiFormatLoader) LoadFromDir(dir string) (*Builtins, error) {
+    result := &Builtins{}
+    err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+        if d.IsDir() {
+            return nil
+        }
+        builtins, err := m.LoadFromPath(path)
+        if err != nil {
+            return err
+        }
+        result.Merge(builtins)
+        return nil
+    })
+    return result, err
+}
+```
+
+### Python Stub Parser
+
+For Python stub support, use a lightweight parser (not full Python):
+
+```go
+// loader/python_stub_loader.go
+type PythonStubProvider struct {
+    // Uses tree-sitter-python or a simplified parser
+}
+
+func (p *PythonStubProvider) LoadFile(path string) (*Builtins, error) {
+    content, _ := os.ReadFile(path)
+
+    // Parse with tree-sitter (like tilt-dev/starlark-lsp)
+    // Or use a Go Python parser like github.com/go-python/gpython
+
+    // Extract:
+    // - Function definitions (def foo(...) -> Type:)
+    // - Class definitions (class Foo:)
+    // - Docstrings for documentation
+    // - Type hints for parameter/return types
+
+    return builtins, nil
+}
+```
+
+### Configuration with Multiple Formats
+
+```json
+{
+  "dialect": "custom",
+  "builtins": {
+    "paths": [
+      ".sky/builtins.json",
+      ".sky/types.textproto",
+      ".sky/stubs/api.py",
+      "/shared/team-builtins/"
+    ]
+  }
+}
+```
+
+The loader automatically detects format by extension and merges all definitions.
 
 ## Proposed Design
 
@@ -385,12 +595,25 @@ For a tool like `bazelbump` that might define custom Starlark functions:
 1. **Config file location**: `.sky/config.json` vs `sky.config.json` vs `pyproject.toml [tool.sky]`?
 2. **Initialization options**: Should LSP `initializationOptions` override config file?
 3. **Remote builtins**: Support loading from URLs? (`https://example.com/builtins.json`)
-4. **Type stub format**: Continue with JSON or adopt `.skyi` (Starlark interface) format?
+4. **Python parser choice**: Tree-sitter (like Tilt) vs go-python vs custom regex-based?
+5. **Starpls compatibility**: Should we aim for 100% compatible textproto format with starpls?
+6. **Directory conventions**: Follow Tilt's `__init__.py` module structure or flat files?
+
+## Implementation Priority for Formats
+
+| Priority | Format       | Rationale                                   |
+| -------- | ------------ | ------------------------------------------- |
+| P0       | JSON         | Already implemented, easy to author         |
+| P0       | Binary Proto | Already implemented, used for Bazel/Buck2   |
+| P1       | Textproto    | Starpls compatibility, human-readable proto |
+| P2       | Python Stubs | Tilt compatibility, rich ecosystem          |
 
 ## References
 
 - [JSON Loader Documentation](../internal/starlark/builtins/loader/JSON_LOADER.md)
-- [starlark-lsp (Tilt)](https://github.com/tilt-dev/starlark-lsp)
-- [starpls](https://github.com/withered-magic/starpls)
+- [starlark-lsp (Tilt)](https://github.com/tilt-dev/starlark-lsp) - Python stub approach
+- [starpls](https://github.com/withered-magic/starpls) - Proto-based approach
+- [starpls#379: Support custom stubs](https://github.com/withered-magic/starpls/issues/379) - Discussion on format support
 - [Pyright Configuration](https://github.com/microsoft/pyright/blob/main/docs/configuration.md)
 - [LSP Specification](https://microsoft.github.io/language-server-protocol/)
+- [Bazel builtins.proto](https://github.com/bazelbuild/bazel/blob/master/src/main/java/com/google/devtools/build/docgen/starlark/proto/starlark_doc_extract.proto)
