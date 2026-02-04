@@ -2,6 +2,7 @@
 package loader
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -11,6 +12,28 @@ import (
 	"github.com/albertocavalcante/sky/internal/starlark/builtins"
 	"github.com/albertocavalcante/sky/internal/starlark/filekind"
 )
+
+// JSON data files embedded via Go embed
+//
+//go:embed data/json/starlark-core.json
+var starlarkCoreJSON []byte
+
+//go:embed data/json/starlark-skyi.json
+var starlarkSkyiJSON []byte
+
+// embeddedJSONFS provides access to embedded JSON files.
+type embeddedJSONFS struct{}
+
+func (e *embeddedJSONFS) ReadFile(name string) ([]byte, error) {
+	switch name {
+	case "data/json/starlark-core.json":
+		return starlarkCoreJSON, nil
+	case "data/json/starlark-skyi.json":
+		return starlarkSkyiJSON, nil
+	default:
+		return nil, fmt.Errorf("file not found: %s", name)
+	}
+}
 
 // JSONProvider loads builtin definitions from JSON files.
 type JSONProvider struct {
@@ -25,13 +48,11 @@ type JSONProvider struct {
 }
 
 // NewJSONProvider creates a new JSON-based builtin provider.
-// For now, uses runtime file reading. Will add embed support later.
+// Uses Go embed to load JSON data files at compile time.
 func NewJSONProvider() *JSONProvider {
-	// TODO: Add embed.FS support once JSON files are generated
-	// For now, this will fail gracefully if files don't exist yet
 	return &JSONProvider{
 		cache:  make(map[string]map[filekind.Kind]builtins.Builtins),
-		dataFS: &diskFS{baseDir: "internal/starlark/builtins/loader"},
+		dataFS: &embeddedJSONFS{},
 	}
 }
 

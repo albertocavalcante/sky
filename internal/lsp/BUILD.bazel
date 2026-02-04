@@ -4,12 +4,14 @@ go_library(
     name = "lsp",
     srcs = [
         "jsonrpc.go",
+        "provider.go",
         "server.go",
     ],
     importpath = "github.com/albertocavalcante/sky/internal/lsp",
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/starlark/builtins",
+        "//internal/starlark/builtins/loader",
         "//internal/starlark/checker",
         "//internal/starlark/classifier",
         "//internal/starlark/docgen",
@@ -29,6 +31,7 @@ go_test(
         "builtins_integration_test.go",
         "completion_test.go",
         "jsonrpc_test.go",
+        "provider_test.go",
         "server_test.go",
     ],
     embed = [":lsp"],

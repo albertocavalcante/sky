@@ -53,8 +53,10 @@ type Document struct {
 }
 
 // NewServer creates a new LSP server with default configuration.
+// It initializes a default builtins provider from proto/JSON data
+// to provide completion and hover for Bazel and Starlark builtins.
 func NewServer(onExit func()) *Server {
-	return NewServerWithProvider(onExit, nil)
+	return NewServerWithProvider(onExit, NewDefaultProvider())
 }
 
 // NewServerWithProvider creates a new LSP server with a custom builtins provider.
@@ -143,6 +145,12 @@ func (s *Server) Handle(ctx context.Context, req *Request) (any, error) {
 		return s.handleFormatting(ctx, req.Params)
 	case "textDocument/documentSymbol":
 		return s.handleDocumentSymbol(ctx, req.Params)
+	case "textDocument/foldingRange":
+		return s.handleFoldingRange(ctx, req.Params)
+	case "textDocument/documentLink":
+		return s.handleDocumentLink(ctx, req.Params)
+	case "textDocument/signatureHelp":
+		return s.handleSignatureHelp(ctx, req.Params)
 
 	default:
 		log.Printf("unhandled method: %s", req.Method)
@@ -184,6 +192,12 @@ func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (
 				TriggerCharacters: []string{".", "("},
 			},
 			DocumentFormattingProvider: true,
+			SignatureHelpProvider: &protocol.SignatureHelpOptions{
+				TriggerCharacters:   []string{"(", ","},
+				RetriggerCharacters: []string{","},
+			},
+			FoldingRangeProvider: true,
+			DocumentLinkProvider: &protocol.DocumentLinkOptions{},
 		},
 		ServerInfo: &protocol.ServerInfo{
 			Name:    "skyls",
@@ -345,7 +359,7 @@ func (s *Server) handleHover(ctx context.Context, params json.RawMessage) (any, 
 
 	// First, check builtins from provider
 	if s.builtins != nil {
-		markdown = s.getBuiltinHover(word)
+		markdown = s.getBuiltinHover(word, p.TextDocument.URI)
 	}
 
 	// Fall back to document-defined symbols if not a builtin
@@ -516,7 +530,7 @@ func (s *Server) handleCompletion(ctx context.Context, params json.RawMessage) (
 		// Use provider-aware keyword completions to avoid duplicates
 		items = slices.Concat(
 			s.getKeywordCompletionsFiltered(prefix),
-			s.getProviderBuiltinCompletions(prefix),
+			s.getProviderBuiltinCompletions(prefix, p.TextDocument.URI),
 			getModuleCompletions(prefix),
 			s.getDocumentSymbolCompletions(docSnapshot, prefix, int(p.Position.Line)),
 		)
@@ -646,14 +660,18 @@ func (s *Server) getKeywordCompletionsFiltered(prefix string) []protocol.Complet
 
 // getProviderBuiltinCompletions returns completions from the builtins provider.
 // Falls back to hardcoded builtins if no provider is configured.
-func (s *Server) getProviderBuiltinCompletions(prefix string) []protocol.CompletionItem {
+// Uses dialect/kind detection based on the document URI to return appropriate builtins.
+func (s *Server) getProviderBuiltinCompletions(prefix string, uri protocol.DocumentURI) []protocol.CompletionItem {
 	// Fall back to hardcoded builtins if no provider
 	if s.builtins == nil {
 		return getBuiltinCompletions(prefix)
 	}
 
-	// Get builtins from provider (use starlark dialect and generic kind for now)
-	b, err := s.builtins.Builtins("starlark", filekind.KindStarlark)
+	// Get dialect and file kind from URI
+	dialect, kind := s.getDialectAndKind(uri)
+
+	// Get builtins from provider for this dialect/kind
+	b, err := s.builtins.Builtins(dialect, kind)
 	if err != nil {
 		// Fall back to hardcoded on error
 		return getBuiltinCompletions(prefix)
@@ -1205,12 +1223,16 @@ func formatGlobalHover(g docgen.GlobalDoc) string {
 }
 
 // getBuiltinHover returns hover markdown for a builtin symbol from the provider.
-func (s *Server) getBuiltinHover(word string) string {
+// Uses dialect/kind detection based on the document URI to return appropriate builtins.
+func (s *Server) getBuiltinHover(word string, uri protocol.DocumentURI) string {
 	if s.builtins == nil {
 		return ""
 	}
 
-	b, err := s.builtins.Builtins("starlark", filekind.KindStarlark)
+	// Get dialect and file kind from URI
+	dialect, kind := s.getDialectAndKind(uri)
+
+	b, err := s.builtins.Builtins(dialect, kind)
 	if err != nil {
 		return ""
 	}
