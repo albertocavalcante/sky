@@ -34,8 +34,18 @@ func (r *TextReporter) ReportFile(w io.Writer, result *FileResult) {
 	}
 
 	for _, t := range result.Tests {
-		status := "PASS"
-		if !t.Passed {
+		// Determine status string
+		var status string
+		switch {
+		case t.Skipped:
+			status = "SKIP"
+		case t.XPass:
+			status = "XPASS"
+		case t.XFail && t.Passed:
+			status = "XFAIL"
+		case t.Passed:
+			status = "PASS"
+		default:
 			status = "FAIL"
 		}
 
@@ -45,7 +55,17 @@ func (r *TextReporter) ReportFile(w io.Writer, result *FileResult) {
 			_, _ = fmt.Fprintf(w, "%s  %s\n", status, t.Name)
 		}
 
-		if !t.Passed && t.Error != nil {
+		// Show skip reason if present
+		if t.Skipped && t.SkipReason != "" {
+			_, _ = fmt.Fprintf(w, "      %s\n", t.SkipReason)
+		}
+
+		// Show xfail reason if present
+		if t.XFail && t.XFailReason != "" {
+			_, _ = fmt.Fprintf(w, "      %s\n", t.XFailReason)
+		}
+
+		if !t.Passed && t.Error != nil && !t.XFail {
 			// Indent error message
 			errStr := t.Error.Error()
 			for _, line := range strings.Split(errStr, "\n") {
