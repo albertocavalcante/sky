@@ -8,6 +8,12 @@ import (
 	"go.starlark.net/syntax"
 )
 
+// Thread local storage keys for test context
+const (
+	// SnapshotManagerKey is the thread-local key for the snapshot manager.
+	SnapshotManagerKey = "skytest.snapshot_manager"
+)
+
 // NewAssertModule creates the built-in assert module.
 //
 // Available functions:
@@ -20,6 +26,7 @@ import (
 //   - assert.len(container, expected, msg=None) - Assert len(container) == expected
 //   - assert.empty(container, msg=None) - Assert container is empty
 //   - assert.not_empty(container, msg=None) - Assert container is not empty
+//   - assert.snapshot(value, name) - Assert value matches stored snapshot
 func NewAssertModule() *starlarkstruct.Module {
 	return &starlarkstruct.Module{
 		Name: "assert",
@@ -37,6 +44,7 @@ func NewAssertModule() *starlarkstruct.Module {
 			"len":       starlark.NewBuiltin("assert.len", assertLen),
 			"empty":     starlark.NewBuiltin("assert.empty", assertEmpty),
 			"not_empty": starlark.NewBuiltin("assert.not_empty", assertNotEmpty),
+			"snapshot":  starlark.NewBuiltin("assert.snapshot", assertSnapshot),
 		},
 	}
 }
@@ -353,4 +361,33 @@ func findSubstring(s, substr string) int {
 		}
 	}
 	return -1
+}
+
+// assertSnapshot compares a value against a stored snapshot.
+// On first run, creates the snapshot. On subsequent runs, compares and fails if different.
+// Use --update-snapshots to update snapshots instead of failing on mismatch.
+func assertSnapshot(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var value starlark.Value
+	var name starlark.String
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "value", &value, "name", &name); err != nil {
+		return nil, err
+	}
+
+	// Get snapshot manager from thread local storage
+	smVal := thread.Local(SnapshotManagerKey)
+	if smVal == nil {
+		return nil, fmt.Errorf("assert.snapshot: snapshot testing not enabled (no snapshot manager)")
+	}
+
+	sm, ok := smVal.(*SnapshotManager)
+	if !ok {
+		return nil, fmt.Errorf("assert.snapshot: invalid snapshot manager type")
+	}
+
+	// Compare value against snapshot
+	if err := sm.Compare(value, string(name)); err != nil {
+		return nil, fmt.Errorf("assert.snapshot: %w", err)
+	}
+
+	return starlark.None, nil
 }

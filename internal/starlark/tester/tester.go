@@ -186,6 +186,10 @@ type Options struct {
 
 	// FailFast stops running tests after the first failure.
 	FailFast bool
+
+	// UpdateSnapshots when true, updates snapshots instead of comparing.
+	// Use with -u or --update-snapshots flag.
+	UpdateSnapshots bool
 }
 
 // DefaultOptions returns sensible defaults.
@@ -200,6 +204,7 @@ func DefaultOptions() Options {
 type Runner struct {
 	opts     Options
 	coverage *coverage.DefaultCollector
+	snapshot *SnapshotManager
 }
 
 // New creates a new test runner.
@@ -221,6 +226,9 @@ func New(opts Options) *Runner {
 			r.coverage = coverage.NewCollector()
 		}
 	}
+
+	// Create snapshot manager (always available, but compare behavior depends on UpdateSnapshots)
+	r.snapshot = NewSnapshotManager("", opts.UpdateSnapshots)
 
 	return r
 }
@@ -371,7 +379,7 @@ func (r *Runner) RunFile(filename string, src []byte) (*FileResult, error) {
 				continue
 			}
 
-			testResult := r.runSingleTest(thread, name, fn, setupFn, teardownFn, predeclared, fixtureRegistry)
+			testResult := r.runSingleTest(thread, name, filename, fn, setupFn, teardownFn, predeclared, fixtureRegistry)
 			testResult.File = filename
 
 			// Handle xfail
@@ -713,6 +721,7 @@ func (r *Runner) matchesFilter(name string) bool {
 func (r *Runner) runSingleTest(
 	_ *starlark.Thread,
 	name string,
+	filename string,
 	testFn *starlark.Function,
 	setupFn *starlark.Function,
 	teardownFn *starlark.Function,
@@ -727,6 +736,12 @@ func (r *Runner) runSingleTest(
 
 	// EXPERIMENTAL: Enable coverage collection for this test thread
 	r.setupCoverageHook(testThread)
+
+	// Set up snapshot manager in thread local storage
+	if r.snapshot != nil {
+		r.snapshot.SetContext(filename, name)
+		testThread.SetLocal(SnapshotManagerKey, r.snapshot)
+	}
 
 	// Set up timeout cancellation if configured
 	var timer *time.Timer

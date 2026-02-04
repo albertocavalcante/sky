@@ -1511,3 +1511,162 @@ def test_assert_not_empty_fails_on_empty():
 		t.Errorf("RunWithIO(assert.empty tests) returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr.String(), stdout.String())
 	}
 }
+
+// ============================================================================
+// Snapshot Testing (Phase 3.2)
+// ============================================================================
+
+func TestRun_SnapshotBasic(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_snapshot.star")
+	content := `def test_snapshot_string():
+    """Test basic string snapshot."""
+    assert.snapshot("hello world", "greeting")
+
+def test_snapshot_dict():
+    """Test dict snapshot."""
+    data = {"name": "Alice", "age": 30}
+    assert.snapshot(data, "user_data")
+
+def test_snapshot_list():
+    """Test list snapshot."""
+    items = [1, 2, 3, "four", {"nested": True}]
+    assert.snapshot(items, "mixed_list")
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	// First run - creates snapshots
+	var stdout1, stderr1 bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout1, &stderr1)
+
+	if code != 0 {
+		t.Errorf("First run returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr1.String(), stdout1.String())
+	}
+
+	// Verify snapshot files were created
+	snapDir := filepath.Join(dir, "__snapshots__", "test_snapshot")
+	if _, err := os.Stat(snapDir); os.IsNotExist(err) {
+		t.Errorf("Snapshot directory not created: %s", snapDir)
+	}
+
+	// Second run - compares against existing snapshots
+	var stdout2, stderr2 bytes.Buffer
+	code = RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout2, &stderr2)
+
+	if code != 0 {
+		t.Errorf("Second run returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr2.String(), stdout2.String())
+	}
+}
+
+func TestRun_SnapshotMismatch(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_snapshot_mismatch.star")
+
+	// Create initial snapshot
+	content1 := `def test_value():
+    assert.snapshot("original", "value")
+`
+	if err := os.WriteFile(file, []byte(content1), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout1, stderr1 bytes.Buffer
+	code := RunWithIO(context.Background(), []string{file}, nil, &stdout1, &stderr1)
+	if code != 0 {
+		t.Fatalf("Initial run failed: %s", stderr1.String())
+	}
+
+	// Now change the value - should fail
+	content2 := `def test_value():
+    assert.snapshot("changed", "value")
+`
+	if err := os.WriteFile(file, []byte(content2), 0644); err != nil {
+		t.Fatalf("failed to write modified test file: %v", err)
+	}
+
+	var stdout2, stderr2 bytes.Buffer
+	code = RunWithIO(context.Background(), []string{file}, nil, &stdout2, &stderr2)
+
+	if code == 0 {
+		t.Error("Expected mismatch to cause failure, but test passed")
+	}
+
+	output := stdout2.String()
+	if !strings.Contains(output, "does not match") {
+		t.Errorf("Expected 'does not match' in output, got:\n%s", output)
+	}
+}
+
+func TestRun_SnapshotUpdate(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_snapshot_update.star")
+
+	// Create initial snapshot
+	content1 := `def test_value():
+    assert.snapshot("original", "value")
+`
+	if err := os.WriteFile(file, []byte(content1), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout1, stderr1 bytes.Buffer
+	code := RunWithIO(context.Background(), []string{file}, nil, &stdout1, &stderr1)
+	if code != 0 {
+		t.Fatalf("Initial run failed: %s", stderr1.String())
+	}
+
+	// Change the value
+	content2 := `def test_value():
+    assert.snapshot("updated", "value")
+`
+	if err := os.WriteFile(file, []byte(content2), 0644); err != nil {
+		t.Fatalf("failed to write modified test file: %v", err)
+	}
+
+	// Run with --update-snapshots - should pass and update
+	var stdout2, stderr2 bytes.Buffer
+	code = RunWithIO(context.Background(), []string{"--update-snapshots", file}, nil, &stdout2, &stderr2)
+
+	if code != 0 {
+		t.Errorf("Update run returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr2.String(), stdout2.String())
+	}
+
+	// Verify subsequent run passes without update flag
+	var stdout3, stderr3 bytes.Buffer
+	code = RunWithIO(context.Background(), []string{file}, nil, &stdout3, &stderr3)
+
+	if code != 0 {
+		t.Errorf("Post-update run returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr3.String(), stdout3.String())
+	}
+}
+
+func TestRun_SnapshotStruct(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_snapshot_struct.star")
+	content := `def test_struct_snapshot():
+    """Test struct snapshot."""
+    s = struct(name="test", value=42, nested=struct(a=1, b=2))
+    assert.snapshot(s, "my_struct")
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	// First run - creates snapshot
+	var stdout1, stderr1 bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout1, &stderr1)
+
+	if code != 0 {
+		t.Errorf("First run returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr1.String(), stdout1.String())
+	}
+
+	// Second run - compares
+	var stdout2, stderr2 bytes.Buffer
+	code = RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout2, &stderr2)
+
+	if code != 0 {
+		t.Errorf("Second run returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr2.String(), stdout2.String())
+	}
+}
