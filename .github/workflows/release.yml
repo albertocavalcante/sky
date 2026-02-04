@@ -154,6 +154,24 @@ jobs:
       - name: List artifacts
         run: ls -la artifacts/
 
+      - name: Create tar.gz archives for Homebrew
+        working-directory: artifacts
+        run: |
+          # Create tar.gz archives for sky_full (Homebrew distribution)
+          for file in sky_full-darwin-* sky_full-linux-*; do
+            if [[ -f "$file" && ! "$file" == *.exe ]]; then
+              # Extract os-arch from filename (e.g., sky_full-darwin-arm64 -> darwin-arm64)
+              os_arch="${file#sky_full-}"
+              # Create archive with binary renamed to just "sky"
+              cp "$file" sky
+              chmod +x sky
+              tar -czf "sky-${os_arch}.tar.gz" sky
+              rm sky
+              # Create individual sha256 file for Homebrew action
+              sha256sum "sky-${os_arch}.tar.gz" | awk '{print $1}' > "sky-${os_arch}.tar.gz.sha256"
+            fi
+          done
+
       - name: Create checksums
         working-directory: artifacts
         run: |
@@ -172,6 +190,49 @@ jobs:
             artifacts/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Eukia App Token
+        id: eukia
+        continue-on-error: true
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        with:
+          app-id: ${{ vars.EUKIA_APP_ID }}
+          private-key: ${{ secrets.EUKIA_APP_PRIVATE_KEY }}
+          owner: albertocavalcante
+          repositories: homebrew-tap
+          permission-contents: write
+
+      - name: Update Homebrew tap
+        if: steps.eukia.outcome == 'success' && !contains(steps.version.outputs.version, '-')
+        continue-on-error: true
+        uses: albertocavalcante/actions/update-homebrew-tap@main
+        with:
+          tap-repo: albertocavalcante/homebrew-tap
+          formula-name: sky
+          version: ${{ steps.version.outputs.version }}
+          github-token: ${{ steps.eukia.outputs.token }}
+          template: packaging/homebrew/sky.rb.in
+          description: "Starlark developer toolkit - formatter, linter, LSP, and more"
+          homepage: https://github.com/albertocavalcante/sky
+          license: Apache-2.0
+          commit-message: "Update sky to ${{ steps.version.outputs.version }}"
+          git-user-name: "Eukia[bot]"
+          git-user-email: "eukia[bot]@users.noreply.github.com"
+          assets: |
+            {
+              "darwin-arm64": {
+                "url": "https://github.com/albertocavalcante/sky/releases/download/${{ steps.version.outputs.version }}/sky-darwin-arm64.tar.gz"
+              },
+              "darwin-amd64": {
+                "url": "https://github.com/albertocavalcante/sky/releases/download/${{ steps.version.outputs.version }}/sky-darwin-amd64.tar.gz"
+              },
+              "linux-aarch64": {
+                "url": "https://github.com/albertocavalcante/sky/releases/download/${{ steps.version.outputs.version }}/sky-linux-arm64.tar.gz"
+              },
+              "linux-amd64": {
+                "url": "https://github.com/albertocavalcante/sky/releases/download/${{ steps.version.outputs.version }}/sky-linux-amd64.tar.gz"
+              }
+            }
 
   # ===========================================================================
   # Job 3: Dry run summary (when dry_run is true)
