@@ -34,7 +34,7 @@ import (
 // Run executes the testscript tests in the given directory.
 func Run(t *testing.T, dir string) {
 	testscript.Run(t, testscript.Params{
-		Dir: dir,
+		Dir:  dir,
 		Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
 			// Custom commands can be added here if needed
 		},

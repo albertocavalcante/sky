@@ -23,6 +23,7 @@ go_sdk.nogo(nogo = "//tools/nogo:sky_nogo")
 
 go_deps = use_extension("@gazelle//:extensions.bzl", "go_deps")
 go_deps.from_file(go_mod = "//:go.mod")
+
 # keep sorted
 use_repo(
     go_deps,
@@ -31,10 +32,10 @@ use_repo(
     "com_github_google_go_cmp",
     "com_github_kisielk_errcheck",
     "com_github_pmezard_go_difflib",
+    "com_github_rogpeppe_go_internal",
     "com_github_tetratelabs_wazero",
     "com_github_timakin_bodyclose",
     "dev_lsp_go_protocol",
-    "dev_lsp_go_uri",
     "net_starlark_go",
     "org_golang_google_protobuf",
     "org_golang_x_term",

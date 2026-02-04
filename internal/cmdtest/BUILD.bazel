@@ -10,6 +10,7 @@ go_library(
         "//internal/cmd/skydoc",
         "//internal/cmd/skyfmt",
         "//internal/cmd/skylint",
+        "//internal/cmd/skyls",
         "//internal/cmd/skyquery",
         "@com_github_rogpeppe_go_internal//testscript",
     ],

@@ -17,6 +17,7 @@ _EMBEDDED_TOOL_DEPS = [
     "//internal/cmd/skydoc",
     "//internal/cmd/skyfmt",
     "//internal/cmd/skylint",
+    "//internal/cmd/skyls",
     "//internal/cmd/skyquery",
     "//internal/cmd/skyrepl",
     "//internal/cmd/skytest",
@@ -47,7 +48,11 @@ go_binary(
 # Full build - all tools embedded
 go_library(
     name = "sky_full_lib",
-    srcs = ["embedded_full.go"],
+    srcs = [
+        "embedded.go",
+        "embedded_full.go",
+        "main.go",
+    ],
     importpath = "github.com/albertocavalcante/sky/cmd/sky",
     visibility = ["//visibility:private"],
     deps = _COMMON_DEPS + _EMBEDDED_TOOL_DEPS,
