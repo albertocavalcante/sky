@@ -1340,3 +1340,174 @@ __test_params__ = {
 		t.Errorf("expected test_upper[mixed] in output, got:\n%s", output)
 	}
 }
+
+// ============================================================================
+// Builtin Quick Wins Tests (struct, json, assert.len, assert.empty)
+// ============================================================================
+
+func TestRun_StructBuiltin(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_struct.star")
+	content := `def test_struct_basic():
+    """Test that struct builtin is available."""
+    s = struct(name="foo", version="1.0.0")
+    assert.eq(s.name, "foo")
+    assert.eq(s.version, "1.0.0")
+
+def test_struct_attribute_access():
+    """Test attribute access vs dict access."""
+    s = struct(a=1, b=2, c=3)
+    assert.eq(s.a, 1)
+    assert.eq(s.b, 2)
+    assert.eq(s.c, 3)
+
+def test_struct_nested():
+    """Test nested structs."""
+    inner = struct(value=42)
+    outer = struct(name="outer", nested=inner)
+    assert.eq(outer.name, "outer")
+    assert.eq(outer.nested.value, 42)
+
+def test_struct_equality():
+    """Test struct equality."""
+    s1 = struct(a=1, b=2)
+    s2 = struct(a=1, b=2)
+    s3 = struct(a=1, b=3)
+    assert.eq(s1, s2)
+    assert.ne(s1, s3)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(struct tests) returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr.String(), stdout.String())
+	}
+}
+
+func TestRun_JsonModule(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_json.star")
+	content := `def test_json_decode():
+    """Test JSON decoding."""
+    data = json.decode('{"key": "value", "num": 42}')
+    assert.eq(data["key"], "value")
+    assert.eq(data["num"], 42)
+
+def test_json_encode():
+    """Test JSON encoding."""
+    text = json.encode({"foo": [1, 2, 3]})
+    assert.contains(text, "foo")
+    assert.contains(text, "[1")
+
+def test_json_roundtrip():
+    """Test encode/decode roundtrip."""
+    original = {"name": "test", "values": [1, 2, 3], "nested": {"a": 1}}
+    encoded = json.encode(original)
+    decoded = json.decode(encoded)
+    assert.eq(decoded["name"], "test")
+    assert.eq(decoded["values"], [1, 2, 3])
+    assert.eq(decoded["nested"]["a"], 1)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(json tests) returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr.String(), stdout.String())
+	}
+}
+
+func TestRun_AssertLen(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_assert_len.star")
+	content := `def test_assert_len_list():
+    """Test assert.len with lists."""
+    assert.len([1, 2, 3], 3)
+    assert.len([], 0)
+    assert.len([1], 1)
+
+def test_assert_len_dict():
+    """Test assert.len with dicts."""
+    assert.len({"a": 1, "b": 2}, 2)
+    assert.len({}, 0)
+
+def test_assert_len_string():
+    """Test assert.len with strings."""
+    assert.len("hello", 5)
+    assert.len("", 0)
+
+def test_assert_len_tuple():
+    """Test assert.len with tuples."""
+    assert.len((1, 2, 3), 3)
+    assert.len((), 0)
+
+def test_assert_len_fails_on_wrong_length():
+    """Test that assert.len fails when length doesn't match."""
+    assert.fails(lambda: assert.len([1, 2], 3), "expected len")
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(assert.len tests) returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr.String(), stdout.String())
+	}
+}
+
+func TestRun_AssertEmpty(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_assert_empty.star")
+	content := `def test_assert_empty_list():
+    """Test assert.empty with lists."""
+    assert.empty([])
+
+def test_assert_empty_dict():
+    """Test assert.empty with dicts."""
+    assert.empty({})
+
+def test_assert_empty_string():
+    """Test assert.empty with strings."""
+    assert.empty("")
+
+def test_assert_not_empty_list():
+    """Test assert.not_empty with lists."""
+    assert.not_empty([1])
+    assert.not_empty([1, 2, 3])
+
+def test_assert_not_empty_dict():
+    """Test assert.not_empty with dicts."""
+    assert.not_empty({"a": 1})
+
+def test_assert_not_empty_string():
+    """Test assert.not_empty with strings."""
+    assert.not_empty("hello")
+
+def test_assert_empty_fails_on_nonempty():
+    """Test that assert.empty fails on non-empty container."""
+    assert.fails(lambda: assert.empty([1]), "to be empty")
+
+def test_assert_not_empty_fails_on_empty():
+    """Test that assert.not_empty fails on empty container."""
+    assert.fails(lambda: assert.not_empty([]), "to not be empty")
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(assert.empty tests) returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr.String(), stdout.String())
+	}
+}
