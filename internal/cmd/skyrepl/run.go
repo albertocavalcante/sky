@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"strings"
+	"sync"
+	gosystime "time"
 
 	"go.starlark.net/lib/json"
 	"go.starlark.net/lib/math"
@@ -158,10 +161,41 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	stdinIsTerminal := term.IsTerminal(int(os.Stdin.Fd()))
 	if stdinIsTerminal {
 		writef(stdout, "skyrepl %s (Starlark REPL)\n", version.String())
-		writeln(stdout, "Type expressions to evaluate. Use Ctrl-D to exit.")
+		writeln(stdout, "Type expressions to evaluate. Use Ctrl-D or exit() to exit.")
 		writeln(stdout, "Built-in modules: json, math, time")
 		writeln(stdout)
 	}
+
+	// Set up double Ctrl-C to exit
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt)
+	var (
+		lastInterrupt gosystime.Time
+		interruptMu   sync.Mutex
+	)
+	go func() {
+		for range sigChan {
+			interruptMu.Lock()
+			now := gosystime.Now()
+			if now.Sub(lastInterrupt) < 500*gosystime.Millisecond {
+				writeln(stdout)
+				os.Exit(0)
+			}
+			lastInterrupt = now
+			interruptMu.Unlock()
+			// Print hint on first Ctrl-C
+			writeln(stderr, "(Press Ctrl-C again to exit, or Ctrl-D, or type exit())")
+		}
+	}()
+	defer signal.Stop(sigChan)
+
+	// Add exit() and quit() builtins
+	exitFn := starlark.NewBuiltin("exit", func(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+		os.Exit(0)
+		return starlark.None, nil
+	})
+	globals["exit"] = exitFn
+	globals["quit"] = exitFn
 
 	thread.Name = "REPL"
 	repl.REPLOptions(syntax.LegacyFileOptions(), thread, globals)
