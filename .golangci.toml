@@ -23,10 +23,6 @@ disable = [
   "nlreturn",
 ]
 
-[formatters]
-enable = []
-disable = ["gofumpt"]
-
 [linters.settings.errcheck]
 check-type-assertions = false
 check-blank = false
