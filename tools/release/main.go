@@ -149,8 +149,12 @@ func deleteTag(tag string) {
 		return
 	}
 
-	exec.Command("git", "tag", "-d", tag).Run()
-	exec.Command("git", "push", "origin", "--delete", tag).Run()
+	if err := exec.Command("git", "tag", "-d", tag).Run(); err != nil {
+		fmt.Printf("Warning: failed to delete local tag: %v\n", err)
+	}
+	if err := exec.Command("git", "push", "origin", "--delete", tag).Run(); err != nil {
+		fmt.Printf("Warning: failed to delete remote tag: %v\n", err)
+	}
 	fmt.Printf("Tag %s deleted.\n", tag)
 }
 
