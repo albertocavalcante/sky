@@ -7,6 +7,7 @@ package tester
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -125,6 +126,10 @@ type Options struct {
 	// TestNames filters to specific test function names.
 	// If set, only these tests will run (used by :: syntax).
 	TestNames []string
+
+	// Preludes is a list of prelude file paths to load before each test file.
+	// Prelude globals become available in the test scope.
+	Preludes []string
 }
 
 // DefaultOptions returns sensible defaults.
@@ -179,7 +184,13 @@ func (r *Runner) RunFile(filename string, src []byte) (*FileResult, error) {
 	result := &FileResult{File: filename}
 
 	// Build predeclared with assert module
-	predeclared := r.buildPredeclared()
+	basePredeclared := r.buildPredeclared()
+
+	// Load preludes (if any) to get additional predeclared values
+	predeclared, err := r.loadPreludes(basePredeclared)
+	if err != nil {
+		return nil, err
+	}
 
 	// Parse and execute the file
 	thread := &starlark.Thread{Name: filename}
@@ -231,6 +242,41 @@ func (r *Runner) buildPredeclared() starlark.StringDict {
 	}
 
 	return predeclared
+}
+
+// loadPreludes loads prelude files and returns their combined globals.
+// Returns an error if any prelude file fails to load.
+func (r *Runner) loadPreludes(basePredeclared starlark.StringDict) (starlark.StringDict, error) {
+	if len(r.opts.Preludes) == 0 {
+		return basePredeclared, nil
+	}
+
+	// Start with base predeclared
+	combined := make(starlark.StringDict)
+	for k, v := range basePredeclared {
+		combined[k] = v
+	}
+
+	// Load each prelude file in order
+	for _, preludePath := range r.opts.Preludes {
+		src, err := os.ReadFile(preludePath)
+		if err != nil {
+			return nil, fmt.Errorf("reading prelude %s: %w", preludePath, err)
+		}
+
+		thread := &starlark.Thread{Name: preludePath}
+		globals, err := starlark.ExecFile(thread, preludePath, src, combined)
+		if err != nil {
+			return nil, fmt.Errorf("executing prelude %s: %w", preludePath, err)
+		}
+
+		// Add prelude globals to combined (later preludes can shadow earlier ones)
+		for k, v := range globals {
+			combined[k] = v
+		}
+	}
+
+	return combined, nil
 }
 
 // findTestFunctions returns sorted list of test function names.

@@ -370,3 +370,93 @@ def test_three():
 	// test_one and test_three should not appear in passed tests
 	// (they might appear as "skipped" in verbose mode, which is acceptable)
 }
+
+// Prelude System (--prelude flag) tests
+
+func TestRun_PreludeBasic(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create prelude file with helper function
+	preludeFile := filepath.Join(dir, "helpers.star")
+	preludeContent := `def add_one(x):
+    return x + 1
+
+SHARED_VALUE = 42
+`
+	if err := os.WriteFile(preludeFile, []byte(preludeContent), 0644); err != nil {
+		t.Fatalf("failed to write prelude file: %v", err)
+	}
+
+	// Create test file that uses prelude helper
+	testFile := filepath.Join(dir, "test_with_prelude.star")
+	testContent := `def test_uses_helper():
+    # add_one and SHARED_VALUE come from prelude
+    assert.eq(add_one(1), 2)
+    assert.eq(SHARED_VALUE, 42)
+`
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"--prelude", preludeFile, testFile}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(--prelude) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+}
+
+func TestRun_PreludeMultiple(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create first prelude file
+	prelude1 := filepath.Join(dir, "prelude1.star")
+	if err := os.WriteFile(prelude1, []byte(`PRELUDE1_VALUE = 10`), 0644); err != nil {
+		t.Fatalf("failed to write prelude1: %v", err)
+	}
+
+	// Create second prelude file
+	prelude2 := filepath.Join(dir, "prelude2.star")
+	if err := os.WriteFile(prelude2, []byte(`PRELUDE2_VALUE = 20`), 0644); err != nil {
+		t.Fatalf("failed to write prelude2: %v", err)
+	}
+
+	// Create test file that uses both preludes
+	testFile := filepath.Join(dir, "test_multi_prelude.star")
+	testContent := `def test_uses_both_preludes():
+    assert.eq(PRELUDE1_VALUE, 10)
+    assert.eq(PRELUDE2_VALUE, 20)
+`
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{
+		"--prelude", prelude1,
+		"--prelude", prelude2,
+		testFile,
+	}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(multiple --prelude) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+}
+
+func TestRun_PreludeNotFound(t *testing.T) {
+	dir := t.TempDir()
+	testFile := filepath.Join(dir, "test_simple.star")
+	if err := os.WriteFile(testFile, []byte(`def test_pass():\n    assert.eq(1, 1)`), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{
+		"--prelude", "/nonexistent/prelude.star",
+		testFile,
+	}, nil, &stdout, &stderr)
+
+	if code == 0 {
+		t.Error("RunWithIO(nonexistent --prelude) returned 0, want non-zero")
+	}
+}

@@ -23,6 +23,18 @@ const (
 	exitError  = 2
 )
 
+// stringSliceFlag allows a flag to be specified multiple times.
+type stringSliceFlag []string
+
+func (s *stringSliceFlag) String() string {
+	return strings.Join(*s, ", ")
+}
+
+func (s *stringSliceFlag) Set(value string) error {
+	*s = append(*s, value)
+	return nil
+}
+
 // Run executes skytest with the given arguments.
 // Returns exit code.
 func Run(args []string) int {
@@ -42,6 +54,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		coverageFlag  bool
 		coverageOut   string
 		filterFlag    string
+		preludeFlags  stringSliceFlag
 	)
 
 	fs := flag.NewFlagSet("skytest", flag.ContinueOnError)
@@ -54,6 +67,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	fs.StringVar(&prefixFlag, "prefix", "test_", "test function prefix")
 	fs.BoolVar(&durationFlag, "duration", false, "show test durations")
 	fs.StringVar(&filterFlag, "k", "", "filter tests by name pattern (supports 'not' prefix)")
+	fs.Var(&preludeFlags, "prelude", "prelude file to load before tests (can be specified multiple times)")
 	// EXPERIMENTAL: Coverage collection requires starlark-go-x with OnExec hook.
 	// Uncomment the replace directive in go.mod to enable.
 	// TODO(upstream): Remove experimental note once OnExec is merged.
@@ -74,6 +88,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writeln(stderr, "  - Per-file setup() and teardown() functions")
 		writeln(stderr, "  - Multiple output formats (text, JSON, JUnit)")
 		writeln(stderr, "  - Test filtering with -k flag")
+		writeln(stderr, "  - Prelude files for shared helpers (--prelude)")
 		writeln(stderr, "  - Coverage collection (EXPERIMENTAL, requires starlark-go-x)")
 		writeln(stderr)
 		writeln(stderr, "Flags:")
@@ -86,6 +101,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writeln(stderr, "  skytest -k parse                # Run tests containing 'parse'")
 		writeln(stderr, "  skytest -k 'not slow'           # Exclude tests containing 'slow'")
 		writeln(stderr, "  skytest test.star::test_foo     # Run specific test function")
+		writeln(stderr, "  skytest --prelude=helpers.star  # Load prelude before tests")
 		writeln(stderr, "  skytest -json tests/            # JSON output")
 		writeln(stderr, "  skytest -junit tests/ > out.xml # JUnit output for CI")
 		writeln(stderr)
@@ -149,6 +165,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	opts.Verbose = verboseFlag
 	opts.Coverage = coverageFlag
 	opts.Filter = filterFlag
+	opts.Preludes = preludeFlags
 
 	// Create a single runner for coverage reporting (if enabled)
 	// Note: We create per-file runners for execution to support :: syntax,
