@@ -54,6 +54,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		coverageFlag  bool
 		coverageOut   string
 		filterFlag    string
+		markerFilter  string
 		preludeFlags  stringSliceFlag
 		timeoutFlag   time.Duration
 		bailFlag      bool
@@ -70,6 +71,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	fs.StringVar(&prefixFlag, "prefix", "test_", "test function prefix")
 	fs.BoolVar(&durationFlag, "duration", false, "show test durations")
 	fs.StringVar(&filterFlag, "k", "", "filter tests by name pattern (supports 'not' prefix)")
+	fs.StringVar(&markerFilter, "m", "", "filter tests by marker (supports 'not' prefix, e.g., '-m slow', '-m \"not slow\"')")
 	fs.Var(&preludeFlags, "prelude", "prelude file to load before tests (can be specified multiple times)")
 	fs.DurationVar(&timeoutFlag, "timeout", 30*time.Second, "timeout per test (0 to disable)")
 	fs.BoolVar(&bailFlag, "bail", false, "stop on first test failure")
@@ -177,6 +179,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	opts.Verbose = verboseFlag
 	opts.Coverage = coverageFlag
 	opts.Filter = filterFlag
+	opts.MarkerFilter = markerFilter
 	opts.Preludes = preludeFlags
 	opts.Timeout = timeoutFlag
 	opts.FailFast = bailFlag || bailShortFlag

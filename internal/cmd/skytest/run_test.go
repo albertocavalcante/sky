@@ -647,3 +647,696 @@ def test_bbb_passes():
 		t.Error("expected test_bbb_passes to be reported (should run without --bail)")
 	}
 }
+
+// Fixture Tests
+
+func TestRun_FixtureBasic(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_fixture.star")
+	// Define a fixture function and a test that uses it
+	content := `def fixture_sample_data():
+    return {"users": ["alice", "bob"], "count": 2}
+
+def test_uses_fixture(sample_data):
+    # sample_data should be injected from fixture_sample_data
+    assert.eq(sample_data["count"], 2)
+    assert.eq(len(sample_data["users"]), 2)
+    assert.eq(sample_data["users"][0], "alice")
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(fixture basic) returned %d, want 0\nstdout: %s\nstderr: %s",
+			code, stdout.String(), stderr.String())
+	}
+}
+
+func TestRun_FixtureFromConftest(t *testing.T) {
+	// Create a directory structure with conftest.star
+	dir := t.TempDir()
+	subdir := filepath.Join(dir, "tests")
+	if err := os.Mkdir(subdir, 0755); err != nil {
+		t.Fatalf("failed to create subdir: %v", err)
+	}
+
+	// Create conftest.star in parent directory
+	conftestFile := filepath.Join(dir, "conftest.star")
+	conftestContent := `def fixture_db_connection():
+    return {"host": "localhost", "port": 5432}
+
+def fixture_config():
+    return {"debug": True, "env": "test"}
+`
+	if err := os.WriteFile(conftestFile, []byte(conftestContent), 0644); err != nil {
+		t.Fatalf("failed to write conftest file: %v", err)
+	}
+
+	// Create test file in subdirectory that uses fixtures from conftest
+	testFile := filepath.Join(subdir, "test_db.star")
+	testContent := `def test_uses_db(db_connection):
+    # db_connection comes from conftest.star in parent directory
+    assert.eq(db_connection["host"], "localhost")
+    assert.eq(db_connection["port"], 5432)
+
+def test_uses_config(config):
+    # config comes from conftest.star
+    assert.eq(config["debug"], True)
+    assert.eq(config["env"], "test")
+`
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", testFile}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(fixture from conftest) returned %d, want 0\nstdout: %s\nstderr: %s",
+			code, stdout.String(), stderr.String())
+	}
+}
+
+func TestRun_FixtureDependsOnFixture(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_fixture_deps.star")
+	// Fixtures can depend on other fixtures
+	content := `def fixture_base_url():
+    return "http://localhost:8080"
+
+def fixture_api_client(base_url):
+    # api_client depends on base_url fixture
+    return {"url": base_url, "headers": {"Content-Type": "application/json"}}
+
+def test_client_uses_url(api_client, base_url):
+    # Test receives both fixtures
+    assert.eq(api_client["url"], base_url)
+    assert.eq(api_client["url"], "http://localhost:8080")
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(fixture depends on fixture) returned %d, want 0\nstdout: %s\nstderr: %s",
+			code, stdout.String(), stderr.String())
+	}
+}
+
+func TestRun_FixtureScopeTest(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_fixture_scope.star")
+	// Test-scoped fixtures get fresh instances per test
+	// Each fixture call returns a new list, so we can test identity
+	content := `def fixture_unique_list():
+    # Each call returns a NEW list instance
+    return []
+
+def test_first(unique_list):
+    # Verify we get an empty list (fixture was called)
+    assert.eq(len(unique_list), 0)
+    # Can append to it (not frozen since it's returned fresh)
+    unique_list.append(1)
+    assert.eq(len(unique_list), 1)
+
+def test_second(unique_list):
+    # Second test also gets an empty list (fresh call for test scope)
+    # This proves we got a new list, not the one modified by test_first
+    assert.eq(len(unique_list), 0)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(fixture scope test) returned %d, want 0\nstdout: %s\nstderr: %s",
+			code, stdout.String(), stderr.String())
+	}
+}
+
+func TestRun_FixtureScopeFile(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_fixture_file_scope.star")
+	// File-scoped fixtures are shared within a file
+	// Each fixture call returns a new list, but with file scope it's cached
+	content := `def fixture_shared_list():
+    # This is only called ONCE for file scope, result is cached
+    return []
+
+# Configure fixture scope
+__fixture_config__ = {
+    "shared_list": "file",
+}
+
+def test_first(shared_list):
+    # Verify we get an empty list
+    assert.eq(len(shared_list), 0)
+    # Append to it
+    shared_list.append(1)
+    assert.eq(len(shared_list), 1)
+
+def test_second(shared_list):
+    # Second test gets THE SAME list (file scope = cached)
+    # It should have the item appended by test_first
+    assert.eq(len(shared_list), 1)
+    assert.eq(shared_list[0], 1)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(fixture scope file) returned %d, want 0\nstdout: %s\nstderr: %s",
+			code, stdout.String(), stderr.String())
+	}
+}
+
+func TestRun_FixtureNotFound(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_missing_fixture.star")
+	// Test requests a fixture that doesn't exist
+	content := `def test_uses_missing_fixture(nonexistent_fixture):
+    assert.eq(nonexistent_fixture, "something")
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	// Should fail because fixture is not found
+	if code == 0 {
+		t.Error("RunWithIO(missing fixture) returned 0, expected failure")
+	}
+
+	// Output should mention the missing fixture
+	output := stdout.String() + stderr.String()
+	if !strings.Contains(output, "nonexistent_fixture") || !strings.Contains(output, "not found") {
+		t.Errorf("expected error about nonexistent_fixture not found, got:\n%s", output)
+	}
+}
+
+// Test Markers tests
+
+func TestRun_MarkSkip(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_mark_skip.star")
+	// Test uses __test_meta__ to mark a test as skipped
+	content := `def test_should_be_skipped():
+    assert.eq(1, 2)  # Would fail if run
+
+def test_should_run():
+    assert.eq(1, 1)
+
+__test_meta__ = {
+    "test_should_be_skipped": {"skip": True},
+}
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	// Should pass because the failing test is skipped
+	if code != 0 {
+		t.Errorf("RunWithIO(__test_meta__ skip) returned %d, want 0\nstdout: %s\nstderr: %s", code, stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+	// Should show that test_should_be_skipped was skipped
+	if !strings.Contains(output, "SKIP") || !strings.Contains(output, "test_should_be_skipped") {
+		t.Errorf("expected test_should_be_skipped to be reported as SKIP, got:\n%s", output)
+	}
+	// Should run test_should_run
+	if !strings.Contains(output, "test_should_run") {
+		t.Error("expected test_should_run to be run")
+	}
+}
+
+func TestRun_MarkSkipWithReason(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_mark_skip_reason.star")
+	// Test uses __test_meta__ with skip reason
+	content := `def test_not_implemented():
+    assert.eq(1, 2)  # Would fail if run
+
+def test_should_run():
+    assert.eq(1, 1)
+
+__test_meta__ = {
+    "test_not_implemented": {"skip": "Feature not implemented yet"},
+}
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	// Should pass because the failing test is skipped
+	if code != 0 {
+		t.Errorf("RunWithIO(__test_meta__ skip with reason) returned %d, want 0\nstdout: %s\nstderr: %s", code, stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+	// Should show that test_not_implemented was skipped
+	if !strings.Contains(output, "SKIP") || !strings.Contains(output, "test_not_implemented") {
+		t.Errorf("expected test_not_implemented to be reported as SKIP, got:\n%s", output)
+	}
+	// Should show the reason
+	if !strings.Contains(output, "Feature not implemented") {
+		t.Errorf("expected skip reason in output, got:\n%s", output)
+	}
+}
+
+func TestRun_MarkXfail(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_xfail.star")
+	// Test uses xfail - a test that fails is expected to fail
+	content := `def test_known_bug():
+    # This test fails due to a known bug
+    assert.eq(1, 2)
+
+def test_should_run():
+    assert.eq(1, 1)
+
+__test_meta__ = {
+    "test_known_bug": {"xfail": "Bug #123"},
+}
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	// Should pass because the failing test is expected to fail (xfail)
+	if code != 0 {
+		t.Errorf("RunWithIO(xfail) returned %d, want 0\nstdout: %s\nstderr: %s", code, stdout.String(), stderr.String())
+	}
+
+	output := stdout.String()
+	// Should show that test_known_bug was XFAIL (expected failure)
+	if !strings.Contains(output, "XFAIL") || !strings.Contains(output, "test_known_bug") {
+		t.Errorf("expected test_known_bug to be reported as XFAIL, got:\n%s", output)
+	}
+}
+
+func TestRun_MarkXfailPasses(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_xfail_passes.star")
+	// Test uses xfail but the test actually passes - this should be reported as XPASS (unexpected pass)
+	content := `def test_bug_fixed():
+    # Bug was fixed, test now passes unexpectedly
+    assert.eq(1, 1)
+
+__test_meta__ = {
+    "test_bug_fixed": {"xfail": "Bug #123"},
+}
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	// Should FAIL because the xfail test unexpectedly passed (XPASS is a failure)
+	if code == 0 {
+		t.Errorf("RunWithIO(xfail that passes) returned 0, want non-zero\nstdout: %s", stdout.String())
+	}
+
+	output := stdout.String()
+	// Should show that test_bug_fixed was XPASS (unexpected pass)
+	if !strings.Contains(output, "XPASS") || !strings.Contains(output, "test_bug_fixed") {
+		t.Errorf("expected test_bug_fixed to be reported as XPASS, got:\n%s", output)
+	}
+}
+
+func TestRun_MarkFilter(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_mark_filter.star")
+	// Test with markers for filtering
+	content := `def test_unit_fast():
+    assert.eq(1, 1)
+
+def test_slow_integration():
+    assert.eq(2, 2)
+
+def test_another_slow():
+    assert.eq(3, 3)
+
+__test_meta__ = {
+    "test_slow_integration": {"markers": ["slow", "integration"]},
+    "test_another_slow": {"markers": ["slow"]},
+}
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	// Filter to only run tests with "slow" marker
+	code := RunWithIO(context.Background(), []string{"-m", "slow", "-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(-m slow) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+
+	output := stdout.String()
+	// Should run only slow tests
+	if !strings.Contains(output, "test_slow_integration") {
+		t.Error("expected test_slow_integration to be run")
+	}
+	if !strings.Contains(output, "test_another_slow") {
+		t.Error("expected test_another_slow to be run")
+	}
+	// test_unit_fast should NOT be run (or should be skipped)
+	if strings.Contains(output, "PASS") && strings.Contains(output, "test_unit_fast") {
+		t.Error("expected test_unit_fast to NOT be run with -m slow")
+	}
+}
+
+func TestRun_MarkFilterNot(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_mark_filter_not.star")
+	// Test with markers for filtering
+	content := `def test_unit_fast():
+    assert.eq(1, 1)
+
+def test_slow_integration():
+    assert.eq(2, 2)
+
+def test_another_fast():
+    assert.eq(3, 3)
+
+__test_meta__ = {
+    "test_slow_integration": {"markers": ["slow"]},
+}
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	// Filter to exclude tests with "slow" marker
+	code := RunWithIO(context.Background(), []string{"-m", "not slow", "-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(-m 'not slow') returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+
+	output := stdout.String()
+	// Should run non-slow tests
+	if !strings.Contains(output, "test_unit_fast") {
+		t.Error("expected test_unit_fast to be run")
+	}
+	if !strings.Contains(output, "test_another_fast") {
+		t.Error("expected test_another_fast to be run")
+	}
+	// test_slow_integration should NOT be run (or should be skipped)
+	if strings.Contains(output, "PASS") && strings.Contains(output, "test_slow_integration") {
+		t.Error("expected test_slow_integration to NOT be run with -m 'not slow'")
+	}
+}
+
+func TestRun_MarkMultiple(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_mark_multiple.star")
+	// Test with multiple markers on one test
+	content := `def test_complex():
+    assert.eq(1, 1)
+
+__test_meta__ = {
+    "test_complex": {"markers": ["slow", "integration", "database"]},
+}
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	// Test that filtering by any of the markers works
+	tests := []struct {
+		marker string
+		want   bool // true if test should run
+	}{
+		{"slow", true},
+		{"integration", true},
+		{"database", true},
+		{"fast", false},
+		{"not slow", false},
+	}
+
+	for _, tc := range tests {
+		var stdout, stderr bytes.Buffer
+		code := RunWithIO(context.Background(), []string{"-m", tc.marker, "-v", file}, nil, &stdout, &stderr)
+
+		output := stdout.String()
+		hasTest := strings.Contains(output, "PASS") && strings.Contains(output, "test_complex")
+
+		if tc.want && !hasTest {
+			t.Errorf("-m %q: expected test_complex to run, output:\n%s", tc.marker, output)
+		}
+		if !tc.want && hasTest {
+			t.Errorf("-m %q: expected test_complex to NOT run, output:\n%s", tc.marker, output)
+		}
+		if tc.want && code != 0 {
+			t.Errorf("-m %q: expected exit code 0, got %d", tc.marker, code)
+		}
+	}
+}
+
+// Table-Driven Tests (__test_params__) tests
+
+func TestRun_ParamBasic(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_param.star")
+	content := `
+CASES = [
+    {"name": "empty", "input": "", "want": 0},
+    {"name": "single", "input": "a", "want": 1},
+    {"name": "multi", "input": "abc", "want": 3},
+]
+
+def test_length(case):
+    assert.eq(len(case["input"]), case["want"])
+
+__test_params__ = {"test_length": CASES}
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(parametrized test) returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr.String(), stdout.String())
+	}
+
+	output := stdout.String()
+	// Should show virtual test names with case names
+	if !strings.Contains(output, "test_length[empty]") {
+		t.Errorf("expected test_length[empty] in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "test_length[single]") {
+		t.Errorf("expected test_length[single] in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "test_length[multi]") {
+		t.Errorf("expected test_length[multi] in output, got:\n%s", output)
+	}
+}
+
+func TestRun_ParamWithoutName(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_param_noname.star")
+	content := `
+CASES = [
+    {"input": "a", "want": 1},
+    {"input": "ab", "want": 2},
+    {"input": "abc", "want": 3},
+]
+
+def test_length(case):
+    assert.eq(len(case["input"]), case["want"])
+
+__test_params__ = {"test_length": CASES}
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(parametrized test without name) returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr.String(), stdout.String())
+	}
+
+	output := stdout.String()
+	// Should show virtual test names with indices (0, 1, 2)
+	if !strings.Contains(output, "test_length[0]") {
+		t.Errorf("expected test_length[0] in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "test_length[1]") {
+		t.Errorf("expected test_length[1] in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "test_length[2]") {
+		t.Errorf("expected test_length[2] in output, got:\n%s", output)
+	}
+}
+
+func TestRun_ParamSomeFail(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_param_fail.star")
+	content := `
+CASES = [
+    {"name": "pass1", "input": "a", "want": 1},
+    {"name": "fail", "input": "ab", "want": 999},
+    {"name": "pass2", "input": "abc", "want": 3},
+]
+
+def test_length(case):
+    assert.eq(len(case["input"]), case["want"])
+
+__test_params__ = {"test_length": CASES}
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	// Should fail because one case fails
+	if code == 0 {
+		t.Error("RunWithIO(parametrized test with failures) returned 0, want non-zero")
+	}
+
+	output := stdout.String()
+	// Should show individual results
+	if !strings.Contains(output, "test_length[pass1]") {
+		t.Errorf("expected test_length[pass1] in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "test_length[fail]") {
+		t.Errorf("expected test_length[fail] in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "test_length[pass2]") {
+		t.Errorf("expected test_length[pass2] in output, got:\n%s", output)
+	}
+	// Should show FAIL for the failing case
+	if !strings.Contains(output, "FAIL") {
+		t.Errorf("expected FAIL in output for failing case, got:\n%s", output)
+	}
+}
+
+func TestRun_ParamFilterByCase(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_param_filter.star")
+	content := `
+CASES = [
+    {"name": "empty", "input": "", "want": 0},
+    {"name": "single", "input": "a", "want": 1},
+    {"name": "multi", "input": "abc", "want": 3},
+]
+
+def test_length(case):
+    assert.eq(len(case["input"]), case["want"])
+
+__test_params__ = {"test_length": CASES}
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	// Filter by case name "empty"
+	code := RunWithIO(context.Background(), []string{"-k", "empty", "-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(-k empty) returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr.String(), stdout.String())
+	}
+
+	output := stdout.String()
+	// Should only run test_length[empty]
+	if !strings.Contains(output, "test_length[empty]") {
+		t.Errorf("expected test_length[empty] in output, got:\n%s", output)
+	}
+	// Other cases should not be run
+	if strings.Contains(output, "test_length[single]") && !strings.Contains(output, "skipped") {
+		t.Errorf("expected test_length[single] to NOT be run, got:\n%s", output)
+	}
+	if strings.Contains(output, "test_length[multi]") && !strings.Contains(output, "skipped") {
+		t.Errorf("expected test_length[multi] to NOT be run, got:\n%s", output)
+	}
+}
+
+func TestRun_ParamMultipleTests(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_param_multi.star")
+	content := `
+LENGTH_CASES = [
+    {"name": "empty", "input": "", "want": 0},
+    {"name": "one", "input": "x", "want": 1},
+]
+
+UPPER_CASES = [
+    {"name": "lower", "input": "abc", "want": "ABC"},
+    {"name": "mixed", "input": "aBc", "want": "ABC"},
+]
+
+def test_length(case):
+    assert.eq(len(case["input"]), case["want"])
+
+def test_upper(case):
+    assert.eq(case["input"].upper(), case["want"])
+
+__test_params__ = {
+    "test_length": LENGTH_CASES,
+    "test_upper": UPPER_CASES,
+}
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(multiple parametrized tests) returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr.String(), stdout.String())
+	}
+
+	output := stdout.String()
+	// Should show all virtual tests
+	if !strings.Contains(output, "test_length[empty]") {
+		t.Errorf("expected test_length[empty] in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "test_length[one]") {
+		t.Errorf("expected test_length[one] in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "test_upper[lower]") {
+		t.Errorf("expected test_upper[lower] in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "test_upper[mixed]") {
+		t.Errorf("expected test_upper[mixed] in output, got:\n%s", output)
+	}
+}
