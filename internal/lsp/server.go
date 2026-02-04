@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 
+	"github.com/albertocavalcante/sky/internal/starlark/filekind"
+	"github.com/albertocavalcante/sky/internal/starlark/formatter"
 	"go.lsp.dev/protocol"
 )
 
@@ -318,11 +321,40 @@ func (s *Server) handleFormatting(ctx context.Context, params json.RawMessage) (
 		return nil, nil
 	}
 
-	// TODO: Integrate with skyfmt
-	_ = doc
+	// Extract filename from URI for kind detection
+	path := uriToPath(p.TextDocument.URI)
+	log.Printf("formatting: %s", path)
 
-	log.Printf("formatting: %s", p.TextDocument.URI)
-	return nil, nil // No edits yet
+	// Format the document content
+	formatted, err := formatter.Format([]byte(doc.Content), path, filekind.KindUnknown)
+	if err != nil {
+		log.Printf("formatting error: %v", err)
+		// Return empty edits on error - don't break the editor
+		return []protocol.TextEdit{}, nil
+	}
+
+	// If no changes, return empty edits
+	formattedStr := string(formatted)
+	if formattedStr == doc.Content {
+		return []protocol.TextEdit{}, nil
+	}
+
+	// Return a single edit that replaces the entire document
+	lines := strings.Count(doc.Content, "\n")
+	lastLineLen := len(doc.Content)
+	if idx := strings.LastIndex(doc.Content, "\n"); idx >= 0 {
+		lastLineLen = len(doc.Content) - idx - 1
+	}
+
+	return []protocol.TextEdit{
+		{
+			Range: protocol.Range{
+				Start: protocol.Position{Line: 0, Character: 0},
+				End:   protocol.Position{Line: uint32(lines), Character: uint32(lastLineLen)},
+			},
+			NewText: formattedStr,
+		},
+	}, nil
 }
 
 func (s *Server) handleDocumentSymbol(ctx context.Context, params json.RawMessage) (any, error) {
@@ -335,4 +367,14 @@ func (s *Server) handleDocumentSymbol(ctx context.Context, params json.RawMessag
 	log.Printf("documentSymbol: %s", p.TextDocument.URI)
 
 	return []protocol.DocumentSymbol{}, nil
+}
+
+// uriToPath converts a document URI to a file path.
+// Handles file:// URIs and returns just the path component.
+func uriToPath(uri protocol.DocumentURI) string {
+	s := string(uri)
+	if strings.HasPrefix(s, "file://") {
+		return s[7:] // Remove "file://"
+	}
+	return s
 }

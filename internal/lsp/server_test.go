@@ -191,6 +191,144 @@ func TestServerDocumentSync(t *testing.T) {
 	}
 }
 
+func TestServerFormatting(t *testing.T) {
+	server := NewServer(nil)
+
+	// Initialize
+	initParams, _ := json.Marshal(protocol.InitializeParams{})
+	server.Handle(context.Background(), &Request{
+		Method: "initialize",
+		ID:     rawID(1),
+		Params: initParams,
+	})
+	server.Handle(context.Background(), &Request{
+		Method: "initialized",
+		Params: json.RawMessage("{}"),
+	})
+
+	// Open document with badly formatted code
+	unformatted := "def   foo(  x,y ):\n  return x+y\n"
+	openParams, _ := json.Marshal(protocol.DidOpenTextDocumentParams{
+		TextDocument: protocol.TextDocumentItem{
+			URI:        "file:///test.star",
+			LanguageID: "starlark",
+			Version:    1,
+			Text:       unformatted,
+		},
+	})
+	server.Handle(context.Background(), &Request{
+		Method: "textDocument/didOpen",
+		Params: openParams,
+	})
+
+	// Request formatting
+	fmtParams, _ := json.Marshal(protocol.DocumentFormattingParams{
+		TextDocument: protocol.TextDocumentIdentifier{
+			URI: "file:///test.star",
+		},
+	})
+	result, err := server.Handle(context.Background(), &Request{
+		Method: "textDocument/formatting",
+		ID:     rawID(2),
+		Params: fmtParams,
+	})
+
+	if err != nil {
+		t.Fatalf("formatting failed: %v", err)
+	}
+
+	edits, ok := result.([]protocol.TextEdit)
+	if !ok {
+		t.Fatalf("result is not []TextEdit: %T", result)
+	}
+
+	// Should have exactly one edit (whole document replacement)
+	if len(edits) != 1 {
+		t.Fatalf("expected 1 edit, got %d", len(edits))
+	}
+
+	// The edit should produce formatted code
+	formatted := edits[0].NewText
+	if formatted == unformatted {
+		t.Error("formatted text should differ from original")
+	}
+
+	// Check that the formatted code is cleaner
+	if !containsSubstring(formatted, "def foo(x, y):") {
+		t.Errorf("formatted code doesn't look right: %q", formatted)
+	}
+}
+
+func TestServerFormattingNoChange(t *testing.T) {
+	server := NewServer(nil)
+
+	// Initialize
+	initParams, _ := json.Marshal(protocol.InitializeParams{})
+	server.Handle(context.Background(), &Request{
+		Method: "initialize",
+		ID:     rawID(1),
+		Params: initParams,
+	})
+	server.Handle(context.Background(), &Request{
+		Method: "initialized",
+		Params: json.RawMessage("{}"),
+	})
+
+	// Open document with already formatted code
+	formatted := "def foo(x, y):\n    return x + y\n"
+	openParams, _ := json.Marshal(protocol.DidOpenTextDocumentParams{
+		TextDocument: protocol.TextDocumentItem{
+			URI:        "file:///test.star",
+			LanguageID: "starlark",
+			Version:    1,
+			Text:       formatted,
+		},
+	})
+	server.Handle(context.Background(), &Request{
+		Method: "textDocument/didOpen",
+		Params: openParams,
+	})
+
+	// Request formatting
+	fmtParams, _ := json.Marshal(protocol.DocumentFormattingParams{
+		TextDocument: protocol.TextDocumentIdentifier{
+			URI: "file:///test.star",
+		},
+	})
+	result, err := server.Handle(context.Background(), &Request{
+		Method: "textDocument/formatting",
+		ID:     rawID(2),
+		Params: fmtParams,
+	})
+
+	if err != nil {
+		t.Fatalf("formatting failed: %v", err)
+	}
+
+	edits, ok := result.([]protocol.TextEdit)
+	if !ok {
+		t.Fatalf("result is not []TextEdit: %T", result)
+	}
+
+	// Should have no edits since code is already formatted
+	if len(edits) != 0 {
+		t.Errorf("expected 0 edits for already formatted code, got %d", len(edits))
+	}
+}
+
+func containsSubstring(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstringHelper(s, substr))
+}
+
+func containsSubstringHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
 func rawID(n int) *json.RawMessage {
 	raw := json.RawMessage([]byte{byte('0' + n)})
 	return &raw
