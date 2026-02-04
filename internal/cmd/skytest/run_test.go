@@ -1670,3 +1670,206 @@ func TestRun_SnapshotStruct(t *testing.T) {
 		t.Errorf("Second run returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr2.String(), stdout2.String())
 	}
 }
+
+// Mock fixture tests
+
+func TestRun_MockBasic(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_mock_basic.star")
+	content := `def test_mock_wrap(mock):
+    """Test mock.wrap() creates a wrapper."""
+    def original_fn():
+        return "original"
+
+    wrapped = mock.wrap(original_fn)
+    result = wrapped()
+
+    # Without configuration, should call through to original
+    assert.eq(result, "original")
+    assert.true(mock.was_called(wrapped))
+    assert.eq(mock.call_count(wrapped), 1)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(mock basic) returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr.String(), stdout.String())
+	}
+}
+
+func TestRun_MockThenReturn(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_mock_then_return.star")
+	content := `def test_mock_then_return(mock):
+    """Test mock.when().then_return() configuration."""
+    def fetch_data():
+        return {"error": "should not be called"}
+
+    wrapped = mock.wrap(fetch_data)
+    mock.when(wrapped).then_return({"data": 42})
+
+    result = wrapped()
+
+    assert.eq(result["data"], 42)
+    assert.true(mock.was_called(wrapped))
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(mock then_return) returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr.String(), stdout.String())
+	}
+}
+
+func TestRun_MockCalledWith(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_mock_called_with.star")
+	content := `def test_mock_called_with(mock):
+    """Test mock.when().called_with().then_return() configuration."""
+    def api_call(url):
+        return {"error": "should not be called"}
+
+    wrapped = mock.wrap(api_call)
+    mock.when(wrapped).called_with("/api/users").then_return({"users": ["alice", "bob"]})
+    mock.when(wrapped).called_with("/api/posts").then_return({"posts": []})
+
+    users = wrapped("/api/users")
+    posts = wrapped("/api/posts")
+
+    assert.eq(users["users"], ["alice", "bob"])
+    assert.eq(posts["posts"], [])
+    assert.eq(mock.call_count(wrapped), 2)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(mock called_with) returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr.String(), stdout.String())
+	}
+}
+
+func TestRun_MockCalls(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_mock_calls.star")
+	content := `def test_mock_calls(mock):
+    """Test mock.calls() returns call history."""
+    def process(value):
+        return value * 2
+
+    wrapped = mock.wrap(process)
+
+    wrapped(1)
+    wrapped(2)
+    wrapped(3)
+
+    calls = mock.calls(wrapped)
+    assert.eq(len(calls), 3)
+    assert.eq(calls[0]["args"], (1,))
+    assert.eq(calls[1]["args"], (2,))
+    assert.eq(calls[2]["args"], (3,))
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(mock calls) returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr.String(), stdout.String())
+	}
+}
+
+func TestRun_MockIsolation(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_mock_isolation.star")
+	content := `# Test that mocks are isolated between tests
+
+def test_first(mock):
+    """First test configures a mock."""
+    def fn():
+        return "original"
+
+    wrapped = mock.wrap(fn)
+    mock.when(wrapped).then_return("mocked")
+
+    # Should use mocked value
+    assert.eq(wrapped(), "mocked")
+    assert.eq(mock.call_count(wrapped), 1)
+
+def test_second(mock):
+    """Second test should have fresh mock state."""
+    def fn():
+        return "original"
+
+    wrapped = mock.wrap(fn)
+
+    # Should call through to original (no configuration from first test)
+    assert.eq(wrapped(), "original")
+    assert.eq(mock.call_count(wrapped), 1)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(mock isolation) returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr.String(), stdout.String())
+	}
+}
+
+func TestRun_MockWithFixture(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create conftest with fixture
+	conftest := filepath.Join(dir, "conftest.star")
+	conftestContent := `def fixture_api_client(mock):
+    """Fixture that provides a mocked API client."""
+    def _fetch(url):
+        return {"error": "real API not available"}
+
+    wrapped = mock.wrap(_fetch)
+    return wrapped
+`
+	if err := os.WriteFile(conftest, []byte(conftestContent), 0644); err != nil {
+		t.Fatalf("failed to write conftest: %v", err)
+	}
+
+	// Create test file
+	testFile := filepath.Join(dir, "test_mock_fixture.star")
+	testContent := `def test_with_mocked_fixture(api_client, mock):
+    """Test using a fixture that wraps a mock."""
+    # Configure the mock
+    mock.when(api_client).called_with("/users").then_return({"users": ["test_user"]})
+
+    # Use the fixture
+    result = api_client("/users")
+
+    assert.eq(result["users"], ["test_user"])
+    assert.true(mock.was_called(api_client))
+`
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-v", testFile}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(mock with fixture) returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr.String(), stdout.String())
+	}
+}

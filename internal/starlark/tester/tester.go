@@ -205,6 +205,7 @@ type Runner struct {
 	opts     Options
 	coverage *coverage.DefaultCollector
 	snapshot *SnapshotManager
+	mock     *MockManager
 }
 
 // New creates a new test runner.
@@ -228,7 +229,10 @@ func New(opts Options) *Runner {
 	}
 
 	// Create snapshot manager (always available, but compare behavior depends on UpdateSnapshots)
-	r.snapshot = NewSnapshotManager("", opts.UpdateSnapshots)
+	r.snapshot = NewSnapshotManager(opts.UpdateSnapshots)
+
+	// Create mock manager (always available)
+	r.mock = NewMockManager()
 
 	return r
 }
@@ -283,6 +287,9 @@ func (r *Runner) RunFile(filename string, src []byte) (*FileResult, error) {
 
 	// Merge conftest fixtures with file fixtures (file fixtures override)
 	fixtureRegistry := r.mergeFixtureRegistries(conftestFixtures, fileFixtures)
+
+	// Register built-in fixtures
+	fixtureRegistry.RegisterBuiltin("mock", NewMockFixture(r.mock))
 
 	// Extract __test_params__ for parametrized tests
 	testParams := r.extractTestParams(globals)
@@ -348,8 +355,9 @@ func (r *Runner) RunFile(filename string, src []byte) (*FileResult, error) {
 
 				result.Tests = append(result.Tests, testResult)
 
-				// Clear test-scoped fixture cache between tests
+				// Clear test-scoped fixture cache and mock state between tests
 				fixtureRegistry.ClearTestCache()
+				r.mock.Reset()
 
 				// Fail-fast: stop after first failure
 				if r.opts.FailFast && !testResult.Passed {

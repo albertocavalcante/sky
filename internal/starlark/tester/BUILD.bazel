@@ -6,13 +6,18 @@ go_library(
         "assertions.go",
         "coverage_hook.go",
         "discovery.go",
+        "fixtures.go",
+        "mock.go",
         "reporter.go",
+        "snapshot.go",
         "tester.go",
     ],
     importpath = "github.com/albertocavalcante/sky/internal/starlark/tester",
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/starlark/coverage",
+        "@com_github_pmezard_go_difflib//difflib",
+        "@net_starlark_go//lib/json",
         "@net_starlark_go//starlark",
         "@net_starlark_go//starlarkstruct",
         "@net_starlark_go//syntax",
@@ -21,6 +26,10 @@ go_library(
 
 go_test(
     name = "tester_test",
-    srcs = ["tester_test.go"],
+    srcs = [
+        "mock_test.go",
+        "tester_test.go",
+    ],
     embed = [":tester"],
+    deps = ["@net_starlark_go//starlark"],
 )
