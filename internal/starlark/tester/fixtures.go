@@ -36,6 +36,8 @@ type FixtureRegistry struct {
 	fixtures map[string]*Fixture
 	// cache holds computed fixture values for file-scoped fixtures
 	cache map[string]starlark.Value
+	// builtins holds pre-computed builtin fixture values (e.g., mock)
+	builtins map[string]starlark.Value
 }
 
 // NewFixtureRegistry creates a new fixture registry.
@@ -43,7 +45,13 @@ func NewFixtureRegistry() *FixtureRegistry {
 	return &FixtureRegistry{
 		fixtures: make(map[string]*Fixture),
 		cache:    make(map[string]starlark.Value),
+		builtins: make(map[string]starlark.Value),
 	}
+}
+
+// RegisterBuiltin registers a built-in fixture value that doesn't need computation.
+func (r *FixtureRegistry) RegisterBuiltin(name string, value starlark.Value) {
+	r.builtins[name] = value
 }
 
 // Register adds a fixture to the registry.
@@ -70,6 +78,11 @@ func (r *FixtureRegistry) ClearTestCache() {
 
 // GetOrCompute returns the fixture value, computing it if necessary.
 func (r *FixtureRegistry) GetOrCompute(thread *starlark.Thread, name string, registry *FixtureRegistry) (starlark.Value, error) {
+	// Check builtins first (e.g., mock)
+	if builtin, ok := r.builtins[name]; ok {
+		return builtin, nil
+	}
+
 	fixture, ok := r.fixtures[name]
 	if !ok {
 		return nil, fmt.Errorf("fixture %q not found", name)

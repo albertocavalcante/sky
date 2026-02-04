@@ -8,16 +8,14 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/pmezard/go-difflib/difflib"
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
+	"go.starlark.net/syntax"
 )
 
 // SnapshotManager handles reading, writing, and comparing snapshots.
 type SnapshotManager struct {
-	// BaseDir is the directory containing test files.
-	// Snapshots are stored in __snapshots__/ subdirectories.
-	BaseDir string
-
 	// UpdateMode when true, updates snapshots instead of comparing.
 	UpdateMode bool
 
@@ -42,9 +40,8 @@ type SnapshotMismatch struct {
 }
 
 // NewSnapshotManager creates a new snapshot manager.
-func NewSnapshotManager(baseDir string, updateMode bool) *SnapshotManager {
+func NewSnapshotManager(updateMode bool) *SnapshotManager {
 	return &SnapshotManager{
-		BaseDir:    baseDir,
 		UpdateMode: updateMode,
 	}
 }
@@ -69,9 +66,20 @@ func (sm *SnapshotManager) snapshotDir() string {
 
 // snapshotPath returns the full path for a named snapshot.
 func (sm *SnapshotManager) snapshotPath(name string) string {
-	// Sanitize name for filesystem
-	safeName := strings.ReplaceAll(name, "/", "_")
-	safeName = strings.ReplaceAll(safeName, "\\", "_")
+	// Sanitize name for filesystem by replacing characters that are invalid on common operating systems.
+	// This includes forward/back slashes and Windows-invalid chars: : * ? " < > |
+	r := strings.NewReplacer(
+		"/", "_",
+		"\\", "_",
+		":", "_",
+		"*", "_",
+		"?", "_",
+		"\"", "_",
+		"<", "_",
+		">", "_",
+		"|", "_",
+	)
+	safeName := r.Replace(name)
 	return filepath.Join(sm.snapshotDir(), sm.testName+"__"+safeName+".snap")
 }
 
@@ -288,51 +296,43 @@ func serializeValue(v starlark.Value, indent int) string {
 }
 
 // sortStarlarkValues sorts a slice of Starlark values for deterministic output.
+// It uses a stable sorting strategy: first by type, then by canonical comparison
+// for comparable types, falling back to string representation.
 func sortStarlarkValues(values []starlark.Value) {
 	sort.Slice(values, func(i, j int) bool {
-		// Compare by string representation for simplicity
-		return values[i].String() < values[j].String()
+		v1, v2 := values[i], values[j]
+		t1, t2 := v1.Type(), v2.Type()
+
+		// 1. Different types: sort by type name for determinism
+		if t1 != t2 {
+			return t1 < t2
+		}
+
+		// 2. Same type: try canonical comparison using starlark.Compare
+		cmp, err := starlark.Compare(syntax.LT, v1, v2)
+		if err == nil {
+			return cmp
+		}
+
+		// 3. Fallback to string representation for uncomparable types
+		return v1.String() < v2.String()
 	})
 }
 
-// formatDiff creates a simple diff between expected and actual strings.
+// formatDiff creates a unified diff between expected and actual strings.
 func formatDiff(expected, actual string) string {
-	var sb strings.Builder
-	sb.WriteString("--- Expected\n")
-	sb.WriteString("+++ Actual\n")
-
-	expectedLines := strings.Split(expected, "\n")
-	actualLines := strings.Split(actual, "\n")
-
-	// Simple line-by-line diff
-	maxLines := max(len(expectedLines), len(actualLines))
-
-	for i := 0; i < maxLines; i++ {
-		var expLine, actLine string
-		if i < len(expectedLines) {
-			expLine = expectedLines[i]
-		}
-		if i < len(actualLines) {
-			actLine = actualLines[i]
-		}
-
-		if expLine != actLine {
-			if expLine != "" {
-				sb.WriteString("- ")
-				sb.WriteString(expLine)
-				sb.WriteString("\n")
-			}
-			if actLine != "" {
-				sb.WriteString("+ ")
-				sb.WriteString(actLine)
-				sb.WriteString("\n")
-			}
-		} else {
-			sb.WriteString("  ")
-			sb.WriteString(expLine)
-			sb.WriteString("\n")
-		}
+	diff := difflib.UnifiedDiff{
+		A:        difflib.SplitLines(expected),
+		B:        difflib.SplitLines(actual),
+		FromFile: "Expected",
+		ToFile:   "Actual",
+		Context:  3,
 	}
 
-	return sb.String()
+	result, err := difflib.GetUnifiedDiffString(diff)
+	if err != nil {
+		// Fallback to simple comparison if diff fails
+		return fmt.Sprintf("--- Expected\n%s\n+++ Actual\n%s", expected, actual)
+	}
+	return result
 }
