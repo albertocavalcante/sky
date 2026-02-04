@@ -44,21 +44,22 @@ func Run(args []string) int {
 // RunWithIO allows custom IO for embedding/testing.
 func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.Writer) int {
 	var (
-		jsonFlag      bool
-		junitFlag     bool
-		versionFlag   bool
-		verboseFlag   bool
-		recursiveFlag bool
-		prefixFlag    string
-		durationFlag  bool
-		coverageFlag  bool
-		coverageOut   string
-		filterFlag    string
-		markerFilter  string
-		preludeFlags  stringSliceFlag
-		timeoutFlag   time.Duration
-		bailFlag      bool
-		bailShortFlag bool
+		jsonFlag            bool
+		junitFlag           bool
+		versionFlag         bool
+		verboseFlag         bool
+		recursiveFlag       bool
+		prefixFlag          string
+		durationFlag        bool
+		coverageFlag        bool
+		coverageOut         string
+		filterFlag          string
+		markerFilter        string
+		preludeFlags        stringSliceFlag
+		timeoutFlag         time.Duration
+		bailFlag            bool
+		bailShortFlag       bool
+		updateSnapshotsFlag bool
 	)
 
 	fs := flag.NewFlagSet("skytest", flag.ContinueOnError)
@@ -81,6 +82,8 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	// TODO(upstream): Remove experimental note once OnExec is merged.
 	fs.BoolVar(&coverageFlag, "coverage", false, "collect coverage data (EXPERIMENTAL)")
 	fs.StringVar(&coverageOut, "coverprofile", "coverage.json", "coverage output file")
+	fs.BoolVar(&updateSnapshotsFlag, "update-snapshots", false, "update snapshots instead of comparing")
+	fs.BoolVar(&updateSnapshotsFlag, "u", false, "update snapshots (short for --update-snapshots)")
 
 	fs.Usage = func() {
 		writeln(stderr, "Usage: skytest [flags] <paths...>")
@@ -183,6 +186,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	opts.Preludes = preludeFlags
 	opts.Timeout = timeoutFlag
 	opts.FailFast = bailFlag || bailShortFlag
+	opts.UpdateSnapshots = updateSnapshotsFlag
 
 	// Create a single runner for coverage reporting (if enabled)
 	// Note: We create per-file runners for execution to support :: syntax,
