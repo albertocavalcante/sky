@@ -608,9 +608,103 @@ For a tool like `bazelbump` that might define custom Starlark functions:
 | P1       | Textproto    | Starpls compatibility, human-readable proto |
 | P2       | Python Stubs | Tilt compatibility, rich ecosystem          |
 
+## Cross-Tool Alignment
+
+Custom dialect support is being implemented across multiple Starlark tools. We should align formats for user consistency.
+
+### Related Work
+
+| Tool                       | PR/Implementation                                                                                                                  | Format                        | Status      |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ----------- |
+| **Sky (this)**             | RFC                                                                                                                                | JSON, textproto, Python stubs | Proposed    |
+| **JetBrains Hirschgarten** | [PR#1](https://github.com/albertocavalcante/fork-jetbrains-hirschgarten/pull/1)                                                    | JSON + glob rules             | Implemented |
+| **starpls**                | [PR#2](https://github.com/albertocavalcante/fork-starpls/pull/2), [PR#3](https://github.com/albertocavalcante/fork-starpls/pull/3) | JSON with modules             | In Progress |
+
+### starpls Extension Format (PR#2)
+
+```json
+{
+  "name": "tilt-dialect",
+  "description": "Tilt-specific Starlark extensions",
+  "applies_to": {
+    "file_patterns": ["Tiltfile", "tilt_modules/**/*.star"]
+  },
+  "modules": {
+    "exec": [
+      {
+        "name": "sh",
+        "type": "function",
+        "doc": "Execute shell command",
+        "callable": {
+          "params": [{"name": "cmd", "type": "string"}],
+          "return_type": "ExecResult"
+        }
+      }
+    ]
+  }
+}
+```
+
+### JetBrains Hirschgarten Format
+
+### Hirschgarten Config: `.starlark-dialects.json`
+
+```json
+{
+  "version": 1,
+  "rules": [
+    { "glob": "Tiltfile", "dialectId": "tilt", "priority": 100 },
+    { "glob": "*.bara.sky", "dialectId": "copybara", "priority": 100 }
+  ],
+  "builtinFilesByDialect": {
+    "tilt": ["starlark/tilt.builtins.json"],
+    "copybara": ["starlark/copybara.builtins.json"]
+  }
+}
+```
+
+### Hirschgarten Builtins Format
+
+```json
+{
+  "functions": [
+    {
+      "name": "docker_build",
+      "doc": "Build an image",
+      "params": [
+        { "name": "ref", "positional": true, "named": false, "required": true }
+      ]
+    }
+  ]
+}
+```
+
+### Proposed Alignment
+
+To maximize user convenience, we could:
+
+1. **Support the same config filename**: `.starlark-dialects.json`
+2. **Support the same builtins JSON schema** (with extensions for types/globals)
+3. **Users write once, works in both Sky LSP and JetBrains**
+
+| Field                 | Hirschgarten        | Sky (Current) | Aligned             |
+| --------------------- | ------------------- | ------------- | ------------------- |
+| `name`                | ✅                  | ✅            | ✅                  |
+| `doc`                 | ✅                  | ✅            | ✅                  |
+| `params[].name`       | ✅                  | ✅            | ✅                  |
+| `params[].required`   | ✅                  | ✅            | ✅                  |
+| `params[].positional` | ✅                  | ❌            | Add                 |
+| `params[].named`      | ✅                  | ❌            | Add                 |
+| `params[].type`       | ❌                  | ✅            | Add to Hirschgarten |
+| `params[].default`    | ✅ (`defaultValue`) | ✅            | Alias both          |
+| `return_type`         | ❌                  | ✅            | Add to Hirschgarten |
+| `types`               | ❌                  | ✅            | Sky extension       |
+| `globals`             | ❌                  | ✅            | Sky extension       |
+
 ## References
 
 - [JSON Loader Documentation](../internal/starlark/builtins/loader/JSON_LOADER.md)
+- [JetBrains Hirschgarten BYO Dialects PR](https://github.com/albertocavalcante/fork-jetbrains-hirschgarten/pull/1) - IntelliJ implementation
 - [starlark-lsp (Tilt)](https://github.com/tilt-dev/starlark-lsp) - Python stub approach
 - [starpls](https://github.com/withered-magic/starpls) - Proto-based approach
 - [starpls#379: Support custom stubs](https://github.com/withered-magic/starpls/issues/379) - Discussion on format support
