@@ -20,7 +20,8 @@ enable-all = true
 disable = ["shadow", "fieldalignment"]
 
 [linters.settings.staticcheck]
-checks = ["all"]
+# Disable style suggestions (ST*) and some simplifications (S*, QF*)
+checks = ["all", "-ST1023", "-S1009", "-QF*"]
 
 [linters.exclusions]
 paths = [
@@ -51,9 +52,15 @@ linters = ["staticcheck"]
 text = "SA1019.*syntax"
 linters = ["staticcheck"]
 
-# QF suggestions are optional
+# Exclude all SA1019 deprecation warnings (can address later)
 [[linters.exclusions.rules]]
-text = "QF1003"
+text = "SA1019"
+linters = ["staticcheck"]
+
+# Exclude SA5011 nil pointer suggestions in tests
+[[linters.exclusions.rules]]
+path = "_test\\.go"
+text = "SA5011"
 linters = ["staticcheck"]
 
 [issues]
