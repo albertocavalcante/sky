@@ -610,16 +610,6 @@ func completionItem(label string, kind protocol.CompletionItemKind, detail strin
 	return item
 }
 
-func getKeywordCompletions(prefix string) []protocol.CompletionItem {
-	items := make([]protocol.CompletionItem, 0, len(starlarkKeywords))
-	for _, kw := range starlarkKeywords {
-		if strings.HasPrefix(kw, prefix) {
-			items = append(items, completionItem(kw, protocol.CompletionItemKindKeyword, "keyword", false))
-		}
-	}
-	return items
-}
-
 func getBuiltinCompletions(prefix string) []protocol.CompletionItem {
 	items := make([]protocol.CompletionItem, 0, len(starlarkBuiltins))
 	for _, fn := range starlarkBuiltins {
