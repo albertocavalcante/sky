@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/albertocavalcante/sky/internal/starlark/checker"
@@ -130,15 +131,11 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		result.Diagnostics = append(result.Diagnostics, diags...)
 	}
 
-	// Filter if quiet mode
+	// Filter if quiet mode (keep only errors)
 	if quietFlag {
-		var filtered []checker.Diagnostic
-		for _, d := range result.Diagnostics {
-			if d.Severity == checker.SeverityError {
-				filtered = append(filtered, d)
-			}
-		}
-		result.Diagnostics = filtered
+		result.Diagnostics = slices.DeleteFunc(result.Diagnostics, func(d checker.Diagnostic) bool {
+			return d.Severity != checker.SeverityError
+		})
 	}
 
 	// Output results

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"sync"
 
@@ -484,10 +485,12 @@ func (s *Server) handleCompletion(ctx context.Context, params json.RawMessage) (
 		items = getModuleMemberCompletions(moduleName, memberPrefix)
 	} else {
 		// Complete keywords, builtins, and document symbols
-		items = append(items, getKeywordCompletions(prefix)...)
-		items = append(items, getBuiltinCompletions(prefix)...)
-		items = append(items, getModuleCompletions(prefix)...)
-		items = append(items, s.getDocumentSymbolCompletions(doc, prefix, int(p.Position.Line))...)
+		items = slices.Concat(
+			getKeywordCompletions(prefix),
+			getBuiltinCompletions(prefix),
+			getModuleCompletions(prefix),
+			s.getDocumentSymbolCompletions(doc, prefix, int(p.Position.Line)),
+		)
 	}
 
 	return &protocol.CompletionList{
@@ -498,12 +501,29 @@ func (s *Server) handleCompletion(ctx context.Context, params json.RawMessage) (
 
 // getCompletionPrefix extracts the identifier prefix at the cursor position.
 func getCompletionPrefix(content string, line, character int) string {
-	lines := strings.Split(content, "\n")
-	if line >= len(lines) {
-		return ""
+	// Find the target line without allocating a slice for all lines
+	lineStart := 0
+	currentLine := 0
+	for i, ch := range content {
+		if currentLine == line {
+			lineStart = i
+			break
+		}
+		if ch == '\n' {
+			currentLine++
+		}
+	}
+	if currentLine < line {
+		return "" // line number exceeds content
 	}
 
-	lineContent := lines[line]
+	// Find line end
+	lineEnd := lineStart
+	for lineEnd < len(content) && content[lineEnd] != '\n' {
+		lineEnd++
+	}
+
+	lineContent := content[lineStart:lineEnd]
 	if character > len(lineContent) {
 		character = len(lineContent)
 	}
@@ -547,65 +567,59 @@ var starlarkModules = map[string][]string{
 	"time": {"now", "parse_time", "parse_duration", "time", "from_timestamp"},
 }
 
+// completionItem creates a completion item with optional snippet support.
+func completionItem(label string, kind protocol.CompletionItemKind, detail string, isFunc bool) protocol.CompletionItem {
+	item := protocol.CompletionItem{
+		Label:  label,
+		Kind:   kind,
+		Detail: detail,
+	}
+	if isFunc {
+		item.InsertText = label + "($0)"
+		item.InsertTextFormat = protocol.InsertTextFormatSnippet
+	}
+	return item
+}
+
 func getKeywordCompletions(prefix string) []protocol.CompletionItem {
-	var items []protocol.CompletionItem
+	items := make([]protocol.CompletionItem, 0, len(starlarkKeywords))
 	for _, kw := range starlarkKeywords {
 		if strings.HasPrefix(kw, prefix) {
-			items = append(items, protocol.CompletionItem{
-				Label:  kw,
-				Kind:   protocol.CompletionItemKindKeyword,
-				Detail: "keyword",
-			})
+			items = append(items, completionItem(kw, protocol.CompletionItemKindKeyword, "keyword", false))
 		}
 	}
 	return items
 }
 
 func getBuiltinCompletions(prefix string) []protocol.CompletionItem {
-	var items []protocol.CompletionItem
+	items := make([]protocol.CompletionItem, 0, len(starlarkBuiltins))
 	for _, fn := range starlarkBuiltins {
 		if strings.HasPrefix(fn, prefix) {
-			items = append(items, protocol.CompletionItem{
-				Label:            fn,
-				Kind:             protocol.CompletionItemKindFunction,
-				Detail:           "builtin function",
-				InsertText:       fn + "($0)",
-				InsertTextFormat: protocol.InsertTextFormatSnippet,
-			})
+			items = append(items, completionItem(fn, protocol.CompletionItemKindFunction, "builtin function", true))
 		}
 	}
 	return items
 }
 
 func getModuleCompletions(prefix string) []protocol.CompletionItem {
-	var items []protocol.CompletionItem
+	items := make([]protocol.CompletionItem, 0, len(starlarkModules))
 	for mod := range starlarkModules {
 		if strings.HasPrefix(mod, prefix) {
-			items = append(items, protocol.CompletionItem{
-				Label:  mod,
-				Kind:   protocol.CompletionItemKindModule,
-				Detail: "module",
-			})
+			items = append(items, completionItem(mod, protocol.CompletionItemKindModule, "module", false))
 		}
 	}
 	return items
 }
 
 func getModuleMemberCompletions(moduleName, prefix string) []protocol.CompletionItem {
-	var items []protocol.CompletionItem
 	members, ok := starlarkModules[moduleName]
 	if !ok {
-		return items
+		return nil
 	}
+	items := make([]protocol.CompletionItem, 0, len(members))
 	for _, member := range members {
 		if strings.HasPrefix(member, prefix) {
-			items = append(items, protocol.CompletionItem{
-				Label:            member,
-				Kind:             protocol.CompletionItemKindFunction,
-				Detail:           moduleName + "." + member,
-				InsertText:       member + "($0)",
-				InsertTextFormat: protocol.InsertTextFormatSnippet,
-			})
+			items = append(items, completionItem(member, protocol.CompletionItemKindFunction, moduleName+"."+member, true))
 		}
 	}
 	return items
