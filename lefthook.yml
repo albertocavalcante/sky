@@ -1,0 +1,60 @@
+# Lefthook configuration for pre-commit hooks
+# https://github.com/evilmartians/lefthook
+#
+# Install hooks: lefthook install
+# Run manually: lefthook run pre-commit
+
+pre-commit:
+  parallel: true
+  commands:
+    # Check Go formatting
+    gofmt:
+      glob: "*.go"
+      run: |
+        unformatted=$(gofmt -l {staged_files})
+        if [ -n "$unformatted" ]; then
+          echo "The following files are not formatted:"
+          echo "$unformatted"
+          echo ""
+          echo "Run 'gofmt -w .' to fix"
+          exit 1
+        fi
+
+    # Check go.mod is tidy
+    go-mod-tidy:
+      glob: "*.go"
+      run: |
+        go mod tidy
+        if ! git diff --quiet go.mod go.sum; then
+          echo "go.mod or go.sum is not tidy"
+          echo "Run 'go mod tidy' and commit the changes"
+          git diff go.mod go.sum
+          exit 1
+        fi
+
+    # Verify Go build
+    go-build:
+      glob: "*.go"
+      run: go build ./...
+
+    # Run Go tests (only on changed packages)
+    go-test:
+      glob: "*.go"
+      run: go test -short ./...
+
+pre-push:
+  parallel: true
+  commands:
+    # Full test suite before push
+    go-test-full:
+      run: go test -race ./...
+
+    # Bazel build check (optional - comment out if too slow)
+    bazel-build:
+      run: bazel build //...
+
+# Output settings
+output:
+  - meta
+  - summary
+  - success

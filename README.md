@@ -141,6 +141,7 @@ examples/      Example plugins
 - Go 1.25+
 - Bazel 7+ (optional, for hermetic builds)
 - [just](https://github.com/casey/just) (optional, for task runner)
+- [lefthook](https://github.com/evilmartians/lefthook) (optional, for git hooks)
 
 ### Quick Start
 
@@ -172,6 +173,21 @@ go build -tags=sky_full ./cmd/sky
 # Cross-compile for all platforms
 just dist-all
 ```
+
+### Git Hooks
+
+Pre-commit hooks ensure code quality before commits:
+
+```bash
+# Install git hooks (one-time setup)
+just hooks
+# or: lefthook install
+
+# Run pre-commit checks manually
+just pre-commit
+```
+
+Hooks check: formatting, go.mod tidy, build, and tests.
 
 ## Contributing
 

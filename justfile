@@ -36,6 +36,14 @@ tidy:
 # Run format + lint + test (CI check)
 check: format lint test
 
+# Install git hooks via lefthook
+hooks:
+    lefthook install
+
+# Run pre-commit hooks manually
+pre-commit:
+    lefthook run pre-commit
+
 # Build a specific tool (e.g., just tool skylint)
 tool name:
     bazel build //cmd/{{name}}
