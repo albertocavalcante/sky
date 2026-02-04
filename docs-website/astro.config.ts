@@ -5,9 +5,12 @@ import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
 import fs from 'node:fs';
 
-// Load Starlark TextMate grammar for syntax highlighting
+// Load TextMate grammars for syntax highlighting
 const starlarkGrammar = JSON.parse(
 	fs.readFileSync(new URL('./starlark.tmLanguage.json', import.meta.url), 'utf-8')
+);
+const textprotoGrammar = JSON.parse(
+	fs.readFileSync(new URL('./textproto.tmLanguage.json', import.meta.url), 'utf-8')
 );
 
 export default defineConfig({
@@ -40,12 +43,15 @@ export default defineConfig({
 			expressiveCode: {
 				themes: ['github-dark', 'github-light'],
 				shiki: {
-					langs: [starlarkGrammar],
+					langs: [starlarkGrammar, textprotoGrammar],
 					langAlias: {
 						bzl: 'starlark',
 						bazel: 'starlark',
 						build: 'starlark',
 						star: 'starlark',
+						pbtxt: 'textproto',
+						prototext: 'textproto',
+						txtpb: 'textproto',
 					},
 				},
 				styleOverrides: {
@@ -98,7 +104,7 @@ export default defineConfig({
 				{
 					label: 'Plugins',
 					items: [
-						{ label: 'Overview', slug: 'plugins/index' },
+						{ label: 'Overview', slug: 'plugins' },
 						{ label: 'Quick Start', slug: 'plugins/quick-start' },
 						{ label: 'Protocol', slug: 'plugins/protocol' },
 						{ label: 'Native Plugins', slug: 'plugins/native' },
