@@ -5,9 +5,12 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -125,8 +128,8 @@ func (c *Conn) readRequest() (*Request, error) {
 		}
 
 		// Parse Content-Length header
-		if len(line) > 16 && line[:16] == "Content-Length: " {
-			n, err := strconv.Atoi(line[16:])
+		if value, ok := strings.CutPrefix(line, "Content-Length: "); ok {
+			n, err := strconv.Atoi(value)
 			if err != nil {
 				return nil, fmt.Errorf("invalid Content-Length: %w", err)
 			}
@@ -166,19 +169,23 @@ func (c *Conn) handleRequest(ctx context.Context, req *Request) {
 	}
 
 	if err != nil {
-		resp.Error = &ResponseError{
-			Code:    CodeInternalError,
-			Message: err.Error(),
-		}
-		// Check for specific error types
-		if rpcErr, ok := err.(*ResponseError); ok {
+		// Check for ResponseError first (preserves code)
+		var rpcErr *ResponseError
+		if errors.As(err, &rpcErr) {
 			resp.Error = rpcErr
+		} else {
+			resp.Error = &ResponseError{
+				Code:    CodeInternalError,
+				Message: err.Error(),
+			}
 		}
 	} else {
 		resp.Result = result
 	}
 
-	c.writeResponse(&resp)
+	if writeErr := c.writeResponse(&resp); writeErr != nil {
+		log.Printf("failed to write response: %v", writeErr)
+	}
 }
 
 func (c *Conn) writeResponse(resp *Response) error {

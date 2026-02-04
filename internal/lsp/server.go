@@ -47,16 +47,29 @@ func (s *Server) SetConn(conn *Conn) {
 
 // Handle implements Handler interface - routes requests to methods.
 func (s *Server) Handle(ctx context.Context, req *Request) (any, error) {
-	// Check shutdown state
 	s.mu.RLock()
 	shutdown := s.shutdown
 	initialized := s.initialized
 	s.mu.RUnlock()
 
+	// Check shutdown state - only allow exit after shutdown
 	if shutdown && req.Method != "exit" {
 		return nil, &ResponseError{
 			Code:    CodeInvalidRequest,
 			Message: "server is shutting down",
+		}
+	}
+
+	// Check initialization - only lifecycle methods allowed before initialize
+	if !initialized {
+		switch req.Method {
+		case "initialize", "initialized", "shutdown", "exit":
+			// Allowed before initialization
+		default:
+			return nil, &ResponseError{
+				Code:    CodeInvalidRequest,
+				Message: "server not initialized",
+			}
 		}
 	}
 
@@ -95,13 +108,6 @@ func (s *Server) Handle(ctx context.Context, req *Request) (any, error) {
 		return s.handleDocumentSymbol(ctx, req.Params)
 
 	default:
-		// Check if initialized for non-lifecycle methods
-		if !initialized && req.Method != "initialize" {
-			return nil, &ResponseError{
-				Code:    CodeInvalidRequest,
-				Message: "server not initialized",
-			}
-		}
 		log.Printf("unhandled method: %s", req.Method)
 		return nil, ErrMethodNotFound
 	}
@@ -143,7 +149,7 @@ func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (
 			DocumentFormattingProvider: true,
 		},
 		ServerInfo: &protocol.ServerInfo{
-			Name:    "skylsp",
+			Name:    "skyls",
 			Version: "0.1.0",
 		},
 	}, nil
@@ -266,7 +272,7 @@ func (s *Server) handleHover(ctx context.Context, params json.RawMessage) (any, 
 	return &protocol.Hover{
 		Contents: protocol.MarkupContent{
 			Kind:  protocol.Markdown,
-			Value: "**skylsp** - hover not yet implemented",
+			Value: "**skyls** - hover not yet implemented",
 		},
 	}, nil
 }
@@ -329,12 +335,4 @@ func (s *Server) handleDocumentSymbol(ctx context.Context, params json.RawMessag
 	log.Printf("documentSymbol: %s", p.TextDocument.URI)
 
 	return []protocol.DocumentSymbol{}, nil
-}
-
-// getDocument returns a document by URI (thread-safe).
-func (s *Server) getDocument(uri protocol.DocumentURI) (*Document, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	doc, ok := s.documents[uri]
-	return doc, ok
 }
