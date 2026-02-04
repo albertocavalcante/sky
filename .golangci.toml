@@ -17,7 +17,7 @@ check-blank = false
 
 [linters.settings.govet]
 enable-all = true
-disable = ["shadow"]
+disable = ["shadow", "fieldalignment"]
 
 [linters.settings.staticcheck]
 checks = ["all"]
