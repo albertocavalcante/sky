@@ -7,6 +7,7 @@ package tester
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -68,6 +69,12 @@ func (fr *FileResult) Summary() (passed, failed int) {
 	return
 }
 
+// HasFailures returns true if any test in this file failed.
+func (fr *FileResult) HasFailures() bool {
+	_, failed := fr.Summary()
+	return failed > 0
+}
+
 // RunResult contains all results from a test run.
 type RunResult struct {
 	// Files contains results for each file.
@@ -117,6 +124,25 @@ type Options struct {
 	// CoverageCollector is the collector to use for coverage.
 	// If nil and Coverage is true, a default collector is created.
 	CoverageCollector *coverage.DefaultCollector
+
+	// Filter is a test name filter pattern.
+	// Supports "not <pattern>" to exclude tests matching pattern.
+	Filter string
+
+	// TestNames filters to specific test function names.
+	// If set, only these tests will run (used by :: syntax).
+	TestNames []string
+
+	// Preludes is a list of prelude file paths to load before each test file.
+	// Prelude globals become available in the test scope.
+	Preludes []string
+
+	// Timeout is the maximum duration for each test.
+	// If zero, no timeout is applied.
+	Timeout time.Duration
+
+	// FailFast stops running tests after the first failure.
+	FailFast bool
 }
 
 // DefaultOptions returns sensible defaults.
@@ -171,7 +197,13 @@ func (r *Runner) RunFile(filename string, src []byte) (*FileResult, error) {
 	result := &FileResult{File: filename}
 
 	// Build predeclared with assert module
-	predeclared := r.buildPredeclared()
+	basePredeclared := r.buildPredeclared()
+
+	// Load preludes (if any) to get additional predeclared values
+	predeclared, err := r.loadPreludes(basePredeclared)
+	if err != nil {
+		return nil, err
+	}
 
 	// Parse and execute the file
 	thread := &starlark.Thread{Name: filename}
@@ -193,12 +225,20 @@ func (r *Runner) RunFile(filename string, src []byte) (*FileResult, error) {
 	setupFn, _ := globals["setup"].(*starlark.Function)
 	teardownFn, _ := globals["teardown"].(*starlark.Function)
 
-	// Run tests
+	// Run tests (applying filter)
 	for _, name := range testFuncs {
+		if !r.matchesFilter(name) {
+			continue // Skip tests that don't match filter
+		}
 		fn := globals[name].(*starlark.Function)
 		testResult := r.runSingleTest(thread, name, fn, setupFn, teardownFn, predeclared)
 		testResult.File = filename
 		result.Tests = append(result.Tests, testResult)
+
+		// Fail-fast: stop after first failure
+		if r.opts.FailFast && !testResult.Passed {
+			break
+		}
 	}
 
 	result.Duration = time.Since(start)
@@ -222,6 +262,41 @@ func (r *Runner) buildPredeclared() starlark.StringDict {
 	return predeclared
 }
 
+// loadPreludes loads prelude files and returns their combined globals.
+// Returns an error if any prelude file fails to load.
+func (r *Runner) loadPreludes(basePredeclared starlark.StringDict) (starlark.StringDict, error) {
+	if len(r.opts.Preludes) == 0 {
+		return basePredeclared, nil
+	}
+
+	// Start with base predeclared
+	combined := make(starlark.StringDict)
+	for k, v := range basePredeclared {
+		combined[k] = v
+	}
+
+	// Load each prelude file in order
+	for _, preludePath := range r.opts.Preludes {
+		src, err := os.ReadFile(preludePath)
+		if err != nil {
+			return nil, fmt.Errorf("reading prelude %s: %w", preludePath, err)
+		}
+
+		thread := &starlark.Thread{Name: preludePath}
+		globals, err := starlark.ExecFile(thread, preludePath, src, combined)
+		if err != nil {
+			return nil, fmt.Errorf("executing prelude %s: %w", preludePath, err)
+		}
+
+		// Add prelude globals to combined (later preludes can shadow earlier ones)
+		for k, v := range globals {
+			combined[k] = v
+		}
+	}
+
+	return combined, nil
+}
+
 // findTestFunctions returns sorted list of test function names.
 func (r *Runner) findTestFunctions(globals starlark.StringDict) []string {
 	var names []string
@@ -234,6 +309,42 @@ func (r *Runner) findTestFunctions(globals starlark.StringDict) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// matchesFilter checks if a test name matches the current filter options.
+func (r *Runner) matchesFilter(name string) bool {
+	// Check TestNames first (from :: syntax)
+	if len(r.opts.TestNames) > 0 {
+		for _, allowed := range r.opts.TestNames {
+			if name == allowed {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Check Filter pattern (from -k flag)
+	if r.opts.Filter == "" {
+		return true
+	}
+
+	filter := r.opts.Filter
+
+	// Handle "not <pattern>" syntax
+	negate := false
+	if strings.HasPrefix(strings.ToLower(filter), "not ") {
+		negate = true
+		filter = strings.TrimPrefix(filter, "not ")
+		filter = strings.TrimPrefix(filter, "NOT ")
+	}
+
+	// Simple substring match (case-insensitive)
+	matches := strings.Contains(strings.ToLower(name), strings.ToLower(filter))
+
+	if negate {
+		return !matches
+	}
+	return matches
 }
 
 // runSingleTest executes one test function with setup/teardown.
@@ -253,6 +364,15 @@ func (r *Runner) runSingleTest(
 
 	// EXPERIMENTAL: Enable coverage collection for this test thread
 	r.setupCoverageHook(testThread)
+
+	// Set up timeout cancellation if configured
+	var timer *time.Timer
+	if r.opts.Timeout > 0 {
+		timer = time.AfterFunc(r.opts.Timeout, func() {
+			testThread.Cancel(fmt.Sprintf("test timeout after %s", r.opts.Timeout))
+		})
+		defer timer.Stop()
+	}
 
 	// Run setup if present
 	if setupFn != nil {

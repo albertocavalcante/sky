@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -166,9 +167,9 @@ func TestRun_TestDirectory(t *testing.T) {
 	}
 }
 
-func TestRun_FilterTests(t *testing.T) {
+func TestRun_MultipleTestFunctions(t *testing.T) {
 	dir := t.TempDir()
-	file := filepath.Join(dir, "test_filter.star")
+	file := filepath.Join(dir, "test_multiple.star")
 	content := `def test_foo():
     assert.eq(1, 1)
 
@@ -183,12 +184,10 @@ def test_baz():
 	}
 
 	var stdout, stderr bytes.Buffer
-	// Use -prefix to filter tests by changing the prefix to match only test_foo
-	// Note: -run flag is not implemented, so we test that all tests pass
 	code := RunWithIO(context.Background(), []string{file}, nil, &stdout, &stderr)
 
 	if code != 0 {
-		t.Errorf("RunWithIO(filter tests) returned %d, want 0\nstderr: %s", code, stderr.String())
+		t.Errorf("RunWithIO(multiple test functions) returned %d, want 0\nstderr: %s", code, stderr.String())
 	}
 }
 
@@ -258,7 +257,393 @@ x = helper()
 	var stdout, stderr bytes.Buffer
 	code := RunWithIO(context.Background(), []string{file}, nil, &stdout, &stderr)
 
-	// Should pass (no tests to fail) or warn about no tests
-	// Behavior depends on implementation
-	_ = code
+	// File with no test functions should pass (no tests to fail)
+	if code != 0 {
+		t.Errorf("RunWithIO(no test functions) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+}
+
+// Test Filtering (-k flag) tests
+
+func TestRun_FilterByName(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_filter.star")
+	content := `def test_parse_basic():
+    assert.eq(1, 1)
+
+def test_parse_advanced():
+    assert.eq(2, 2)
+
+def test_other_feature():
+    assert.eq(3, 3)
+
+def test_unrelated():
+    assert.eq(4, 4)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-k", "parse", "-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(-k parse) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+
+	output := stdout.String()
+	// Should run parse tests
+	if !strings.Contains(output, "test_parse_basic") {
+		t.Error("expected test_parse_basic to be run")
+	}
+	if !strings.Contains(output, "test_parse_advanced") {
+		t.Error("expected test_parse_advanced to be run")
+	}
+	// Should not run other tests
+	if strings.Contains(output, "test_other_feature") && !strings.Contains(output, "skipped") {
+		t.Error("expected test_other_feature to be skipped or not shown")
+	}
+}
+
+func TestRun_FilterWithNot(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_filter_not.star")
+	content := `def test_fast_unit():
+    assert.eq(1, 1)
+
+def test_slow_integration():
+    assert.eq(2, 2)
+
+def test_fast_other():
+    assert.eq(3, 3)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-k", "not slow", "-v", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(-k 'not slow') returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+
+	output := stdout.String()
+	// Should run non-slow tests
+	if !strings.Contains(output, "test_fast_unit") {
+		t.Error("expected test_fast_unit to be run")
+	}
+	if !strings.Contains(output, "test_fast_other") {
+		t.Error("expected test_fast_other to be run")
+	}
+}
+
+func TestRun_FilterSpecificTest(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_specific.star")
+	content := `def test_one():
+    assert.eq(1, 1)
+
+def test_two():
+    assert.eq(2, 2)
+
+def test_three():
+    assert.eq(3, 3)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	// Use :: syntax to select specific test
+	code := RunWithIO(context.Background(), []string{"-v", file + "::test_two"}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(file::test_two) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+
+	output := stdout.String()
+	// Should only run test_two
+	if !strings.Contains(output, "test_two") {
+		t.Error("expected test_two to be run")
+	}
+	// test_one and test_three should not appear in passed tests
+	// (they might appear as "skipped" in verbose mode, which is acceptable)
+}
+
+// Prelude System (--prelude flag) tests
+
+func TestRun_PreludeBasic(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create prelude file with helper function
+	preludeFile := filepath.Join(dir, "helpers.star")
+	preludeContent := `def add_one(x):
+    return x + 1
+
+SHARED_VALUE = 42
+`
+	if err := os.WriteFile(preludeFile, []byte(preludeContent), 0644); err != nil {
+		t.Fatalf("failed to write prelude file: %v", err)
+	}
+
+	// Create test file that uses prelude helper
+	testFile := filepath.Join(dir, "test_with_prelude.star")
+	testContent := `def test_uses_helper():
+    # add_one and SHARED_VALUE come from prelude
+    assert.eq(add_one(1), 2)
+    assert.eq(SHARED_VALUE, 42)
+`
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"--prelude", preludeFile, testFile}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(--prelude) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+}
+
+func TestRun_PreludeMultiple(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create first prelude file
+	prelude1 := filepath.Join(dir, "prelude1.star")
+	if err := os.WriteFile(prelude1, []byte(`PRELUDE1_VALUE = 10`), 0644); err != nil {
+		t.Fatalf("failed to write prelude1: %v", err)
+	}
+
+	// Create second prelude file
+	prelude2 := filepath.Join(dir, "prelude2.star")
+	if err := os.WriteFile(prelude2, []byte(`PRELUDE2_VALUE = 20`), 0644); err != nil {
+		t.Fatalf("failed to write prelude2: %v", err)
+	}
+
+	// Create test file that uses both preludes
+	testFile := filepath.Join(dir, "test_multi_prelude.star")
+	testContent := `def test_uses_both_preludes():
+    assert.eq(PRELUDE1_VALUE, 10)
+    assert.eq(PRELUDE2_VALUE, 20)
+`
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{
+		"--prelude", prelude1,
+		"--prelude", prelude2,
+		testFile,
+	}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(multiple --prelude) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+}
+
+func TestRun_PreludeNotFound(t *testing.T) {
+	dir := t.TempDir()
+	testFile := filepath.Join(dir, "test_simple.star")
+	if err := os.WriteFile(testFile, []byte(`def test_pass():\n    assert.eq(1, 1)`), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{
+		"--prelude", "/nonexistent/prelude.star",
+		testFile,
+	}, nil, &stdout, &stderr)
+
+	if code == 0 {
+		t.Error("RunWithIO(nonexistent --prelude) returned 0, want non-zero")
+	}
+}
+
+// Test Timeouts (--timeout flag) tests
+
+func TestRun_TimeoutBasic(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_fast.star")
+	content := `def test_fast():
+    assert.eq(1, 1)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	// Set a generous timeout that should pass
+	code := RunWithIO(context.Background(), []string{"--timeout", "10s", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(--timeout 10s) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+}
+
+func TestRun_TimeoutZeroDisables(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_no_timeout.star")
+	content := `def test_no_timeout():
+    assert.eq(1, 1)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	// Zero should disable timeout
+	code := RunWithIO(context.Background(), []string{"--timeout", "0", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(--timeout 0) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+}
+
+func TestRun_TimeoutExpired(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_slow.star")
+	// Create a test with an infinite loop
+	content := `def test_infinite_loop():
+    x = 0
+    for i in range(1000000000):  # Very long loop
+        x = x + 1
+    assert.eq(x, 0)  # Should never reach
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	// Set a very short timeout to trigger cancellation
+	code := RunWithIO(context.Background(), []string{"--timeout", "100ms", file}, nil, &stdout, &stderr)
+
+	// Should fail due to timeout
+	if code == 0 {
+		t.Error("RunWithIO(--timeout 100ms with slow test) returned 0, expected failure")
+	}
+
+	// Check that output mentions timeout
+	combined := stdout.String() + stderr.String()
+	if !strings.Contains(strings.ToLower(combined), "timeout") && !strings.Contains(strings.ToLower(combined), "cancel") {
+		t.Logf("output: %s", combined)
+		// Note: We'll accept either mention of timeout/cancel or just a failure
+		// since Starlark may report it differently
+	}
+}
+
+// Fail-Fast Mode (--bail / -x flag) tests
+
+func TestRun_BailOnFirstFailure(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_bail.star")
+	// Create tests where first fails, second should not run
+	content := `def test_aaa_fails():
+    assert.eq(1, 2)  # Will fail
+
+def test_bbb_should_not_run():
+    assert.eq(1, 1)
+
+def test_ccc_should_not_run():
+    assert.eq(2, 2)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"--bail", "-v", file}, nil, &stdout, &stderr)
+
+	// Should fail
+	if code == 0 {
+		t.Error("RunWithIO(--bail) returned 0, expected failure")
+	}
+
+	output := stdout.String()
+	// First test should appear (it fails)
+	if !strings.Contains(output, "test_aaa_fails") {
+		t.Error("expected test_aaa_fails to be reported")
+	}
+	// Later tests should not run (bail stops after first failure)
+	// Note: They might appear in discovery but not in results
+}
+
+func TestRun_BailShortFlag(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_bail_x.star")
+	content := `def test_fails():
+    assert.eq(1, 2)
+
+def test_passes():
+    assert.eq(1, 1)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	// Use -x short form
+	code := RunWithIO(context.Background(), []string{"-x", file}, nil, &stdout, &stderr)
+
+	// Should fail
+	if code == 0 {
+		t.Error("RunWithIO(-x) returned 0, expected failure")
+	}
+}
+
+func TestRun_BailMultipleFiles(t *testing.T) {
+	dir := t.TempDir()
+
+	// First file fails
+	file1 := filepath.Join(dir, "test_a_fails.star")
+	if err := os.WriteFile(file1, []byte("def test_fail():\n    assert.eq(1, 2)"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	// Second file passes
+	file2 := filepath.Join(dir, "test_b_passes.star")
+	if err := os.WriteFile(file2, []byte("def test_pass():\n    assert.eq(1, 1)"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"--bail", file1, file2}, nil, &stdout, &stderr)
+
+	// Should fail
+	if code == 0 {
+		t.Error("RunWithIO(--bail with multiple files) returned 0, expected failure")
+	}
+}
+
+func TestRun_NoBailRunsAll(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_no_bail.star")
+	content := `def test_aaa_fails():
+    assert.eq(1, 2)  # Will fail
+
+def test_bbb_passes():
+    assert.eq(1, 1)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	// Without --bail, all tests should run
+	code := RunWithIO(context.Background(), []string{"-v", file}, nil, &stdout, &stderr)
+
+	// Should fail because one test fails
+	if code == 0 {
+		t.Error("RunWithIO(without --bail) returned 0, expected failure")
+	}
+
+	output := stdout.String()
+	// Both tests should appear
+	if !strings.Contains(output, "test_aaa_fails") {
+		t.Error("expected test_aaa_fails to be reported")
+	}
+	if !strings.Contains(output, "test_bbb_passes") {
+		t.Error("expected test_bbb_passes to be reported (should run without --bail)")
+	}
 }

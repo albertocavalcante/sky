@@ -11,6 +11,7 @@ import (
 
 	"github.com/bazelbuild/buildtools/build"
 
+	"github.com/albertocavalcante/sky/internal/starlark/builtins"
 	"github.com/albertocavalcante/sky/internal/starlark/checker"
 	"github.com/albertocavalcante/sky/internal/starlark/classifier"
 	"github.com/albertocavalcante/sky/internal/starlark/docgen"
@@ -37,6 +38,9 @@ type Server struct {
 	lintDriver *linter.Driver
 	checker    *checker.Checker
 
+	// Builtins provider for completion and hover
+	builtins builtins.Provider
+
 	// Callbacks
 	onExit func()
 }
@@ -48,8 +52,14 @@ type Document struct {
 	Content string
 }
 
-// NewServer creates a new LSP server.
+// NewServer creates a new LSP server with default configuration.
 func NewServer(onExit func()) *Server {
+	return NewServerWithProvider(onExit, nil)
+}
+
+// NewServerWithProvider creates a new LSP server with a custom builtins provider.
+// If provider is nil, the server will use hardcoded fallback builtins.
+func NewServerWithProvider(onExit func(), provider builtins.Provider) *Server {
 	// Set up linter with buildtools rules
 	registry := linter.NewRegistry()
 	_ = registry.Register(buildtools.AllRules()...)
@@ -62,6 +72,7 @@ func NewServer(onExit func()) *Server {
 		documents:  make(map[protocol.DocumentURI]*Document),
 		lintDriver: lintDriver,
 		checker:    chk,
+		builtins:   provider,
 		onExit:     onExit,
 	}
 }
@@ -462,19 +473,29 @@ func (s *Server) handleDefinition(ctx context.Context, params json.RawMessage) (
 func (s *Server) handleCompletion(ctx context.Context, params json.RawMessage) (any, error) {
 	var p protocol.CompletionParams
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parsing completion params: %w", err)
 	}
 
+	// Copy document content while holding lock to avoid race conditions
 	s.mu.RLock()
 	doc, ok := s.documents[p.TextDocument.URI]
+	var content string
+	var docURI protocol.DocumentURI
+	if ok {
+		content = doc.Content
+		docURI = doc.URI
+	}
 	s.mu.RUnlock()
 
 	if !ok {
 		return &protocol.CompletionList{Items: []protocol.CompletionItem{}}, nil
 	}
 
+	// Create a local document snapshot for completion
+	docSnapshot := &Document{URI: docURI, Content: content}
+
 	// Get the prefix being typed
-	prefix := getCompletionPrefix(doc.Content, int(p.Position.Line), int(p.Position.Character))
+	prefix := getCompletionPrefix(content, int(p.Position.Line), int(p.Position.Character))
 
 	var items []protocol.CompletionItem
 
@@ -489,7 +510,7 @@ func (s *Server) handleCompletion(ctx context.Context, params json.RawMessage) (
 			getKeywordCompletions(prefix),
 			getBuiltinCompletions(prefix),
 			getModuleCompletions(prefix),
-			s.getDocumentSymbolCompletions(doc, prefix, int(p.Position.Line)),
+			s.getDocumentSymbolCompletions(docSnapshot, prefix, int(p.Position.Line)),
 		)
 	}
 
@@ -998,12 +1019,7 @@ func getWordAtPosition(content string, line, char int) string {
 		return ""
 	}
 
-	// Find word boundaries (identifier characters: letters, digits, underscore)
-	isIdentChar := func(c byte) bool {
-		return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
-	}
-
-	// Find start of word
+	// Find start of word (use package-level isIdentChar)
 	start := char
 	for start > 0 && isIdentChar(lineContent[start-1]) {
 		start--

@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -152,8 +153,8 @@ func outputText(w io.Writer, result checker.Result) int {
 		byFile[d.Pos.Filename()] = append(byFile[d.Pos.Filename()], d)
 	}
 
-	for file, diags := range byFile {
-		for _, d := range diags {
+	for _, file := range slices.Sorted(maps.Keys(byFile)) {
+		for _, d := range byFile[file] {
 			severity := strings.ToLower(d.Severity.String())
 			writef(w, "%s:%d:%d: %s: %s [%s]\n",
 				file, d.Pos.Line, d.Pos.Col,
@@ -253,7 +254,7 @@ func expandPath(path string) ([]string, error) {
 		}
 		if d.IsDir() {
 			// Skip hidden directories
-			if strings.HasPrefix(d.Name(), ".") && d.Name() != "." {
+			if strings.HasPrefix(d.Name(), ".") {
 				return filepath.SkipDir
 			}
 			return nil

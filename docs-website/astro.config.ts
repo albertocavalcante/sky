@@ -83,6 +83,10 @@ export default defineConfig({
 						{ label: 'What is Starlark?', slug: 'starlark/overview' },
 						{ label: 'Language Basics', slug: 'starlark/basics' },
 						{ label: 'Type System', slug: 'starlark/types' },
+						{ label: 'Implementations', slug: 'starlark/implementations' },
+						{ label: 'Tooling & IDE Support', slug: 'starlark/tooling' },
+						{ label: 'Use Cases', slug: 'starlark/use-cases' },
+						{ label: 'Type System Roadmap', slug: 'starlark/types-roadmap' },
 						{ label: 'Best Practices', slug: 'starlark/best-practices' },
 						{ label: 'Resources', slug: 'starlark/resources' },
 					],
@@ -130,6 +134,14 @@ export default defineConfig({
 						{ label: 'Technical Deep Dive', slug: 'starlark-go-x/technical' },
 						{ label: 'Type Annotations', slug: 'starlark-go-x/type-annotations' },
 						{ label: 'Roadmap & TODO', slug: 'starlark-go-x/roadmap' },
+					],
+				},
+				{
+					label: 'Language Server',
+					items: [
+						{ label: 'Overview', slug: 'lsp' },
+						{ label: 'Custom Dialects', slug: 'lsp/custom-dialects' },
+						{ label: 'Builtin Formats', slug: 'lsp/builtin-formats' },
 					],
 				},
 				{

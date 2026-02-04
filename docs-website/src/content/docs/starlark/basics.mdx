@@ -3,7 +3,7 @@ title: Language Basics
 description: Learn Starlark syntax and core features
 ---
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
 # Starlark Language Basics
 
@@ -129,9 +129,9 @@ for i in range(5):
     print(i)  # 0, 1, 2, 3, 4
 ```
 
-:::note
+<Aside>
 Starlark has no `while` loops to prevent infinite execution. Use `for` with `range()` instead.
-:::
+</Aside>
 
 ## Comprehensions
 
@@ -182,9 +182,9 @@ value = CONSTANT
 sum = my_add(1, 2)
 ```
 
-:::note
+<Aside>
 Unlike Python's `import`, Starlark's `load()` executes at parse time and only imports specific symbols.
-:::
+</Aside>
 
 ## Structs
 

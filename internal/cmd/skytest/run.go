@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/albertocavalcante/sky/internal/starlark/coverage"
@@ -21,6 +22,18 @@ const (
 	exitFailed = 1
 	exitError  = 2
 )
+
+// stringSliceFlag allows a flag to be specified multiple times.
+type stringSliceFlag []string
+
+func (s *stringSliceFlag) String() string {
+	return strings.Join(*s, ", ")
+}
+
+func (s *stringSliceFlag) Set(value string) error {
+	*s = append(*s, value)
+	return nil
+}
 
 // Run executes skytest with the given arguments.
 // Returns exit code.
@@ -40,6 +53,11 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		durationFlag  bool
 		coverageFlag  bool
 		coverageOut   string
+		filterFlag    string
+		preludeFlags  stringSliceFlag
+		timeoutFlag   time.Duration
+		bailFlag      bool
+		bailShortFlag bool
 	)
 
 	fs := flag.NewFlagSet("skytest", flag.ContinueOnError)
@@ -51,6 +69,11 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	fs.BoolVar(&recursiveFlag, "r", false, "search directories recursively")
 	fs.StringVar(&prefixFlag, "prefix", "test_", "test function prefix")
 	fs.BoolVar(&durationFlag, "duration", false, "show test durations")
+	fs.StringVar(&filterFlag, "k", "", "filter tests by name pattern (supports 'not' prefix)")
+	fs.Var(&preludeFlags, "prelude", "prelude file to load before tests (can be specified multiple times)")
+	fs.DurationVar(&timeoutFlag, "timeout", 30*time.Second, "timeout per test (0 to disable)")
+	fs.BoolVar(&bailFlag, "bail", false, "stop on first test failure")
+	fs.BoolVar(&bailShortFlag, "x", false, "stop on first test failure (short for --bail)")
 	// EXPERIMENTAL: Coverage collection requires starlark-go-x with OnExec hook.
 	// Uncomment the replace directive in go.mod to enable.
 	// TODO(upstream): Remove experimental note once OnExec is merged.
@@ -70,6 +93,10 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writeln(stderr, "  - Built-in assert module (assert.eq, assert.true, etc.)")
 		writeln(stderr, "  - Per-file setup() and teardown() functions")
 		writeln(stderr, "  - Multiple output formats (text, JSON, JUnit)")
+		writeln(stderr, "  - Test filtering with -k flag")
+		writeln(stderr, "  - Prelude files for shared helpers (--prelude)")
+		writeln(stderr, "  - Per-test timeouts (--timeout)")
+		writeln(stderr, "  - Fail-fast mode (--bail / -x)")
 		writeln(stderr, "  - Coverage collection (EXPERIMENTAL, requires starlark-go-x)")
 		writeln(stderr)
 		writeln(stderr, "Flags:")
@@ -79,6 +106,14 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writeln(stderr, "  skytest .                       # Run tests in current directory")
 		writeln(stderr, "  skytest -r .                    # Run tests recursively")
 		writeln(stderr, "  skytest test.star               # Run specific test file")
+		writeln(stderr, "  skytest -k parse                # Run tests containing 'parse'")
+		writeln(stderr, "  skytest -k 'not slow'           # Exclude tests containing 'slow'")
+		writeln(stderr, "  skytest test.star::test_foo     # Run specific test function")
+		writeln(stderr, "  skytest --prelude=helpers.star  # Load prelude before tests")
+		writeln(stderr, "  skytest --timeout=10s           # Set test timeout")
+		writeln(stderr, "  skytest --timeout=0             # Disable timeouts")
+		writeln(stderr, "  skytest --bail                  # Stop on first failure")
+		writeln(stderr, "  skytest -x                      # Stop on first failure (short)")
 		writeln(stderr, "  skytest -json tests/            # JSON output")
 		writeln(stderr, "  skytest -junit tests/ > out.xml # JUnit output for CI")
 		writeln(stderr)
@@ -109,8 +144,23 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		paths = []string{"."}
 	}
 
+	// Parse paths for :: syntax (file::test_name)
+	// fileTestNames maps file paths to specific test names
+	fileTestNames := make(map[string][]string)
+	var cleanPaths []string
+	for _, p := range paths {
+		if idx := strings.Index(p, "::"); idx != -1 {
+			filePath := p[:idx]
+			testName := p[idx+2:]
+			fileTestNames[filePath] = append(fileTestNames[filePath], testName)
+			cleanPaths = append(cleanPaths, filePath)
+		} else {
+			cleanPaths = append(cleanPaths, p)
+		}
+	}
+
 	// Discover test files
-	files, err := tester.ExpandPaths(paths, nil, recursiveFlag)
+	files, err := tester.ExpandPaths(cleanPaths, nil, recursiveFlag)
 	if err != nil {
 		writef(stderr, "skytest: %v\n", err)
 		return exitError
@@ -121,12 +171,23 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		return exitError
 	}
 
-	// Create runner
+	// Create base options for runners
 	opts := tester.DefaultOptions()
 	opts.TestPrefix = prefixFlag
 	opts.Verbose = verboseFlag
 	opts.Coverage = coverageFlag
-	runner := tester.New(opts)
+	opts.Filter = filterFlag
+	opts.Preludes = preludeFlags
+	opts.Timeout = timeoutFlag
+	opts.FailFast = bailFlag || bailShortFlag
+
+	// Create a single runner for coverage reporting (if enabled)
+	// Note: We create per-file runners for execution to support :: syntax,
+	// but use a single runner to aggregate coverage data.
+	var coverageRunner *tester.Runner
+	if coverageFlag {
+		coverageRunner = tester.New(opts)
+	}
 
 	// Select reporter
 	var reporter tester.Reporter
@@ -159,7 +220,23 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 			absPath = file
 		}
 
-		fileResult, err := runner.RunFile(absPath, src)
+		// Check if this file has specific test names from :: syntax
+		// We need to check both the original path and the absolute path
+		var testNames []string
+		for origPath, names := range fileTestNames {
+			origAbs, _ := filepath.Abs(origPath)
+			if origPath == file || origAbs == absPath {
+				testNames = names
+				break
+			}
+		}
+
+		// Create a runner with the appropriate test names for this file
+		fileOpts := opts
+		fileOpts.TestNames = testNames
+		fileRunner := tester.New(fileOpts)
+
+		fileResult, err := fileRunner.RunFile(absPath, src)
 		if err != nil {
 			writef(stderr, "skytest: %s: %v\n", file, err)
 			return exitError
@@ -171,6 +248,11 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		if _, ok := reporter.(*tester.TextReporter); ok {
 			reporter.ReportFile(stdout, fileResult)
 		}
+
+		// Fail-fast: stop processing more files after first failure
+		if opts.FailFast && fileResult.HasFailures() {
+			break
+		}
 	}
 
 	result.Duration = time.Since(start)
@@ -181,8 +263,8 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	// Write coverage output if enabled
 	// EXPERIMENTAL: Coverage collection requires starlark-go-x with OnExec hook.
 	// TODO(upstream): Remove experimental note once OnExec is merged.
-	if coverageFlag {
-		if err := writeCoverageReport(runner, coverageOut, stderr); err != nil {
+	if coverageFlag && coverageRunner != nil {
+		if err := writeCoverageReport(coverageRunner, coverageOut, stderr); err != nil {
 			writef(stderr, "skytest: coverage: %v\n", err)
 			// Don't fail the run for coverage errors, just warn
 		}
