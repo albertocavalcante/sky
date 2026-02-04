@@ -130,6 +130,10 @@ type Options struct {
 	// Preludes is a list of prelude file paths to load before each test file.
 	// Prelude globals become available in the test scope.
 	Preludes []string
+
+	// Timeout is the maximum duration for each test.
+	// If zero, no timeout is applied.
+	Timeout time.Duration
 }
 
 // DefaultOptions returns sensible defaults.
@@ -346,6 +350,15 @@ func (r *Runner) runSingleTest(
 
 	// EXPERIMENTAL: Enable coverage collection for this test thread
 	r.setupCoverageHook(testThread)
+
+	// Set up timeout cancellation if configured
+	var timer *time.Timer
+	if r.opts.Timeout > 0 {
+		timer = time.AfterFunc(r.opts.Timeout, func() {
+			testThread.Cancel(fmt.Sprintf("test timeout after %s", r.opts.Timeout))
+		})
+		defer timer.Stop()
+	}
 
 	// Run setup if present
 	if setupFn != nil {

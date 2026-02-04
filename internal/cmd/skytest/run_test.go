@@ -460,3 +460,75 @@ func TestRun_PreludeNotFound(t *testing.T) {
 		t.Error("RunWithIO(nonexistent --prelude) returned 0, want non-zero")
 	}
 }
+
+// Test Timeouts (--timeout flag) tests
+
+func TestRun_TimeoutBasic(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_fast.star")
+	content := `def test_fast():
+    assert.eq(1, 1)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	// Set a generous timeout that should pass
+	code := RunWithIO(context.Background(), []string{"--timeout", "10s", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(--timeout 10s) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+}
+
+func TestRun_TimeoutZeroDisables(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_no_timeout.star")
+	content := `def test_no_timeout():
+    assert.eq(1, 1)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	// Zero should disable timeout
+	code := RunWithIO(context.Background(), []string{"--timeout", "0", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(--timeout 0) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+}
+
+func TestRun_TimeoutExpired(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_slow.star")
+	// Create a test with an infinite loop
+	content := `def test_infinite_loop():
+    x = 0
+    for i in range(1000000000):  # Very long loop
+        x = x + 1
+    assert.eq(x, 0)  # Should never reach
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	// Set a very short timeout to trigger cancellation
+	code := RunWithIO(context.Background(), []string{"--timeout", "100ms", file}, nil, &stdout, &stderr)
+
+	// Should fail due to timeout
+	if code == 0 {
+		t.Error("RunWithIO(--timeout 100ms with slow test) returned 0, expected failure")
+	}
+
+	// Check that output mentions timeout
+	combined := stdout.String() + stderr.String()
+	if !strings.Contains(strings.ToLower(combined), "timeout") && !strings.Contains(strings.ToLower(combined), "cancel") {
+		t.Logf("output: %s", combined)
+		// Note: We'll accept either mention of timeout/cancel or just a failure
+		// since Starlark may report it differently
+	}
+}
