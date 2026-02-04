@@ -1,4 +1,4 @@
-# golangci-lint configuration
+# golangci-lint configuration (v2)
 # https://golangci-lint.run/usage/configuration/
 
 version = "2"
@@ -6,12 +6,9 @@ version = "2"
 [run]
 timeout = "5m"
 modules-download-mode = "readonly"
-exclude-dirs = [
-  "bazel-*",
-  "vendor",
-]
 
 [linters]
+default = "standard"
 enable = [
   "errcheck",
   "govet",
@@ -27,26 +24,31 @@ disable = [
   "gofumpt",
 ]
 
-[settings.errcheck]
+[linters.settings.errcheck]
 check-type-assertions = false
 check-blank = false
 
-[settings.govet]
+[linters.settings.govet]
 enable-all = true
 disable = ["shadow"]
 
-[settings.staticcheck]
+[linters.settings.staticcheck]
 checks = ["all"]
+
+[linters.exclusions]
+paths = [
+  "bazel-.*",
+  "vendor",
+]
+
+[[linters.exclusions.rules]]
+path = "_test\\.go"
+linters = ["funlen"]
+
+[[linters.exclusions.rules]]
+path = "\\.pb\\.go"
+linters = ["all"]
 
 [issues]
 max-issues-per-linter = 50
 max-same-issues = 10
-
-[issues.exclusions]
-[[issues.exclusions.rules]]
-path = "_test\\.go"
-linters = ["funlen"]
-
-[[issues.exclusions.rules]]
-path = "\\.pb\\.go"
-linters = ["all"]
