@@ -1,0 +1,17 @@
+# Bazel ignore file
+# https://bazel.build/run/bazelrc#bazelignore
+
+# Testdata directories containing sample BUILD files (not real build targets)
+internal/starlark/dialects/testdata/sources
+internal/starlark/dialects/testdata/projects
+
+# Node modules (if present)
+node_modules
+docs-website/node_modules
+
+# Bazel output directories
+bazel-bin
+bazel-out
+bazel-testlogs
+bazel-sky
+bazel-main

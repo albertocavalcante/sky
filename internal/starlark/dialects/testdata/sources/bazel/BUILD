@@ -30,6 +30,6 @@ cc_library(
     }),
 )
 
-# Test package name constant
-_package = PACKAGE_NAME
-_repo = REPOSITORY_NAME
+# Test package name function
+_package = package_name()
+_repo = repository_name()

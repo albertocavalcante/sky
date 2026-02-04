@@ -49,9 +49,14 @@ pre-push:
     go-test-full:
       run: go test -race ./...
 
-    # Bazel build check (optional - comment out if too slow)
+    # Bazel build check
     bazel-build:
       run: bazel build //...
+
+    # Astro docs build check
+    astro-build:
+      root: "docs-website/"
+      run: bun run build
 
 # Output settings
 output:
