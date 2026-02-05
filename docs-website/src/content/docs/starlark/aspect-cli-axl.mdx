@@ -1,0 +1,1270 @@
+---
+title: Aspect CLI and AXL Deep Dive
+description: Comprehensive guide to Aspect CLI, AXL (Aspect Extension Language), and how they extend Bazel for modern development workflows
+---
+
+import { Aside, Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+# Aspect CLI and AXL: The Bazel Extension Platform
+
+Aspect CLI is a programmable task runner built on top of Bazel that extends the build system with powerful workflow automation capabilities. At its core is AXL (Aspect Extension Language), a Starlark dialect designed to fill the gaps in Bazel's developer experience.
+
+<Aside type="note">
+Aspect CLI is under active development. The API is expected to stabilize with a stable release planned for early 2026. This documentation covers the Rust rewrite (version 2025.42+) which supersedes the legacy Go implementation.
+</Aside>
+
+## Executive Summary
+
+| Feature | Description |
+|---------|-------------|
+| **What it is** | Task runner and developer workflow automation for Bazel |
+| **Language** | AXL - a Starlark dialect with extended capabilities |
+| **License** | Apache 2.0 (fully open source) |
+| **Current Version** | 2025.19.5+ |
+| **Repository** | [github.com/aspect-build/aspect-cli](https://github.com/aspect-build/aspect-cli) |
+| **Implementation** | Rust (rewritten from Go in 2025.42) |
+
+---
+
+## Part 1: Understanding Aspect CLI
+
+### Why Aspect CLI Exists
+
+Bazel excels at three core capabilities:
+- **Loading dependency graphs** from package declarations (`query`/`cquery`)
+- **Analyzing action graphs** from rule implementations (`aquery`)
+- **Scalable execution** for building and testing (`build`/`test`)
+
+However, Bazel has significant gaps when it comes to developer workflows. As the [Aspect CLI README](https://github.com/aspect-build/aspect-cli) explains:
+
+> Bazel is extensible, but only for defining build rules that produce additional output files. It falls short on customizing developer workflows. In fact the Bazel commands not mentioned above are not-so-excellent attempts at adding a few developer workflows for use within Google.
+
+The reality is that many organizations end up scripting around Bazel with brittle shell scripts, and these local development scripts inevitably drift from CI testing scripts. This demonstrates a missing layer: **a task runner built on top of Bazel's `query` and `build` primitives**.
+
+### What Aspect CLI Solves
+
+Aspect CLI addresses these common pain points:
+
+<CardGrid>
+  <Card title="Onboarding" icon="rocket">
+    New engineers don't struggle to set up their machines or reproduce CI behavior locally
+  </Card>
+  <Card title="Productivity" icon="setting">
+    Product engineers regain control over their own productivity
+  </Card>
+  <Card title="Consistency" icon="approve-check">
+    DevInfra teams can integrate tooling into every developer's routine, not just CI
+  </Card>
+  <Card title="Maintainability" icon="document">
+    Say goodbye to brittle Bash wrappers and delete your Makefile
+  </Card>
+</CardGrid>
+
+### Installation and Setup
+
+Aspect CLI installs alongside Bazel (it no longer shadows the `bazel` command as it did in versions before 2025.42):
+
+```bash
+# Using Homebrew
+brew install aspect-build/aspect/aspect
+
+# Or download directly from GitHub releases
+# https://github.com/aspect-build/aspect-cli/releases
+```
+
+After installation, you'll have both `bazel` and `aspect` commands available:
+
+```bash
+# Run vanilla Bazel
+bazel build //...
+
+# Run Aspect CLI (with AXL extensions)
+aspect build //...
+```
+
+### Configuration Files
+
+Aspect CLI uses several configuration files:
+
+| File | Purpose |
+|------|---------|
+| `MODULE.aspect` | Module-level dependency configuration for AXL extensions |
+| `.aspect/config.axl` | Repository configuration script |
+| `.aspect/*.axl` | Auto-discovered task definitions |
+| `.aspect/modules/*/` | Local AXL modules |
+| `.aspect/user/*.axl` | User-specific tasks (typically gitignored) |
+
+---
+
+## Part 2: AXL - Aspect Extension Language
+
+### What is AXL?
+
+AXL (Aspect Extension Language) is a dialect of Starlark designed specifically for extending Bazel's functionality. Just as `.bzl` files provide Bazel-specific standard libraries for build rules, `.axl` files provide extension points for developer workflows.
+
+<Aside type="tip">
+AXL is the Bazel equivalent of Buck2's BXL (Buck Extension Language). Both use Starlark as their foundation but target different build systems.
+</Aside>
+
+According to [Aspect's documentation](https://www.aspect.build/axl):
+
+> AXL is a dialect of Starlark, the language you already know from Bazel BUILD files and .bzl rules. This lets you write extensions that are deterministic, with no hidden side effects, no unbounded execution.
+
+### AXL Design Principles
+
+1. **Familiarity**: Uses Starlark syntax that Bazel developers already know
+2. **Safety**: Deterministic execution with no hidden side effects
+3. **Composability**: Tasks integrate with Bazel's query and build APIs
+4. **Lightweight**: Extensions are easy to share and maintain
+5. **Reproducibility**: Critical for enterprise build systems
+
+### File Extension and Syntax Highlighting
+
+AXL files use the `.axl` extension. To enable syntax highlighting in VS Code:
+
+**Settings > Files > Associations**: Add `.axl` and `.aspect` mapped to `starlark`
+
+---
+
+## Part 3: Writing AXL Tasks
+
+### Basic Task Structure
+
+Every AXL task follows this pattern:
+
+```python
+# my_task.axl
+
+def impl(ctx: TaskContext) -> int:
+    """Task implementation that receives context and returns exit code."""
+    print("Hello from AXL!")
+    return 0
+
+my_task = task(
+    implementation = impl,
+    args = {},  # Define command-line arguments
+)
+```
+
+**Source**: This pattern is demonstrated in `/Users/adsc/dev/refs/aspect-cli/.aspect/user-task.axl`
+
+### The TaskContext Object
+
+`TaskContext` is the primary interface for AXL tasks, providing access to:
+
+```python
+def impl(ctx: TaskContext) -> int:
+    # Access to arguments provided by the caller
+    target = ctx.args.target_pattern
+
+    # Access to Bazel functionality
+    build = ctx.bazel.build("//...")
+
+    # Standard library (filesystem, process, I/O, environment)
+    home = ctx.std.env.home_dir()
+    ctx.std.fs.write("/tmp/output.txt", "content")
+
+    # HTTP client for network operations
+    response = ctx.http().get(url="https://example.com").block()
+
+    # Template rendering (Jinja2, Handlebars, Liquid)
+    result = ctx.template.jinja2("Hello, {{ name }}!", {"name": "World"})
+
+    # Task configuration (if defined)
+    config = ctx.config
+
+    return 0
+```
+
+### Defining Arguments
+
+AXL provides a rich argument system:
+
+```python
+# From /Users/adsc/dev/refs/aspect-cli/crates/axl-runtime/src/builtins/aspect/build.axl
+
+build = task(
+    implementation = impl,
+    args = {
+        # Positional arguments (like target patterns)
+        "target_pattern": args.positional(minimum=1, maximum=512, default=["..."]),
+
+        # String flags (--flag=value)
+        "bazel_flag": args.string_list(),
+        "bazel_startup_flag": args.string_list(),
+        "bes_backend": args.string_list(),
+        "bes_header": args.string_list(),
+    }
+)
+```
+
+**Available argument types:**
+
+| Type | Description | Example |
+|------|-------------|---------|
+| `args.positional()` | Positional arguments | `aspect build //target` |
+| `args.string()` | Single string flag | `--config=release` |
+| `args.string_list()` | Repeatable string flag | `--flag=a --flag=b` |
+| `args.boolean()` | Boolean flag | `--verbose` or `--verbose=true` |
+| `args.int()` / `args.uint()` | Integer flags | `--jobs=4` |
+| `args.trailing_var_args()` | Capture remaining args | `aspect run target -- extra args` |
+
+### Task Groups
+
+Tasks can be organized into groups for better CLI organization:
+
+```python
+# From /Users/adsc/dev/refs/aspect-cli/.aspect/axl.axl
+
+axl = task(
+    group = ["tests"],  # Shows under 'aspect tests axl'
+    implementation = impl,
+    args = {}
+)
+```
+
+```python
+# From /Users/adsc/dev/refs/aspect-cli/.aspect/modules/dev/build.axl
+
+build = task(
+    implementation = _build_impl,
+    group = ["dev"],  # Shows under 'aspect dev build'
+    args = {
+        "target_pattern": args.positional(minimum=1, maximum=512, default=["..."]),
+    }
+)
+```
+
+### Task Configuration with Records
+
+Tasks can define configuration schemas that can be customized:
+
+```python
+# From /Users/adsc/dev/refs/aspect-cli/.aspect/user-task.axl
+
+UserTaskConfig = record(
+    message=field(str, "hello world"),
+    count=field(int, 1),
+    customize_message=field(typing.Callable[[str], str], default=lambda s: s),
+)
+
+def _impl(ctx: TaskContext) -> int:
+    # Access configuration
+    for i in range(ctx.config.count):
+        print(ctx.config.customize_message(ctx.config.message))
+    return 0
+
+user_task = task(
+    group = ["user"],
+    implementation = _impl,
+    args = {},
+    config = UserTaskConfig(),  # Default configuration
+)
+```
+
+Configuration can be customized in `.aspect/config.axl`:
+
+```python
+# From /Users/adsc/dev/refs/aspect-cli/.aspect/config.axl
+
+def config(ctx: ConfigContext):
+    # Customize a task's configuration
+    for task in ctx.tasks:
+        if task.name == "user_task" and task.group == ["user"]:
+            task.config = UserTaskConfig(
+                message = "hello axl",
+                count = 2,
+                customize_message = lambda s: s + "!"
+            )
+```
+
+---
+
+## Part 4: Bazel Integration
+
+### Building Targets
+
+AXL provides a non-blocking API for Bazel builds:
+
+```python
+# From /Users/adsc/dev/refs/aspect-cli/crates/axl-runtime/src/builtins/aspect/build.axl
+
+def impl(ctx: TaskContext) -> int:
+    # Build with options
+    build = ctx.bazel.build(
+        *ctx.args.target_pattern,
+        build_events = True,  # Enable Build Event Stream
+        flags = ["--isatty=" + str(int(ctx.std.io.stdout.is_tty))],
+        startup_flags = [],
+    )
+
+    # Wait for completion
+    build_status = build.wait()
+    return build_status.code
+```
+
+**Key `build()` parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `*targets` | `str` | Target patterns to build |
+| `build_events` | `bool \| list[BuildEventSink]` | Enable BES streaming |
+| `workspace_events` | `bool` | Enable workspace events |
+| `execution_logs` | `bool` | Enable execution logs |
+| `flags` | `list[str]` | Bazel command flags |
+| `startup_flags` | `list[str]` | Bazel startup flags |
+| `inherit_stdout` | `bool` | Pass through stdout |
+| `inherit_stderr` | `bool` | Pass through stderr (default: True) |
+| `current_dir` | `str \| None` | Working directory |
+
+### Processing Build Events
+
+AXL can process the Build Event Stream for custom UIs:
+
+```python
+# From /Users/adsc/dev/refs/aspect-cli/.aspect/modules/dev/lib/tui.axl
+
+def _fancy_tui(ctx: TaskContext, build: bazel.build.Build) -> int:
+    events = build.build_events()
+    in_flight = {}
+
+    for timer in forever(tick_ms):
+        event = events.try_pop()
+
+        if event != None:
+            if event.kind == "target_configured":
+                in_flight[event.id.label] = timer
+
+            elif event.kind == "target_completed":
+                start = in_flight.pop(event.id.label, None)
+                print("Built {} in {} ticks".format(event.id.label, (timer - start)))
+
+            elif event.kind == "progress":
+                ctx.std.io.stdout.write(event.payload.stdout)
+                ctx.std.io.stderr.write(event.payload.stderr)
+
+            if events.done():
+                return build.wait().code
+```
+
+**Common build event types:**
+- `build_started` - Build initialization
+- `configuration` / `configured` / `target_configured` - Configuration events
+- `target_completed` - Target finished building
+- `progress` - Progress messages (stdout/stderr)
+
+### Query API
+
+AXL provides a fluent API for Bazel queries:
+
+```python
+# From /Users/adsc/dev/refs/aspect-cli/.aspect/modules/dev/query.axl
+
+def _query_impl(ctx: TaskContext) -> int:
+    # Simple query using raw expression
+    build = ctx.bazel.query().raw(ctx.args.pattern[0])
+    for result in build.eval():
+        print(result.name)
+    return 0
+```
+
+**Fluent query API:**
+
+```python
+# Query dependencies of a target
+deps = ctx.bazel.query().targets("//myapp:main").deps()
+all_deps = deps.eval()
+
+# Chain multiple operations
+sources = ctx.bazel.query().targets("//myapp:main") \
+    .deps() \
+    .kind("source file") \
+    .eval()
+
+# Complex intersection query using raw expression
+complex = ctx.bazel.query().raw("deps(//foo) intersect kind('test', //bar:*)")
+
+# Path-based query
+path_query = ctx.bazel.query().raw("somepath(//start, //end)")
+```
+
+### Running Tests
+
+The test API mirrors the build API:
+
+```python
+# From /Users/adsc/dev/refs/aspect-cli/crates/axl-runtime/src/builtins/aspect/test.axl
+
+def _test_impl(ctx: TaskContext) -> int:
+    test = ctx.bazel.test(
+        *ctx.args.target_pattern,
+        build_events = True,
+        flags = ["--isatty=" + str(int(ctx.std.io.stdout.is_tty))],
+        startup_flags = [],
+    )
+
+    build_status = test.wait()
+    return build_status.code
+```
+
+---
+
+## Part 5: Standard Library (std)
+
+The `std` module provides cross-platform system access.
+
+### Environment (std.env)
+
+```python
+def impl(ctx: TaskContext) -> int:
+    env = ctx.std.env
+
+    # Directory information
+    home = env.home_dir()           # User's home directory
+    current = env.current_dir()     # Current working directory
+    root = env.root_dir()           # Project root (where MODULE.aspect lives)
+    temp = env.temp_dir()           # System temp directory
+
+    # System information
+    os = env.os()                   # "linux", "macos", "windows"
+    arch = env.arch()               # "x86_64", "aarch64"
+
+    # Environment variables
+    path = env.var("PATH")          # Get variable (returns None if not set)
+    all_vars = env.vars()           # List of (name, value) tuples
+
+    # Aspect CLI information
+    version = env.aspect_cli_version()
+    exe = env.current_exe()
+
+    return 0
+```
+
+### Filesystem (std.fs)
+
+```python
+# From /Users/adsc/dev/refs/aspect-cli/.aspect/axl.axl (comprehensive test suite)
+
+def test_fs(ctx: TaskContext) -> int:
+    fs = ctx.std.fs
+
+    # Path checks
+    if fs.exists("/path"):
+        if fs.is_file("/path"):
+            content = fs.read_to_string("/path")
+        elif fs.is_dir("/path"):
+            entries = fs.read_dir("/path")
+
+    # File operations
+    fs.write("/path/file.txt", "content")
+    fs.copy("/src", "/dst")
+    fs.rename("/old", "/new")
+    fs.hard_link("/original", "/link")
+    fs.remove_file("/path/file.txt")
+
+    # Directory operations
+    fs.create_dir("/path/dir")
+    fs.create_dir_all("/path/deep/nested/dir")
+    fs.remove_dir("/empty/dir")
+    fs.remove_dir_all("/dir/with/contents")
+
+    # Metadata
+    meta = fs.metadata("/path")
+    # meta.is_file, meta.is_dir, meta.is_symlink
+    # meta.size, meta.modified, meta.accessed, meta.created
+    # meta.readonly
+
+    sym_meta = fs.symlink_metadata("/path")  # Don't follow symlinks
+
+    # Read directory contents
+    for entry in fs.read_dir("/path"):
+        print(entry.path, entry.is_file, entry.is_dir)
+
+    return 0
+```
+
+### Process Execution (std.process)
+
+```python
+def impl(ctx: TaskContext) -> int:
+    proc = ctx.std.process
+
+    # Spawn process with piped I/O
+    child = proc.command("cat") \
+        .stdin("piped") \
+        .stdout("piped") \
+        .spawn()
+
+    stdin = child.stdin()
+    stdout = child.stdout()
+
+    stdin.write("Hello from AXL!\n")
+    stdin.flush()
+    stdin.close()  # Signal EOF
+
+    output = stdout.read_to_string()
+    status = child.wait()
+
+    print("Output:", output)
+    print("Exit code:", status.code)
+
+    return status.code
+```
+
+### I/O (std.io)
+
+```python
+def impl(ctx: TaskContext) -> int:
+    io = ctx.std.io
+
+    # Check if connected to a terminal
+    if io.stdout.is_tty:
+        # Use fancy terminal output
+        io.stdout.write("\033[32mGreen text\033[0m\n")
+    else:
+        # Plain output
+        io.stdout.write("Plain text\n")
+
+    io.stdout.flush()
+    io.stderr.write("Error message\n")
+    io.stderr.flush()
+
+    # Read from stdin
+    data = io.stdin.read(1024)
+
+    return 0
+```
+
+---
+
+## Part 6: HTTP Client
+
+AXL includes a built-in HTTP client for network operations.
+
+### Making Requests
+
+```python
+def impl(ctx: TaskContext) -> int:
+    http = ctx.http()
+
+    # GET request
+    response = http.get(
+        url = "https://api.example.com/data",
+        headers = {"Authorization": "Bearer token"}
+    ).block()
+
+    print("Status:", response.status)
+    print("Body:", response.body)
+
+    # POST request
+    response = http.post(
+        "https://api.example.com/data",
+        headers = {"Content-Type": "application/json"},
+        data = '{"key": "value"}'
+    ).block()
+
+    return 0
+```
+
+### Downloading Files
+
+```python
+# From /Users/adsc/dev/refs/aspect-cli/.aspect/axl.axl
+
+def test_http(ctx: TaskContext) -> int:
+    url = "https://raw.githubusercontent.com/aspect-build/aspect-cli/refs/heads/main/LICENSE"
+    expected_sha256 = "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+    expected_integrity = "sha256-DVQuDIgE45qn836wDaWnYhSdxoLXgpRRKH4RuTjpRZQ="
+
+    # Download with SHA256 verification (Bazel-style hex format)
+    resp = ctx.http().download(
+        url = url,
+        output = "/tmp/license.txt",
+        mode = 0o644,
+        sha256 = expected_sha256
+    ).block()
+
+    # Download with SRI integrity verification
+    resp = ctx.http().download(
+        url = url,
+        output = "/tmp/license2.txt",
+        mode = 0o644,
+        integrity = expected_integrity
+    ).block()
+
+    return 0
+```
+
+<Aside type="tip">
+Both `sha256` (hex format like Bazel) and `integrity` (SRI format) are supported. If both are specified, `integrity` takes precedence. Checksums are verified during streaming download.
+</Aside>
+
+---
+
+## Part 7: Template Rendering
+
+AXL supports three template engines for generating content.
+
+### Jinja2
+
+```python
+result = ctx.template.jinja2(
+    "Hello, {{ name }}! You have {{ count }} messages.",
+    {"name": "World", "count": 42}
+)
+# Result: "Hello, World! You have 42 messages."
+```
+
+### Handlebars
+
+```python
+result = ctx.template.handlebars(
+    "Hello, {{name}}!",
+    {"name": "World"}
+)
+# Result: "Hello, World!"
+```
+
+### Liquid
+
+```python
+result = ctx.template.liquid(
+    "Hello, {{ name }}!",
+    {"name": "World"}
+)
+# Result: "Hello, World!"
+```
+
+---
+
+## Part 8: Module System
+
+### Load Semantics
+
+AXL uses `load` statements similar to Starlark, with security-focused restrictions.
+
+**Source**: `/Users/adsc/dev/refs/aspect-cli/docs/load.md`
+
+```python
+# Relative paths (from current file's directory)
+load("./utils.axl", "helper_function")
+load("../shared/common.axl", "shared_function")
+
+# Repository-root relative paths
+load("path/to/script.axl", "function")
+
+# Module paths (from vendored modules)
+load("@module_name/path.axl", "function")
+```
+
+**Security restrictions:**
+
+1. Paths cannot start with `/` (no absolute OS paths)
+2. Paths cannot contain `//` (double slashes)
+3. All resolved paths must remain within the repository root
+4. When inside a module, you cannot escape the module boundary
+5. Cycle detection prevents recursive load loops
+
+### MODULE.aspect
+
+The `MODULE.aspect` file configures AXL dependencies:
+
+```python
+# From /Users/adsc/dev/refs/aspect-cli/MODULE.aspect
+
+# Local development module
+axl_local_dep(
+    name = "demo",
+    path = ".aspect/modules/demo",
+    auto_use_tasks = True,
+)
+
+axl_local_dep(
+    name = "dev",
+    path = ".aspect/modules/dev",
+    auto_use_tasks = True,
+)
+
+# Remote module from GitHub archive
+axl_archive_dep(
+    name = "aspect_rules_lint",
+    urls = ["https://github.com/aspect-build/rules_lint/archive/65525d8...tar.gz"],
+    integrity = "sha512-TGcxutWr8FwxrK3G+uthb...",
+    strip_prefix = "rules_lint-65525d871f677071877d3ea1ec096499ff7dd147",
+    auto_use_tasks = True,
+    dev = True,
+)
+
+# Manual task import
+use_task(".aspect/user/user-task-manual.axl", "user_task_manual")
+```
+
+### Adding Dependencies
+
+AXL provides a built-in command for adding dependencies:
+
+```bash
+# Add latest release
+aspect axl add gh:owner/repo
+
+# Add specific version
+aspect axl add gh:owner/repo@v1.0.0
+
+# With custom name
+aspect axl add gh:owner/repo --name=custom_name
+```
+
+**Source**: The `axl add` implementation in `/Users/adsc/dev/refs/aspect-cli/crates/axl-runtime/src/builtins/aspect/axl_add.axl` shows the full workflow:
+
+1. Parse dependency specification
+2. Query GitHub API for release information
+3. Download and compute SHA512 integrity hash
+4. Generate and append `axl_archive_dep()` to `MODULE.aspect`
+
+---
+
+## Part 9: WebAssembly Support
+
+AXL includes experimental WebAssembly support for extending tasks with compiled code.
+
+### Basic WASM Usage
+
+```python
+# From /Users/adsc/dev/refs/aspect-cli/examples/dummywasm/.aspect/dummy.axl
+
+def impl(ctx: TaskContext) -> int:
+    wasm_path = ctx.std.env.current_dir() + "/dummy.wasm"
+
+    # Instantiate WASM module
+    dummy = ctx.wasm.instantiate(wasm_path)
+    memory = dummy.get_memory("memory")
+
+    # Initialize runtime (required for Go wasip1 modules)
+    dummy.start()
+
+    # Call exported WASM functions
+    result = dummy.exports.get_dummy_json()
+
+    # Decode packed pointer/length (Go wasmexport pattern)
+    ptr = result & 0xFFFFFFFF
+    length = (result >> 32) & 0xFFFFFFFF
+
+    # Read data from WASM linear memory
+    json_bytes = memory.read(ptr, length)
+    print("JSON data:", str(json_bytes))
+
+    return 0
+```
+
+### WASM Host Functions
+
+You can import Starlark functions as WASM host functions:
+
+```python
+# host_funcs.axl - Must be frozen (loaded from separate file)
+def get_magic_number() -> int:
+    return 42
+
+def add_numbers(a: int, b: int) -> int:
+    return a + b
+```
+
+```python
+# From /Users/adsc/dev/refs/aspect-cli/examples/dummywasm/.aspect/host_test.axl
+
+load("./host_funcs.axl", "get_magic_number", "add_numbers")
+
+def impl(ctx: TaskContext) -> int:
+    wasm_path = ctx.std.env.current_dir() + "/host_test.wasm"
+
+    # Instantiate with host function imports
+    instance = ctx.wasm.instantiate(
+        wasm_path,
+        imports = {
+            "env": {
+                "get_magic_number": get_magic_number,
+                "add_numbers": add_numbers,
+            }
+        },
+    )
+
+    instance.start()
+
+    # Call WASM functions that use host imports
+    magic = instance.exports.call_get_magic()     # Returns 42
+    sum_result = instance.exports.call_add(10, 32) # Returns 42
+
+    return 0
+```
+
+<Aside type="caution">
+WASM support is marked as EXPERIMENTAL. The API may change in future versions.
+</Aside>
+
+---
+
+## Part 10: AXL vs BXL Comparison
+
+Both AXL and BXL are Starlark-based extension languages for build systems, but they serve different ecosystems.
+
+### Feature Comparison
+
+| Feature | AXL (Aspect CLI) | BXL (Buck2) |
+|---------|------------------|-------------|
+| **Build System** | Bazel | Buck2 |
+| **Primary Purpose** | Developer workflow automation | Graph introspection and analysis |
+| **File Extension** | `.axl` | `.bxl` |
+| **Starlark Interpreter** | starlark-rust | starlark-rust |
+| **Task Definition** | `task()` function | `bxl()` function |
+| **Graph Access** | Query API, Build Events | Direct graph introspection |
+| **Caching** | Via Bazel | Built-in incremental caching |
+| **Stability** | Early preview (stable early 2026) | Mostly stable |
+
+### Philosophical Differences
+
+**BXL focuses on graph introspection:**
+
+According to [Buck2's BXL documentation](https://buck2.build/docs/bxl/):
+
+> BXL is a Starlark-based script that enables integrators to inspect and interact with the Buck2 graph... Introspection of the Buck2 graph can occur at the unconfigured, configured, providers, and action stages.
+
+Key BXL capabilities:
+- IDE integration (project file generation)
+- Direct inspection of Starlark objects (rules, targets, providers)
+- Consolidate multiple Buck2 CLI calls into single BXL execution
+- Built-in profiling and telemetry
+
+**AXL focuses on workflow automation:**
+
+According to [Aspect's AXL page](https://www.aspect.build/axl):
+
+> AXL enables developers to "fill Bazel usability gaps" by creating custom extensions that address workflow challenges not natively supported by Bazel.
+
+Key AXL capabilities:
+- Code coverage reporting
+- Code formatting
+- Linting
+- Test reporting
+- Documentation generation
+- Release automation
+
+### When to Use Each
+
+**Use AXL when:**
+- You're using Bazel and need better developer workflows
+- You want to replace shell scripts around Bazel
+- You need custom CLI commands that integrate with builds
+- You want to process Build Event Stream data
+
+**Use BXL when:**
+- You're using Buck2 and need to introspect the build graph
+- You're building IDE integrations
+- You need direct access to provider data
+- You're implementing language server protocols
+
+---
+
+## Part 11: Available Extensions
+
+Aspect Build publishes extensions at [github.com/aspect-extensions](https://github.com/aspect-extensions).
+
+### rules_lint Integration
+
+[rules_lint](https://github.com/aspect-build/rules_lint) provides first-class linting in Bazel:
+
+```python
+# MODULE.aspect
+axl_archive_dep(
+    name = "aspect_rules_lint",
+    urls = ["https://github.com/aspect-build/rules_lint/archive/...tar.gz"],
+    integrity = "sha512-...",
+    strip_prefix = "rules_lint-...",
+    auto_use_tasks = True,
+)
+```
+
+Then run:
+
+```bash
+aspect lint //...
+aspect format //...
+```
+
+**Key features:**
+
+- Incremental and cache-friendly (runs as Bazel actions)
+- Works with remote execution and remote cache
+- Supports "lint only what changed" workflows
+- No changes needed to BUILD files or rulesets
+- Supports 30+ languages
+
+**Supported linters include:**
+- ESLint (JavaScript/TypeScript)
+- Checkstyle, PMD (Java)
+- Bandit (Python) with SARIF output
+- keep-sorted (any file type)
+- And many more
+
+### Building Custom Extensions
+
+To create your own extension:
+
+1. Create a repository with `.axl` files
+2. Define tasks using the `task()` function
+3. Publish releases on GitHub
+4. Users add via `aspect axl add gh:owner/repo`
+
+---
+
+## Part 12: Configuration Script
+
+The `.aspect/config.axl` file runs during CLI initialization.
+
+### ConfigContext
+
+```python
+# From /Users/adsc/dev/refs/aspect-cli/.aspect/config.axl
+
+def config(ctx: ConfigContext):
+    # Access standard library
+    home = ctx.std.env.home_dir()
+
+    # HTTP client
+    http = ctx.http()
+
+    # Template rendering
+    result = ctx.template.jinja2("...", {})
+
+    # WASM support (experimental)
+    wasm = ctx.wasm
+
+    # Iterate and modify tasks
+    for task in ctx.tasks:
+        print(task.name, task.group)
+
+    # Add new tasks dynamically
+    ctx.tasks.add(my_custom_task)
+
+    # Customize existing task configuration
+    for task in ctx.tasks:
+        if task.name == "my_task":
+            task.config = MyConfig(option = "value")
+```
+
+### Dynamic Task Registration
+
+```python
+# From /Users/adsc/dev/refs/aspect-cli/.aspect/config.axl
+
+def _user_task_impl(ctx: TaskContext) -> int:
+    print("I am a task added by .aspect/config.axl")
+    return 0
+
+_user_task = task(
+    name = "user-task-added-by-config",
+    group = ["user"],
+    implementation = _user_task_impl,
+    args = {}
+)
+
+def config(ctx: ConfigContext):
+    ctx.tasks.add(_user_task)
+```
+
+---
+
+## Part 13: Comparison with Vanilla Bazel
+
+### What Aspect CLI Adds
+
+| Capability | Vanilla Bazel | With Aspect CLI |
+|------------|---------------|-----------------|
+| Custom commands | Shell scripts | AXL tasks |
+| Progress UI | Fixed format | Customizable via BES |
+| Multiple BES backends | Single | Multiple |
+| Build event processing | External tools | Built-in AXL API |
+| Package management | http_archive | `aspect axl add` |
+| Code formatting | External tools | `aspect format` |
+| Linting | External tools | `aspect lint` |
+| Template rendering | None | Jinja2, Handlebars, Liquid |
+| HTTP client | None | Built-in |
+| WASM support | None | Experimental |
+
+### Migration Path
+
+Moving from shell scripts to AXL:
+
+**Before (Makefile):**
+```makefile
+.PHONY: build
+build:
+	bazel build //...
+
+.PHONY: test
+test:
+	bazel test //... --test_output=errors
+
+.PHONY: lint
+lint:
+	./scripts/run_linters.sh
+```
+
+**After (AXL):**
+```python
+# .aspect/tasks.axl
+
+def _build_impl(ctx: TaskContext) -> int:
+    build = ctx.bazel.build("//...", build_events=True)
+    return build.wait().code
+
+build = task(
+    implementation = _build_impl,
+    args = {"target_pattern": args.positional(default=["//..."])}
+)
+
+def _test_impl(ctx: TaskContext) -> int:
+    test = ctx.bazel.test(
+        "//...",
+        flags = ["--test_output=errors"],
+        build_events = True
+    )
+    return test.wait().code
+
+test = task(
+    implementation = _test_impl,
+    args = {"target_pattern": args.positional(default=["//..."])}
+)
+```
+
+---
+
+## Part 14: Architecture Overview
+
+### Crate Structure
+
+The Aspect CLI repository is organized into several Rust crates:
+
+**Source**: `/Users/adsc/dev/refs/aspect-cli/crates/`
+
+| Crate | Purpose |
+|-------|---------|
+| `aspect-cli` | Main CLI binary and task runner |
+| `aspect-launcher` | Fetches and manages CLI versions |
+| `aspect-telemetry` | Telemetry collection |
+| `axl-runtime` | AXL interpreter and built-in functions |
+| `axl-lsp` | Language Server Protocol for AXL |
+| `axl-docgen` | Documentation generator |
+| `axl-proto` | Protocol buffer definitions |
+| `build-event-stream` | Bazel BES parsing |
+| `galvanize` | Build system abstraction |
+| `pty-multiplex` | PTY multiplexing for terminal UI |
+
+### How Tasks Are Discovered
+
+1. **Auto-discovery**: Any `.axl` file in `.aspect/` directory root is loaded
+2. **Module tasks**: Modules with `auto_use_tasks = True` export their tasks
+3. **Manual import**: `use_task()` in `MODULE.aspect` for explicit imports
+4. **Config script**: Tasks can be added dynamically in `config()`
+
+### Execution Flow
+
+```
+aspect <command> [args]
+       │
+       ▼
+┌──────────────────┐
+│ aspect-launcher  │ ─── Resolves CLI version
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│   aspect-cli     │ ─── Loads MODULE.aspect
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  .aspect/config  │ ─── Runs config(ctx)
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│   Task lookup    │ ─── Matches command to task
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Task execution  │ ─── Runs impl(ctx)
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│   Bazel calls    │ ─── build/test/query
+└──────────────────┘
+```
+
+---
+
+## Part 15: Complete Example
+
+Here's a complete example of a custom CI task that builds, tests, and reports results:
+
+```python
+# .aspect/ci.axl
+"""
+CI task that builds, tests, and generates a report.
+"""
+
+def _ci_impl(ctx: TaskContext) -> int:
+    io = ctx.std.io
+    fs = ctx.std.fs
+
+    targets = ctx.args.targets
+    output_dir = ctx.args.output_dir or "./ci-output"
+
+    # Ensure output directory exists
+    if not fs.exists(output_dir):
+        fs.create_dir_all(output_dir)
+
+    print("=" * 60)
+    print("CI Pipeline Starting")
+    print("=" * 60)
+    print("")
+
+    # Step 1: Build
+    print("Step 1: Building targets...")
+    build = ctx.bazel.build(
+        *targets,
+        build_events = True,
+        flags = ["--keep_going"],
+    )
+
+    build_events = []
+    for event in build.build_events():
+        if event.kind == "target_completed":
+            build_events.append({
+                "target": event.id.label,
+                "success": event.payload.success if hasattr(event.payload, "success") else True
+            })
+        elif event.kind == "progress":
+            io.stderr.write(event.payload.stderr)
+
+    build_status = build.wait()
+    print("Build completed with exit code:", build_status.code)
+    print("")
+
+    if build_status.code != 0:
+        print("Build failed, skipping tests")
+        return build_status.code
+
+    # Step 2: Test
+    print("Step 2: Running tests...")
+    test = ctx.bazel.test(
+        *targets,
+        build_events = True,
+        flags = ["--test_output=errors", "--keep_going"],
+    )
+
+    test_results = []
+    for event in test.build_events():
+        if event.kind == "test_result":
+            test_results.append({
+                "target": event.id.label,
+                "status": event.payload.status,
+            })
+        elif event.kind == "progress":
+            io.stderr.write(event.payload.stderr)
+
+    test_status = test.wait()
+    print("Tests completed with exit code:", test_status.code)
+    print("")
+
+    # Step 3: Generate report
+    print("Step 3: Generating report...")
+    report = {
+        "build_status": build_status.code,
+        "test_status": test_status.code,
+        "build_events": build_events,
+        "test_results": test_results,
+    }
+
+    report_content = ctx.template.jinja2("""
+# CI Report
+
+## Build Summary
+- Exit Code: {{ build_status }}
+- Targets Built: {{ build_events | length }}
+
+## Test Summary
+- Exit Code: {{ test_status }}
+- Tests Run: {{ test_results | length }}
+
+## Build Details
+{% for event in build_events %}
+- {{ event.target }}: {{ "PASS" if event.success else "FAIL" }}
+{% endfor %}
+
+## Test Details
+{% for result in test_results %}
+- {{ result.target }}: {{ result.status }}
+{% endfor %}
+    """, report)
+
+    report_path = output_dir + "/ci-report.md"
+    fs.write(report_path, report_content)
+    print("Report written to:", report_path)
+
+    return test_status.code
+
+ci = task(
+    description = "Run CI pipeline: build, test, and generate report",
+    implementation = _ci_impl,
+    args = {
+        "targets": args.positional(minimum = 1, default = ["//..."]),
+        "output_dir": args.string(default = "./ci-output"),
+    }
+)
+```
+
+Run with:
+```bash
+aspect ci //my/project/...
+aspect ci //... --output_dir=/tmp/reports
+```
+
+---
+
+## References and Resources
+
+### Official Documentation
+- [Aspect CLI Documentation](https://docs.aspect.build/cli/)
+- [AXL Overview](https://www.aspect.build/axl)
+- [Aspect Build Blog](https://blog.aspect.build/)
+
+### GitHub Repositories
+- [aspect-build/aspect-cli](https://github.com/aspect-build/aspect-cli) - Main repository
+- [aspect-extensions](https://github.com/aspect-extensions) - Official extensions
+- [aspect-build/rules_lint](https://github.com/aspect-build/rules_lint) - Linting rules
+- [aspect-build/aspect-gazelle](https://github.com/aspect-build/aspect-gazelle) - Pre-compiled Gazelle
+
+### Related Tools
+- [Buck2 BXL](https://buck2.build/docs/bxl/) - Buck2's equivalent extension language
+- [starlark-rust](https://github.com/facebook/starlark-rust) - The Starlark interpreter used by AXL
+- [Bazel](https://bazel.build/) - The underlying build system
+
+### Community
+- Search GitHub for the `aspect-extensions` topic: [github.com/topics/aspect-extensions](https://github.com/topics/aspect-extensions)
+- BazelCon presentations and announcements
+
+---
+
+## Changelog
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 2025.42+ | Nov 2025 | Rust rewrite, AXL replaces gRPC plugins |
+| 2025.19.5 | Current | Latest stable release |
+| Pre-2025.42 | Legacy | Go implementation (maintenance mode at [aspect-cli-legacy](https://github.com/aspect-build/aspect-cli-legacy)) |
+
+<Aside type="note">
+This documentation is based on the Aspect CLI Rust implementation (version 2025.42+). The legacy Go version has different APIs and is in maintenance mode.
+</Aside>
