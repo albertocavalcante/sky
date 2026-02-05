@@ -55,6 +55,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		jsonFlag            bool
 		junitFlag           bool
 		markdownFlag        bool
+		githubFlag          bool
 		versionFlag         bool
 		verboseFlag         bool
 		recursiveFlag       bool
@@ -81,6 +82,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	fs.BoolVar(&jsonFlag, "json", false, "output results as JSON")
 	fs.BoolVar(&junitFlag, "junit", false, "output results as JUnit XML")
 	fs.BoolVar(&markdownFlag, "markdown", false, "output results as GitHub-flavored Markdown (for $GITHUB_STEP_SUMMARY)")
+	fs.BoolVar(&githubFlag, "github", false, "output GitHub workflow commands for native PR annotations")
 	fs.BoolVar(&versionFlag, "version", false, "print version and exit")
 	fs.BoolVar(&verboseFlag, "v", false, "verbose output")
 	fs.BoolVar(&recursiveFlag, "r", false, "search directories recursively")
@@ -146,6 +148,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writeln(stderr, "  skytest -json tests/            # JSON output")
 		writeln(stderr, "  skytest -junit tests/ > out.xml # JUnit output for CI")
 		writeln(stderr, "  skytest -markdown tests/ >> $GITHUB_STEP_SUMMARY  # Markdown for GitHub")
+		writeln(stderr, "  skytest -github tests/          # GitHub native annotations (PR comments)")
 		writeln(stderr, "  skytest --watch tests/          # Watch mode, re-run on changes")
 		writeln(stderr, "  skytest -w --affected-only .    # Watch, only run affected tests")
 		writeln(stderr, "  skytest -j auto tests/          # Run tests in parallel (auto-detect CPUs)")
@@ -336,6 +339,8 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		reporter = &tester.JUnitReporter{}
 	case markdownFlag:
 		reporter = &tester.MarkdownReporter{}
+	case githubFlag:
+		reporter = &tester.GitHubReporter{}
 	default:
 		reporter = &tester.TextReporter{
 			Verbose:      effectiveVerbose,
@@ -583,8 +588,9 @@ func runTests(
 
 		result.Files = append(result.Files, *fileResult)
 
-		// Report file immediately in text mode
-		if _, ok := reporter.(*tester.TextReporter); ok {
+		// Report file immediately for text and GitHub reporters
+		switch reporter.(type) {
+		case *tester.TextReporter, *tester.GitHubReporter:
 			reporter.ReportFile(stdout, fileResult)
 		}
 
@@ -664,8 +670,9 @@ func runSequential(
 
 		result.Files = append(result.Files, *fileResult)
 
-		// Report file immediately in text mode
-		if _, ok := reporter.(*tester.TextReporter); ok {
+		// Report file immediately for text and GitHub reporters
+		switch reporter.(type) {
+		case *tester.TextReporter, *tester.GitHubReporter:
 			reporter.ReportFile(stdout, fileResult)
 		}
 
@@ -773,8 +780,9 @@ func runParallel(
 		if r.fileResult != nil {
 			runResult.Files = append(runResult.Files, *r.fileResult)
 
-			// Output buffered content for text reporter
-			if _, ok := reporter.(*tester.TextReporter); ok {
+			// Output buffered content for text and GitHub reporters
+			switch reporter.(type) {
+			case *tester.TextReporter, *tester.GitHubReporter:
 				_, _ = stdout.Write(r.output)
 			}
 		}
@@ -833,8 +841,9 @@ func runFileForParallel(
 
 	result.fileResult = fileResult
 
-	// Buffer the output for text reporter
-	if _, ok := reporter.(*tester.TextReporter); ok {
+	// Buffer the output for text and GitHub reporters
+	switch reporter.(type) {
+	case *tester.TextReporter, *tester.GitHubReporter:
 		var buf bytes.Buffer
 		reporter.ReportFile(&buf, fileResult)
 		result.output = buf.Bytes()

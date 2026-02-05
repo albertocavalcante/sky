@@ -438,3 +438,213 @@ type testError struct {
 func (e *testError) Error() string {
 	return e.msg
 }
+
+func TestGitHubReporter(t *testing.T) {
+	result := &RunResult{
+		Files: []FileResult{
+			{
+				File: "math_test.star",
+				Tests: []TestResult{
+					{Name: "test_addition", Passed: true},
+					{Name: "test_subtraction", Passed: true},
+					{Name: "test_divide", Passed: false, Error: &testError{msg: "math_test.star:15:5: assertion failed: eq(None, 5)"}},
+					{Name: "test_skipped", Passed: true, Skipped: true, SkipReason: "Not implemented yet"},
+				},
+			},
+		},
+	}
+
+	reporter := &GitHubReporter{}
+	var buf strings.Builder
+
+	// ReportFile outputs workflow commands
+	reporter.ReportFile(&buf, &result.Files[0])
+	output := buf.String()
+
+	// Check group commands
+	if !strings.Contains(output, "::group::📁 math_test.star") {
+		t.Error("expected ::group:: command for file")
+	}
+	if !strings.Contains(output, "::endgroup::") {
+		t.Error("expected ::endgroup:: command")
+	}
+
+	// Check error annotation for failed test
+	if !strings.Contains(output, "::error file=math_test.star,line=15,title=Test Failed::") {
+		t.Error("expected ::error annotation with file and line")
+	}
+
+	// Check notice for skipped test
+	if !strings.Contains(output, "::notice file=math_test.star,title=Skipped::test_skipped") {
+		t.Error("expected ::notice annotation for skipped test")
+	}
+
+	// Check standard output lines
+	if !strings.Contains(output, "PASS  test_addition") {
+		t.Error("expected PASS output")
+	}
+	if !strings.Contains(output, "FAIL  test_divide") {
+		t.Error("expected FAIL output")
+	}
+	if !strings.Contains(output, "SKIP  test_skipped") {
+		t.Error("expected SKIP output")
+	}
+
+	// Test summary
+	buf.Reset()
+	reporter.ReportSummary(&buf, result)
+	summary := buf.String()
+
+	if !strings.Contains(summary, "❌") {
+		t.Error("expected failure indicator in summary")
+	}
+	if !strings.Contains(summary, "1/3 tests failed") {
+		t.Error("expected failure count in summary")
+	}
+}
+
+func TestGitHubReporterAllPassed(t *testing.T) {
+	result := &RunResult{
+		Files: []FileResult{
+			{
+				File: "test.star",
+				Tests: []TestResult{
+					{Name: "test_pass", Passed: true},
+					{Name: "test_pass2", Passed: true},
+				},
+			},
+		},
+	}
+
+	reporter := &GitHubReporter{}
+	var buf strings.Builder
+
+	reporter.ReportSummary(&buf, result)
+	summary := buf.String()
+
+	if !strings.Contains(summary, "✅") {
+		t.Error("expected success indicator in summary")
+	}
+	if !strings.Contains(summary, "2 tests passed") {
+		t.Error("expected pass count in summary")
+	}
+}
+
+func TestGitHubReporterXPass(t *testing.T) {
+	result := &RunResult{
+		Files: []FileResult{
+			{
+				File: "test.star",
+				Tests: []TestResult{
+					{Name: "test_xpass", Passed: false, XFail: true, XPass: true},
+				},
+			},
+		},
+	}
+
+	reporter := &GitHubReporter{}
+	var buf strings.Builder
+
+	reporter.ReportFile(&buf, &result.Files[0])
+	output := buf.String()
+
+	// XPASS should generate an error annotation
+	if !strings.Contains(output, "::error") {
+		t.Error("expected ::error annotation for XPASS")
+	}
+	if !strings.Contains(output, "Unexpected Pass") {
+		t.Error("expected 'Unexpected Pass' in XPASS error")
+	}
+	if !strings.Contains(output, "XPASS") {
+		t.Error("expected XPASS output")
+	}
+}
+
+func TestParseErrorLocation(t *testing.T) {
+	tests := []struct {
+		name         string
+		defaultFile  string
+		errMsg       string
+		expectedFile string
+		expectedLine int
+	}{
+		{
+			name:         "starlark format with col",
+			defaultFile:  "test.star",
+			errMsg:       "test.star:15:5: assertion failed",
+			expectedFile: "test.star",
+			expectedLine: 15,
+		},
+		{
+			name:         "starlark format without col",
+			defaultFile:  "test.star",
+			errMsg:       "test.star:42: in test_foo",
+			expectedFile: "test.star",
+			expectedLine: 42,
+		},
+		{
+			name:         "at suffix format",
+			defaultFile:  "default.star",
+			errMsg:       "assertion failed: eq(1, 2)\n  at other.star:10",
+			expectedFile: "other.star",
+			expectedLine: 10,
+		},
+		{
+			name:         "no location info",
+			defaultFile:  "test.star",
+			errMsg:       "some error without location",
+			expectedFile: "test.star",
+			expectedLine: 0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			file, line := parseErrorLocation(tc.defaultFile, &testError{msg: tc.errMsg})
+			if file != tc.expectedFile {
+				t.Errorf("expected file %q, got %q", tc.expectedFile, file)
+			}
+			if line != tc.expectedLine {
+				t.Errorf("expected line %d, got %d", tc.expectedLine, line)
+			}
+		})
+	}
+}
+
+func TestEscapeGitHubMessage(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"simple", "simple"},
+		{"line1\nline2", "line1%0Aline2"},
+		{"with%percent", "with%25percent"},
+		{"with\r\n", "with%0D%0A"},
+	}
+
+	for _, tc := range tests {
+		got := escapeGitHubMessage(tc.input)
+		if got != tc.expected {
+			t.Errorf("escapeGitHubMessage(%q) = %q, want %q", tc.input, got, tc.expected)
+		}
+	}
+}
+
+func TestEscapeGitHubValue(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"simple", "simple"},
+		{"file:line", "file%3Aline"},
+		{"a,b,c", "a%2Cb%2Cc"},
+		{"path/to/file.star", "path/to/file.star"},
+	}
+
+	for _, tc := range tests {
+		got := escapeGitHubValue(tc.input)
+		if got != tc.expected {
+			t.Errorf("escapeGitHubValue(%q) = %q, want %q", tc.input, got, tc.expected)
+		}
+	}
+}

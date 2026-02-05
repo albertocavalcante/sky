@@ -1,0 +1,31 @@
+# Copybara configuration for syncing sky-action to a separate repository
+#
+# This workflow syncs the sky-action/ folder from the main sky repository
+# to albertocavalcante/sky-action repository.
+#
+# Usage:
+#   copybara copy.bara.sky sky-action
+
+core.workflow(
+    name = "sky-action",
+    origin = git.github_origin(
+        url = "https://github.com/albertocavalcante/sky",
+        ref = "main",
+    ),
+    destination = git.github_pr_destination(
+        url = "https://github.com/albertocavalcante/sky-action",
+        destination_ref = "main",
+        pr_branch = "copybara/sync-${CONTEXT_REFERENCE}",
+    ),
+    authoring = authoring.pass_thru(
+        default = "Copybara <copybara@users.noreply.github.com>",
+    ),
+    origin_files = glob(
+        include = ["sky-action/**"],
+    ),
+    transformations = [
+        # Move sky-action/ contents to root of destination
+        core.move("sky-action/", ""),
+    ],
+    mode = "SQUASH",
+)

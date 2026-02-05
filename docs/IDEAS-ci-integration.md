@@ -303,7 +303,9 @@ ok 5 - test_list_ops # SKIP not implemented
 
 ### Phase 2: GitHub Native
 
-- [ ] `--github` flag for workflow commands
+- [x] `-github` flag for workflow commands (native PR annotations)
+- [x] `sky-action/` GitHub Action created
+- [x] Copybara config for syncing to `albertocavalcante/sky-action`
 - [ ] Integrate annotations with coverage (uncovered lines as warnings)
 
 ### Phase 3: CI Experience

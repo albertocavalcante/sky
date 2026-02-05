@@ -414,3 +414,174 @@ func (r *JSONReporter) ReportSummary(w io.Writer, result *RunResult) {
 	_, _ = fmt.Fprintf(w, "  ]\n")
 	_, _ = fmt.Fprintf(w, "}\n")
 }
+
+// GitHubReporter outputs results as GitHub workflow commands.
+// This enables native PR annotations without third-party actions.
+// See: https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions
+type GitHubReporter struct{}
+
+// ReportFile implements Reporter.
+func (r *GitHubReporter) ReportFile(w io.Writer, result *FileResult) {
+	// Start a collapsible group for this file
+	_, _ = fmt.Fprintf(w, "::group::📁 %s\n", result.File)
+
+	if result.SetupError != nil {
+		// Output setup error as an error annotation
+		_, _ = fmt.Fprintf(w, "::error file=%s,title=Setup Failed::%s\n",
+			escapeGitHubValue(result.File),
+			escapeGitHubMessage(result.SetupError.Error()))
+	}
+
+	for _, t := range result.Tests {
+		switch {
+		case t.Skipped:
+			// Skipped tests as notices
+			if t.SkipReason != "" {
+				_, _ = fmt.Fprintf(w, "::notice file=%s,title=Skipped::%s - %s\n",
+					escapeGitHubValue(result.File),
+					escapeGitHubMessage(t.Name),
+					escapeGitHubMessage(t.SkipReason))
+			} else {
+				_, _ = fmt.Fprintf(w, "::notice file=%s,title=Skipped::%s\n",
+					escapeGitHubValue(result.File),
+					escapeGitHubMessage(t.Name))
+			}
+			_, _ = fmt.Fprintf(w, "SKIP  %s\n", t.Name)
+
+		case t.XPass:
+			// Unexpected pass is a failure
+			_, _ = fmt.Fprintf(w, "::error file=%s,title=Unexpected Pass::%s passed but was expected to fail\n",
+				escapeGitHubValue(result.File),
+				escapeGitHubMessage(t.Name))
+			_, _ = fmt.Fprintf(w, "XPASS %s\n", t.Name)
+
+		case t.XFail && t.Passed:
+			// Expected failure that failed (success)
+			_, _ = fmt.Fprintf(w, "XFAIL %s\n", t.Name)
+
+		case t.Passed:
+			_, _ = fmt.Fprintf(w, "PASS  %s\n", t.Name)
+
+		default:
+			// Failed test - extract line number if possible
+			file, line := parseErrorLocation(result.File, t.Error)
+			errMsg := ""
+			if t.Error != nil {
+				errMsg = t.Error.Error()
+			}
+
+			if line > 0 {
+				_, _ = fmt.Fprintf(w, "::error file=%s,line=%d,title=Test Failed::%s\n",
+					escapeGitHubValue(file), line, escapeGitHubMessage(errMsg))
+			} else {
+				_, _ = fmt.Fprintf(w, "::error file=%s,title=Test Failed::%s - %s\n",
+					escapeGitHubValue(file),
+					escapeGitHubMessage(t.Name),
+					escapeGitHubMessage(errMsg))
+			}
+			_, _ = fmt.Fprintf(w, "FAIL  %s\n", t.Name)
+		}
+	}
+
+	if result.TeardownError != nil {
+		_, _ = fmt.Fprintf(w, "::error file=%s,title=Teardown Failed::%s\n",
+			escapeGitHubValue(result.File),
+			escapeGitHubMessage(result.TeardownError.Error()))
+	}
+
+	_, _ = fmt.Fprintln(w, "::endgroup::")
+}
+
+// ReportSummary implements Reporter.
+func (r *GitHubReporter) ReportSummary(w io.Writer, result *RunResult) {
+	passed, failed, files := result.Summary()
+	total := passed + failed
+
+	// Count skipped
+	skipped := 0
+	for _, fr := range result.Files {
+		skipped += fr.SkippedCount()
+	}
+
+	_, _ = fmt.Fprintln(w)
+
+	// Output summary
+	if failed > 0 {
+		_, _ = fmt.Fprintf(w, "❌ %d/%d tests failed (%d skipped) in %d file(s)\n",
+			failed, total, skipped, files)
+	} else {
+		_, _ = fmt.Fprintf(w, "✅ %d tests passed (%d skipped) in %d file(s)\n",
+			passed, skipped, files)
+	}
+}
+
+// parseErrorLocation tries to extract file and line number from an error.
+// Returns the original file and 0 if no line number can be extracted.
+func parseErrorLocation(defaultFile string, err error) (string, int) {
+	if err == nil {
+		return defaultFile, 0
+	}
+
+	errStr := err.Error()
+
+	// Try to parse Starlark error format: "filename:line:col: message"
+	// Example: "test.star:15:5: assertion failed"
+	// Also handles: "test.star:15: in test_foo"
+	parts := strings.SplitN(errStr, ":", 4)
+	if len(parts) >= 2 {
+		// First part might be the file
+		file := strings.TrimSpace(parts[0])
+		// Second part should be line number
+		lineStr := strings.TrimSpace(parts[1])
+
+		// Check if it looks like a valid file path (has extension or is the default file)
+		if strings.HasSuffix(file, ".star") || file == defaultFile {
+			// Parse line number
+			var line int
+			if _, scanErr := fmt.Sscanf(lineStr, "%d", &line); scanErr == nil && line > 0 {
+				return file, line
+			}
+		}
+	}
+
+	// Try to find "at <file>:<line>" pattern in error message
+	// Example: "assertion failed: eq(1, 2)\n  at test.star:15"
+	atIdx := strings.LastIndex(errStr, " at ")
+	if atIdx == -1 {
+		atIdx = strings.LastIndex(errStr, "\n  at ")
+	}
+	if atIdx != -1 {
+		location := strings.TrimSpace(errStr[atIdx+4:])
+		parts := strings.SplitN(location, ":", 2)
+		if len(parts) == 2 {
+			file := strings.TrimSpace(parts[0])
+			if strings.HasSuffix(file, ".star") {
+				var line int
+				if _, scanErr := fmt.Sscanf(parts[1], "%d", &line); scanErr == nil && line > 0 {
+					return file, line
+				}
+			}
+		}
+	}
+
+	return defaultFile, 0
+}
+
+// escapeGitHubMessage escapes a message for GitHub workflow commands.
+// See: https://github.com/actions/toolkit/blob/main/packages/core/src/command.ts
+func escapeGitHubMessage(s string) string {
+	s = strings.ReplaceAll(s, "%", "%25")
+	s = strings.ReplaceAll(s, "\r", "%0D")
+	s = strings.ReplaceAll(s, "\n", "%0A")
+	return s
+}
+
+// escapeGitHubValue escapes a value for GitHub workflow command parameters.
+func escapeGitHubValue(s string) string {
+	s = strings.ReplaceAll(s, "%", "%25")
+	s = strings.ReplaceAll(s, "\r", "%0D")
+	s = strings.ReplaceAll(s, "\n", "%0A")
+	s = strings.ReplaceAll(s, ":", "%3A")
+	s = strings.ReplaceAll(s, ",", "%2C")
+	return s
+}

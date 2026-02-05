@@ -1,0 +1,83 @@
+name: 'Sky Test'
+description: 'Run Starlark tests with skytest'
+author: 'albertocavalcante'
+
+inputs:
+  path:
+    description: 'Path to test files'
+    required: false
+    default: '.'
+  recursive:
+    description: 'Search directories recursively'
+    required: false
+    default: 'true'
+  coverage:
+    description: 'Enable coverage collection'
+    required: false
+    default: 'false'
+  coverage-threshold:
+    description: 'Minimum coverage percentage (0 to disable)'
+    required: false
+    default: '0'
+  annotations:
+    description: 'Enable GitHub PR annotations'
+    required: false
+    default: 'true'
+  summary:
+    description: 'Write to job summary'
+    required: false
+    default: 'true'
+  version:
+    description: 'Sky version to install (e.g., latest, v0.1.0)'
+    required: false
+    default: 'latest'
+  fail-fast:
+    description: 'Stop on first test failure'
+    required: false
+    default: 'false'
+
+outputs:
+  passed:
+    description: 'Number of passed tests'
+    value: ${{ steps.test.outputs.passed }}
+  failed:
+    description: 'Number of failed tests'
+    value: ${{ steps.test.outputs.failed }}
+  coverage:
+    description: 'Coverage percentage'
+    value: ${{ steps.test.outputs.coverage }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+        cache: true
+
+    - name: Install skytest
+      shell: bash
+      run: |
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          go install github.com/albertocavalcante/sky/cmd/skytest@latest
+        else
+          go install github.com/albertocavalcante/sky/cmd/skytest@${{ inputs.version }}
+        fi
+
+    - name: Run tests
+      id: test
+      shell: bash
+      run: ${{ github.action_path }}/scripts/run.sh
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_RECURSIVE: ${{ inputs.recursive }}
+        INPUT_COVERAGE: ${{ inputs.coverage }}
+        INPUT_COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
+        INPUT_ANNOTATIONS: ${{ inputs.annotations }}
+        INPUT_SUMMARY: ${{ inputs.summary }}
+        INPUT_FAIL_FAST: ${{ inputs.fail-fast }}
+
+branding:
+  icon: 'check-circle'
+  color: 'blue'

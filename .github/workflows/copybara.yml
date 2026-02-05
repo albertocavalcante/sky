@@ -1,0 +1,25 @@
+name: Sync sky-action
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sky-action/**'
+
+jobs:
+  copybara:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Copybara
+        uses: olivr/copybara-action@v1.2.3
+        with:
+          ssh_key: ${{ secrets.COPYBARA_SSH_KEY }}
+          sot_repo: albertocavalcante/sky
+          destination_repo: albertocavalcante/sky-action
+          workflow: sky-action
+          access_token: ${{ secrets.COPYBARA_ACCESS_TOKEN }}
