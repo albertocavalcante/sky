@@ -1,7 +1,7 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import starlightLinksValidator from 'starlight-links-validator';
-import starlightSidebarOrphanPages from 'starlight-sidebar-orphan-pages';
+import starlightSidebarOrphanPages from '@albertocavalcante/starlight-sidebar-orphan-pages';
 import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
 import fs from 'node:fs';
