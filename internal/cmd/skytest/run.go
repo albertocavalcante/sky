@@ -1,6 +1,7 @@
 package skytest
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -9,7 +10,10 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -64,6 +68,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		updateSnapshotsFlag bool
 		watchFlag           bool
 		affectedOnlyFlag    bool
+		parallelFlag        string
 	)
 
 	fs := flag.NewFlagSet("skytest", flag.ContinueOnError)
@@ -91,6 +96,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	fs.BoolVar(&watchFlag, "watch", false, "watch for file changes and re-run tests")
 	fs.BoolVar(&watchFlag, "w", false, "watch mode (short for --watch)")
 	fs.BoolVar(&affectedOnlyFlag, "affected-only", false, "in watch mode, only run tests affected by changes")
+	fs.StringVar(&parallelFlag, "j", "", "number of parallel test files (auto, 1-N)")
 
 	fs.Usage = func() {
 		writeln(stderr, "Usage: skytest [flags] <paths...>")
@@ -109,6 +115,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writeln(stderr, "  - Prelude files for shared helpers (--prelude)")
 		writeln(stderr, "  - Per-test timeouts (--timeout)")
 		writeln(stderr, "  - Fail-fast mode (--bail / -x)")
+		writeln(stderr, "  - Parallel test execution (-j)")
 		writeln(stderr, "  - Watch mode for continuous testing (--watch / -w)")
 		writeln(stderr, "  - Coverage collection (EXPERIMENTAL, requires starlark-go-x)")
 		writeln(stderr)
@@ -131,6 +138,8 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writeln(stderr, "  skytest -junit tests/ > out.xml # JUnit output for CI")
 		writeln(stderr, "  skytest --watch tests/          # Watch mode, re-run on changes")
 		writeln(stderr, "  skytest -w --affected-only .    # Watch, only run affected tests")
+		writeln(stderr, "  skytest -j auto tests/          # Run tests in parallel (auto-detect CPUs)")
+		writeln(stderr, "  skytest -j 4 tests/             # Run tests with 4 parallel workers")
 		writeln(stderr)
 		writeln(stderr, "Assert module:")
 		writeln(stderr, "  assert.eq(a, b, msg=None)       # Assert a == b")
@@ -225,59 +234,22 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		return runWatchMode(files, opts, fileTestNames, reporter, affectedOnlyFlag, stdout, stderr)
 	}
 
-	// Run tests
-	result := &tester.RunResult{}
-	start := time.Now()
+	// Determine parallelism level
+	workers := parseParallelism(parallelFlag)
 
-	for _, file := range files {
-		src, err := os.ReadFile(file)
-		if err != nil {
-			writef(stderr, "skytest: %v\n", err)
-			return exitError
-		}
-
-		// Convert to absolute path for clearer output
-		absPath, _ := filepath.Abs(file)
-		if absPath == "" {
-			absPath = file
-		}
-
-		// Check if this file has specific test names from :: syntax
-		// We need to check both the original path and the absolute path
-		var testNames []string
-		for origPath, names := range fileTestNames {
-			origAbs, _ := filepath.Abs(origPath)
-			if origPath == file || origAbs == absPath {
-				testNames = names
-				break
-			}
-		}
-
-		// Create a runner with the appropriate test names for this file
-		fileOpts := opts
-		fileOpts.TestNames = testNames
-		fileRunner := tester.New(fileOpts)
-
-		fileResult, err := fileRunner.RunFile(absPath, src)
-		if err != nil {
-			writef(stderr, "skytest: %s: %v\n", file, err)
-			return exitError
-		}
-
-		result.Files = append(result.Files, *fileResult)
-
-		// Report file immediately in text mode
-		if _, ok := reporter.(*tester.TextReporter); ok {
-			reporter.ReportFile(stdout, fileResult)
-		}
-
-		// Fail-fast: stop processing more files after first failure
-		if opts.FailFast && fileResult.HasFailures() {
-			break
-		}
+	// Run tests (parallel or sequential)
+	var result *tester.RunResult
+	var runErr error
+	if workers > 1 && len(files) > 1 {
+		result, runErr = runParallel(files, workers, opts, fileTestNames, reporter, stdout, stderr)
+	} else {
+		result, runErr = runSequential(files, opts, fileTestNames, reporter, stdout, stderr)
 	}
 
-	result.Duration = time.Since(start)
+	if runErr != nil {
+		writef(stderr, "skytest: %v\n", runErr)
+		return exitError
+	}
 
 	// Report summary
 	reporter.ReportSummary(stdout, result)
@@ -512,4 +484,252 @@ func runTests(
 
 	// Report summary
 	reporter.ReportSummary(stdout, result)
+}
+
+// parseParallelism parses the -j flag value and returns the number of workers.
+// Returns 1 for sequential execution (empty, "1", invalid values).
+// Returns runtime.NumCPU() for "auto".
+// Returns the parsed number for valid numeric values > 0.
+func parseParallelism(flag string) int {
+	if flag == "" || flag == "1" {
+		return 1
+	}
+	if strings.EqualFold(flag, "auto") {
+		return runtime.NumCPU()
+	}
+	n, err := strconv.Atoi(flag)
+	if err != nil || n < 1 {
+		return 1
+	}
+	return n
+}
+
+// runSequential runs test files sequentially.
+// Returns an error if a file cannot be read or has a syntax error.
+func runSequential(
+	files []string,
+	opts tester.Options,
+	fileTestNames map[string][]string,
+	reporter tester.Reporter,
+	stdout, _ io.Writer,
+) (*tester.RunResult, error) {
+	result := &tester.RunResult{}
+	start := time.Now()
+
+	for _, file := range files {
+		src, err := os.ReadFile(file)
+		if err != nil {
+			return nil, err
+		}
+
+		// Convert to absolute path for clearer output
+		absPath, _ := filepath.Abs(file)
+		if absPath == "" {
+			absPath = file
+		}
+
+		// Check if this file has specific test names from :: syntax
+		var testNames []string
+		for origPath, names := range fileTestNames {
+			origAbs, _ := filepath.Abs(origPath)
+			if origPath == file || origAbs == absPath {
+				testNames = names
+				break
+			}
+		}
+
+		// Create a runner with the appropriate test names for this file
+		fileOpts := opts
+		fileOpts.TestNames = testNames
+		fileRunner := tester.New(fileOpts)
+
+		fileResult, err := fileRunner.RunFile(absPath, src)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", file, err)
+		}
+
+		result.Files = append(result.Files, *fileResult)
+
+		// Report file immediately in text mode
+		if _, ok := reporter.(*tester.TextReporter); ok {
+			reporter.ReportFile(stdout, fileResult)
+		}
+
+		// Fail-fast: stop processing more files after first failure
+		if opts.FailFast && fileResult.HasFailures() {
+			break
+		}
+	}
+
+	result.Duration = time.Since(start)
+	return result, nil
+}
+
+// fileRunResult holds the result of running a single file, used for parallel execution.
+type fileRunResult struct {
+	file       string
+	fileResult *tester.FileResult
+	err        error
+	output     []byte // Buffered output for this file
+}
+
+// runParallel runs test files in parallel using a worker pool.
+// Returns an error if any file cannot be read or has a syntax error.
+func runParallel(
+	files []string,
+	workers int,
+	opts tester.Options,
+	fileTestNames map[string][]string,
+	reporter tester.Reporter,
+	stdout, _ io.Writer,
+) (*tester.RunResult, error) {
+	start := time.Now()
+
+	// Channel for file paths to process
+	jobs := make(chan string, len(files))
+	// Channel for results
+	results := make(chan fileRunResult, len(files))
+
+	// Track if we should stop early (fail-fast or error)
+	var stopFlag int32 // 0 = running, 1 = stop
+	var stopMu sync.Mutex
+	shouldStop := func() bool {
+		stopMu.Lock()
+		defer stopMu.Unlock()
+		return stopFlag == 1
+	}
+	setStop := func() {
+		stopMu.Lock()
+		defer stopMu.Unlock()
+		stopFlag = 1
+	}
+
+	// Start workers
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for file := range jobs {
+				// Check if we should stop early
+				if shouldStop() {
+					continue // Drain the channel but don't process
+				}
+
+				result := runFileForParallel(file, opts, fileTestNames, reporter)
+				results <- result
+
+				// Set stop flag on error or fail-fast failure
+				if result.err != nil {
+					setStop()
+				} else if opts.FailFast && result.fileResult != nil && result.fileResult.HasFailures() {
+					setStop()
+				}
+			}
+		}()
+	}
+
+	// Send jobs
+	for _, file := range files {
+		jobs <- file
+	}
+	close(jobs)
+
+	// Wait for workers and close results
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect results in a map to preserve file order
+	resultMap := make(map[string]fileRunResult)
+	for r := range results {
+		resultMap[r.file] = r
+	}
+
+	// Build final result in original file order
+	// Check for errors first
+	runResult := &tester.RunResult{}
+	for _, file := range files {
+		r, ok := resultMap[file]
+		if !ok {
+			continue
+		}
+
+		// Return first error encountered (in file order)
+		if r.err != nil {
+			return nil, fmt.Errorf("%s: %w", file, r.err)
+		}
+
+		if r.fileResult != nil {
+			runResult.Files = append(runResult.Files, *r.fileResult)
+
+			// Output buffered content for text reporter
+			if _, ok := reporter.(*tester.TextReporter); ok {
+				_, _ = stdout.Write(r.output)
+			}
+		}
+
+		// Stop reporting after first failure in fail-fast mode
+		if opts.FailFast && r.fileResult != nil && r.fileResult.HasFailures() {
+			break
+		}
+	}
+
+	runResult.Duration = time.Since(start)
+	return runResult, nil
+}
+
+// runFileForParallel runs a single file and captures its output.
+func runFileForParallel(
+	file string,
+	opts tester.Options,
+	fileTestNames map[string][]string,
+	reporter tester.Reporter,
+) fileRunResult {
+	result := fileRunResult{file: file}
+
+	src, err := os.ReadFile(file)
+	if err != nil {
+		result.err = err
+		return result
+	}
+
+	// Convert to absolute path for clearer output
+	absPath, _ := filepath.Abs(file)
+	if absPath == "" {
+		absPath = file
+	}
+
+	// Check if this file has specific test names from :: syntax
+	var testNames []string
+	for origPath, names := range fileTestNames {
+		origAbs, _ := filepath.Abs(origPath)
+		if origPath == file || origAbs == absPath {
+			testNames = names
+			break
+		}
+	}
+
+	// Create a runner with the appropriate test names for this file
+	fileOpts := opts
+	fileOpts.TestNames = testNames
+	fileRunner := tester.New(fileOpts)
+
+	fileResult, err := fileRunner.RunFile(absPath, src)
+	if err != nil {
+		result.err = err
+		return result
+	}
+
+	result.fileResult = fileResult
+
+	// Buffer the output for text reporter
+	if _, ok := reporter.(*tester.TextReporter); ok {
+		var buf bytes.Buffer
+		reporter.ReportFile(&buf, fileResult)
+		result.output = buf.Bytes()
+	}
+
+	return result
 }
