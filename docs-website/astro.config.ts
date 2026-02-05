@@ -1,10 +1,10 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import starlightLinksValidator from 'starlight-links-validator';
+import starlightSidebarOrphanPages from 'starlight-sidebar-orphan-pages';
 import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
 import fs from 'node:fs';
-import { validateSidebar } from './src/validate-sidebar';
 
 // Load TextMate grammars for syntax highlighting
 const starlarkGrammar = JSON.parse(
@@ -24,9 +24,11 @@ export default defineConfig({
 
 	integrations: [
 		sitemap(),
-		validateSidebar({ failOnOrphans: true }),
 		starlight({
-			plugins: [starlightLinksValidator()],
+			plugins: [
+				starlightLinksValidator(),
+				starlightSidebarOrphanPages({ failOnOrphans: true }),
+			],
 			title: 'Sky',
 			description: 'A comprehensive toolkit for Starlark development',
 			favicon: '/favicon.svg',
