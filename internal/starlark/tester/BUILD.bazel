@@ -11,11 +11,13 @@ go_library(
         "reporter.go",
         "snapshot.go",
         "tester.go",
+        "watcher.go",
     ],
     importpath = "github.com/albertocavalcante/sky/internal/starlark/tester",
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/starlark/coverage",
+        "@com_github_fsnotify_fsnotify//:fsnotify",
         "@com_github_pmezard_go_difflib//difflib",
         "@net_starlark_go//lib/json",
         "@net_starlark_go//starlark",
@@ -29,6 +31,7 @@ go_test(
     srcs = [
         "mock_test.go",
         "tester_test.go",
+        "watcher_test.go",
     ],
     embed = [":tester"],
     deps = ["@net_starlark_go//starlark"],

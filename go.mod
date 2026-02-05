@@ -4,6 +4,7 @@ go 1.24.6
 
 require (
 	github.com/bazelbuild/buildtools v0.0.0-20251231073631-eb7356da6895
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gofrs/flock v0.13.0
 	github.com/google/go-cmp v0.7.0
 	github.com/kisielk/errcheck v1.9.0
