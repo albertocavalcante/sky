@@ -34,7 +34,126 @@ Integrate Starlark code coverage into your CI/CD pipeline. This guide covers the
 
 ## GitHub Actions
 
-### Basic Coverage
+### Complete Example (Tests + Coverage + PR Annotations)
+
+This workflow runs tests, reports results with PR annotations, and uploads coverage:
+
+```yaml title=".github/workflows/test.yml"
+name: Test
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install Sky
+        run: go install github.com/example/sky/cmd/skytest@latest
+
+      - name: Run tests
+        run: |
+          skytest -junit -r tests/ > test-results.xml
+          skytest --coverage --coverage-output=coverage.xml -r tests/
+
+      - name: Test Report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Starlark Tests
+          path: test-results.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+```
+
+### Test Reporting Actions
+
+Several GitHub Actions can display JUnit XML test results:
+
+<CardGrid>
+  <Card title="dorny/test-reporter" icon="star">
+    Shows test results in PR checks with file annotations. [Marketplace](https://github.com/marketplace/actions/test-reporter)
+  </Card>
+  <Card title="mikepenz/action-junit-report" icon="document">
+    Adds test results as PR check with annotations. [Marketplace](https://github.com/marketplace/actions/junit-report-action)
+  </Card>
+</CardGrid>
+
+#### Using dorny/test-reporter
+
+```yaml
+      - name: Test Report
+        uses: dorny/test-reporter@v1
+        if: always()  # Run even if tests fail
+        with:
+          name: Starlark Tests
+          path: test-results.xml
+          reporter: java-junit
+          fail-on-error: false
+```
+
+#### Using mikepenz/action-junit-report
+
+```yaml
+      - name: Test Report
+        uses: mikepenz/action-junit-report@v4
+        if: always()
+        with:
+          report_paths: test-results.xml
+          check_name: Starlark Tests
+          fail_on_failure: false
+```
+
+### Job Summary (Native GitHub Feature)
+
+Write test results directly to the GitHub Actions job summary:
+
+```yaml
+      - name: Run tests with summary
+        run: |
+          skytest -r tests/ | tee test-output.txt
+
+          # Write summary
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -5 test-output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+```
+
+Or generate a detailed summary from JSON output:
+
+```yaml
+      - name: Generate test summary
+        if: always()
+        run: |
+          skytest -json -r tests/ > results.json || true
+
+          echo "## 🧪 Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          PASSED=$(jq '.passed' results.json)
+          FAILED=$(jq '.failed' results.json)
+
+          if [ "$FAILED" -eq 0 ]; then
+            echo "✅ All $PASSED tests passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ $FAILED failed, $PASSED passed" >> $GITHUB_STEP_SUMMARY
+          fi
+```
+
+### Basic Coverage Only
 
 ```yaml title=".github/workflows/test.yml"
 name: Test
@@ -56,7 +175,7 @@ jobs:
         run: go install github.com/example/sky/cmd/skytest@latest
 
       - name: Run tests with coverage
-        run: skytest --coverage --coverage-output=coverage.xml tests/
+        run: skytest --coverage --coverage-output=coverage.xml -r tests/
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -68,27 +187,6 @@ jobs:
 ### With Codecov
 
 ```yaml title=".github/workflows/test.yml"
-name: Test with Codecov
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
-      - name: Install Sky
-        run: go install github.com/example/sky/cmd/skytest@latest
-
-      - name: Run tests with coverage
-        run: skytest --coverage --coverage-output=coverage.xml tests/
-
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4
         with:

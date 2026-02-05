@@ -238,21 +238,52 @@ skytest -junit . > results.xml
 
 ### GitHub Actions
 
+#### Basic Test Run
+
 ```yaml
 - name: Run Starlark tests
   run: |
     go install github.com/albertocavalcante/sky/cmd/skytest@latest
     skytest -r .
+```
 
-- name: Run tests with JUnit report
+#### With PR Annotations (Recommended)
+
+Use [dorny/test-reporter](https://github.com/marketplace/actions/test-reporter) to show test results in PR checks:
+
+```yaml
+- name: Run tests
   run: |
+    go install github.com/albertocavalcante/sky/cmd/skytest@latest
     skytest -junit -r . > test-results.xml
 
-- name: Upload test results
-  uses: actions/upload-artifact@v3
+- name: Test Report
+  uses: dorny/test-reporter@v1
+  if: always()
   with:
-    name: test-results
+    name: Starlark Tests
     path: test-results.xml
+    reporter: java-junit
+    fail-on-error: false
+```
+
+This displays test results directly in the GitHub PR checks tab with:
+- Pass/fail summary
+- Individual test case results
+- File annotations on failures
+
+#### With Job Summary
+
+Write results to the native GitHub Actions job summary:
+
+```yaml
+- name: Run tests with summary
+  run: |
+    skytest -r . | tee output.txt
+    echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+    echo '```' >> $GITHUB_STEP_SUMMARY
+    cat output.txt >> $GITHUB_STEP_SUMMARY
+    echo '```' >> $GITHUB_STEP_SUMMARY
 ```
 
 ### GitLab CI
@@ -266,6 +297,8 @@ test:
     reports:
       junit: report.xml
 ```
+
+GitLab automatically displays JUnit results in merge request widgets.
 
 ### Jenkins
 

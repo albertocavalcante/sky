@@ -268,6 +268,8 @@ def configure():
 
 ### GitHub Actions
 
+#### Complete Example (Tests + Coverage + PR Annotations)
+
 ```yaml
 name: Tests
 on: [push, pull_request]
@@ -278,14 +280,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Run tests (JUnit XML for PR annotations)
+        run: skytest -junit -r tests/ > test-results.xml
+
       - name: Run tests with coverage
-        run: skytest --coverage --coverage-output=coverage.xml tests/
+        run: skytest --coverage --coverage-output=coverage.xml -r tests/
+
+      - name: Test Report (shows in PR checks)
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Starlark Tests
+          path: test-results.xml
+          reporter: java-junit
+          fail-on-error: false
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: coverage.xml
 ```
+
+The [dorny/test-reporter](https://github.com/marketplace/actions/test-reporter) action displays test results directly in PR checks with pass/fail annotations.
 
 ### GitLab CI
 
