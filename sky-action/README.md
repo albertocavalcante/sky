@@ -4,6 +4,7 @@ GitHub Action for running Starlark tests with [skytest](https://github.com/alber
 
 ## Features
 
+- **Cross-platform**: Works on Linux, macOS, and Windows runners
 - Native GitHub PR annotations (no third-party actions needed)
 - Automatic job summary generation
 - Coverage collection and threshold checking
@@ -16,7 +17,7 @@ GitHub Action for running Starlark tests with [skytest](https://github.com/alber
 
 ```yaml
 - name: Test Starlark files
-  uses: albertocavalcante/sky-action@v1
+  uses: albertocavalcante/sky/sky-action@v1
   with:
     path: tests/
 ```
@@ -25,7 +26,7 @@ GitHub Action for running Starlark tests with [skytest](https://github.com/alber
 
 ```yaml
 - name: Test with coverage
-  uses: albertocavalcante/sky-action@v1
+  uses: albertocavalcante/sky/sky-action@v1
   with:
     path: .
     coverage: true
@@ -44,13 +45,18 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Works on any platform!
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Run Starlark tests
         id: test
-        uses: albertocavalcante/sky-action@v1
+        uses: albertocavalcante/sky/sky-action@v1
         with:
           path: .
           recursive: true
@@ -60,6 +66,7 @@ jobs:
           summary: true
 
       - name: Check results
+        shell: bash
         run: |
           echo "Passed: ${{ steps.test.outputs.passed }}"
           echo "Failed: ${{ steps.test.outputs.failed }}"
@@ -68,16 +75,17 @@ jobs:
 
 ## Inputs
 
-| Input                | Description                                | Default  |
-| -------------------- | ------------------------------------------ | -------- |
-| `path`               | Path to test files                         | `.`      |
-| `recursive`          | Search directories recursively             | `true`   |
-| `coverage`           | Enable coverage collection                 | `false`  |
-| `coverage-threshold` | Minimum coverage percentage (0 to disable) | `0`      |
-| `annotations`        | Enable GitHub PR annotations               | `true`   |
-| `summary`            | Write to job summary                       | `true`   |
-| `version`            | Sky version to install                     | `latest` |
-| `fail-fast`          | Stop on first test failure                 | `false`  |
+| Input                | Description                                      | Default  |
+| -------------------- | ------------------------------------------------ | -------- |
+| `path`               | Path to test files                               | `.`      |
+| `recursive`          | Search directories recursively                   | `true`   |
+| `coverage`           | Enable coverage collection                       | `false`  |
+| `coverage-threshold` | Minimum coverage percentage (0 to disable)       | `0`      |
+| `annotations`        | Enable GitHub PR annotations                     | `true`   |
+| `summary`            | Write to job summary                             | `true`   |
+| `version`            | Sky version to install                           | `latest` |
+| `fail-fast`          | Stop on first test failure                       | `false`  |
+| `timeout`            | Timeout per test (Go duration format, e.g., 30s) | `30s`    |
 
 ## Outputs
 
@@ -89,10 +97,14 @@ jobs:
 
 ## How It Works
 
-1. **Installs skytest** - Downloads and installs the skytest binary
-2. **Runs tests with annotations** - Uses `-github` flag to output GitHub workflow commands
-3. **Generates job summary** - Uses `-markdown` flag to create a beautiful summary
-4. **Collects coverage** - Optionally collects and checks coverage against threshold
+1. **Installs skytest** - Downloads and installs the cross-platform skytest binary via `go install`
+2. **Runs tests with `skytest action`** - The built-in action subcommand handles:
+   - GitHub workflow commands for PR annotations (`-github` flag internally)
+   - Markdown summary generation (`-markdown` flag internally)
+   - Writing outputs to `$GITHUB_OUTPUT`
+   - Coverage threshold checking
+
+The entire action is powered by a single Go binary, ensuring consistent behavior across all platforms.
 
 ## PR Annotations
 
@@ -109,6 +121,20 @@ When `summary: true` (default), a Markdown summary is added to the job output sh
 - Total tests, passed, failed, skipped counts
 - Collapsible details for failed tests
 - Coverage statistics (when enabled)
+
+## Cross-Platform Support
+
+This action works identically on:
+
+- **Linux** (ubuntu-latest, ubuntu-22.04, etc.)
+- **macOS** (macos-latest, macos-14, etc.)
+- **Windows** (windows-latest, windows-2022, etc.)
+
+The cross-platform support is achieved through:
+
+1. Go's native cross-compilation - skytest is a single binary with no dependencies
+2. GitHub Actions' bash support on all platforms (Windows uses Git Bash)
+3. All file path handling and I/O done in Go code, not shell scripts
 
 ## License
 

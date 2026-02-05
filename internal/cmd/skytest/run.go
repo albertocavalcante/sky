@@ -46,6 +46,10 @@ func (s *stringSliceFlag) Set(value string) error {
 // Run executes skytest with the given arguments.
 // Returns exit code.
 func Run(args []string) int {
+	// Check for subcommands
+	if isActionSubcommand(args) {
+		return RunAction(args[1:], os.Stdout, os.Stderr)
+	}
 	return RunWithIO(context.Background(), args, os.Stdin, os.Stdout, os.Stderr)
 }
 

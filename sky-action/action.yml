@@ -1,5 +1,5 @@
 name: 'Sky Test'
-description: 'Run Starlark tests with skytest'
+description: 'Run Starlark tests with skytest - cross-platform (Linux, macOS, Windows)'
 author: 'albertocavalcante'
 
 inputs:
@@ -35,6 +35,10 @@ inputs:
     description: 'Stop on first test failure'
     required: false
     default: 'false'
+  timeout:
+    description: 'Timeout per test (Go duration format, e.g., 30s, 1m)'
+    required: false
+    default: '30s'
 
 outputs:
   passed:
@@ -65,18 +69,21 @@ runs:
           go install github.com/albertocavalcante/sky/cmd/skytest@${{ inputs.version }}
         fi
 
+    # Uses bash on all platforms (Linux, macOS, Windows via Git Bash)
+    # The skytest binary is cross-platform Go, handling all platform differences
     - name: Run tests
       id: test
       shell: bash
-      run: ${{ github.action_path }}/scripts/run.sh
-      env:
-        INPUT_PATH: ${{ inputs.path }}
-        INPUT_RECURSIVE: ${{ inputs.recursive }}
-        INPUT_COVERAGE: ${{ inputs.coverage }}
-        INPUT_COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
-        INPUT_ANNOTATIONS: ${{ inputs.annotations }}
-        INPUT_SUMMARY: ${{ inputs.summary }}
-        INPUT_FAIL_FAST: ${{ inputs.fail-fast }}
+      run: |
+        skytest action \
+          -path="${{ inputs.path }}" \
+          -recursive=${{ inputs.recursive }} \
+          -coverage=${{ inputs.coverage }} \
+          -coverage-threshold=${{ inputs.coverage-threshold }} \
+          -annotations=${{ inputs.annotations }} \
+          -summary=${{ inputs.summary }} \
+          -fail-fast=${{ inputs.fail-fast }} \
+          -timeout=${{ inputs.timeout }}
 
 branding:
   icon: 'check-circle'
