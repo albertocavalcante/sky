@@ -20,6 +20,13 @@ pre-commit:
           exit 1
         fi
 
+    # Check shell script formatting and lint
+    shellcheck:
+      glob: "*.sh"
+      run: |
+        shellcheck {staged_files}
+        shfmt -d -i 2 -ci {staged_files}
+
     # Check go.mod is tidy
     go-mod-tidy:
       glob: "*.go"

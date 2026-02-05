@@ -37,8 +37,8 @@ make gazelle # Generate/update BUILD.bazel files
 ## Rules (ALWAYS APPLY)
 
 1. Git: `git branch --show-current` before commit. `git add <file>` explicitly, never `git add .`.
-2. Formatting: run `make format` before commit.
-3. Lint: run `make lint` before commit.
+2. Formatting: run `just format` (Go) and `just format-sh` (shell) before commit.
+3. Lint: run `just lint` (Go) and `just lint-sh` (shell) before commit.
 
 ## READ BEFORE ACTING
 

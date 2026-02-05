@@ -19,19 +19,19 @@ OUTPUT_FILE="${3:-/tmp/benchmark-results/report.md}"
 # Find benchstat
 BENCHSTAT="$(go env GOPATH)/bin/benchstat"
 if [[ ! -x "$BENCHSTAT" ]]; then
-    echo "Installing benchstat..."
-    go install golang.org/x/perf/cmd/benchstat@latest
+  echo "Installing benchstat..."
+  go install golang.org/x/perf/cmd/benchstat@latest
 fi
 
 # Validate inputs
 if [[ ! -f "$UPSTREAM_FILE" ]]; then
-    echo "Error: Upstream file not found: $UPSTREAM_FILE"
-    exit 1
+  echo "Error: Upstream file not found: $UPSTREAM_FILE"
+  exit 1
 fi
 
 if [[ ! -f "$FORK_FILE" ]]; then
-    echo "Error: Fork file not found: $FORK_FILE"
-    exit 1
+  echo "Error: Fork file not found: $FORK_FILE"
+  exit 1
 fi
 
 # Run benchstat
@@ -51,7 +51,7 @@ SAMPLES=$(echo "$COMPARISON" | grep "n=3" | head -1 | grep -o "n=[0-9]*" | head 
 SAMPLES="${SAMPLES:-unknown}"
 
 # Generate report
-cat > "$OUTPUT_FILE" << EOF
+cat >"$OUTPUT_FILE" <<EOF
 # Benchmark Report: starlark-go-x vs upstream
 
 **Generated**: $DATE
@@ -76,10 +76,10 @@ EOF
 SIGNIFICANT_REGRESSIONS=$(echo "$COMPARISON" | grep -E "^\w.*\+[0-9]+\.[0-9]+%" | grep -v "~" | grep -v "^geomean" | grep -v "¹\|²\|³\|⁴" | head -5 || true)
 
 # Check if all benchmarks show "~" (not significant)
-ALL_TILDE=$(echo "$COMPARISON" | grep -E "^(Benchmark|Starlark|String|Hash|Program)" | grep -v "~" | grep -v "^$" | wc -l | tr -d ' ')
+ALL_TILDE=$(echo "$COMPARISON" | grep -cE "^(Benchmark|Starlark|String|Hash|Program)" | grep -v "~" | grep -v "^$" || echo "0")
 
 if [[ "$ALL_TILDE" -eq 0 ]] || [[ -z "$SIGNIFICANT_REGRESSIONS" ]]; then
-    cat >> "$OUTPUT_FILE" << EOF
+  cat >>"$OUTPUT_FILE" <<EOF
 **Result**: ✅ No statistically significant performance regressions detected.
 
 All benchmarks show \`~\` (no significant difference) with p > 0.05.
@@ -87,7 +87,7 @@ The hooks have **zero measurable overhead** when disabled.
 
 EOF
 else
-    cat >> "$OUTPUT_FILE" << EOF
+  cat >>"$OUTPUT_FILE" <<EOF
 **Result**: ⚠️ Some benchmarks show statistically significant regressions.
 
 \`\`\`
@@ -98,7 +98,7 @@ EOF
 fi
 
 # Add raw output
-cat >> "$OUTPUT_FILE" << EOF
+cat >>"$OUTPUT_FILE" <<EOF
 ## Raw benchstat Output
 
 \`\`\`

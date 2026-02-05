@@ -170,7 +170,37 @@ jobs:
           fi
 
   # ===========================================================================
-  # Job 5: Security Scan (optional but recommended)
+  # Job 5: Shell Script Lint
+  # ===========================================================================
+  shell-lint:
+    name: Shell Lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      # actions/checkout v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install shfmt
+        run: |
+          curl -sS https://webinstall.dev/shfmt | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run shellcheck
+        run: |
+          shellcheck $(find . -name '*.sh' -not -path './vendor/*' -not -path './bazel-*')
+
+      - name: Run shfmt
+        run: |
+          shfmt -d -i 2 -ci $(find . -name '*.sh' -not -path './vendor/*' -not -path './bazel-*')
+
+  # ===========================================================================
+  # Job 6: Security Scan (optional but recommended)
   # ===========================================================================
   security:
     name: Security Scan

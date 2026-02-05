@@ -18,24 +18,27 @@ EXIT_CODE=0
 # Run with GitHub annotations for PR comments
 if [ "$INPUT_ANNOTATIONS" = "true" ]; then
   echo "Running tests with GitHub annotations..."
+  # shellcheck disable=SC2086
   skytest -github $FLAGS "$INPUT_PATH" || EXIT_CODE=$?
 fi
 
 # Run with markdown summary for job summary
 if [ "$INPUT_SUMMARY" = "true" ]; then
   echo "Generating job summary..."
-  skytest -markdown $FLAGS "$INPUT_PATH" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+  # shellcheck disable=SC2086
+  skytest -markdown $FLAGS "$INPUT_PATH" >>"$GITHUB_STEP_SUMMARY" 2>/dev/null || true
 fi
 
 # Run with coverage if requested
 if [ "$INPUT_COVERAGE" = "true" ]; then
   echo "Collecting coverage..."
+  # shellcheck disable=SC2086
   skytest --coverage --coverprofile=coverage.json $FLAGS "$INPUT_PATH" 2>/dev/null || true
 
   # Extract coverage percentage if file exists
   if [ -f coverage.json ]; then
     COVERAGE=$(jq -r '.percentage // 0' coverage.json 2>/dev/null || echo "0")
-    echo "coverage=$COVERAGE" >> "$GITHUB_OUTPUT"
+    echo "coverage=$COVERAGE" >>"$GITHUB_OUTPUT"
 
     # Check coverage threshold
     THRESHOLD="${INPUT_COVERAGE_THRESHOLD:-0}"
@@ -52,12 +55,13 @@ fi
 
 # Get test counts from JSON output for action outputs
 echo "Extracting test results..."
+# shellcheck disable=SC2086
 RESULT=$(skytest -json $FLAGS "$INPUT_PATH" 2>/dev/null || echo '{"passed":0,"failed":0}')
 PASSED=$(echo "$RESULT" | jq -r '.passed // 0')
 FAILED=$(echo "$RESULT" | jq -r '.failed // 0')
 
-echo "passed=$PASSED" >> "$GITHUB_OUTPUT"
-echo "failed=$FAILED" >> "$GITHUB_OUTPUT"
+echo "passed=$PASSED" >>"$GITHUB_OUTPUT"
+echo "failed=$FAILED" >>"$GITHUB_OUTPUT"
 
 # Exit with original test exit code
 exit $EXIT_CODE

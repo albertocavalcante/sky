@@ -26,40 +26,40 @@ mkdir -p "$RESULTS_DIR"
 # Install benchstat if needed
 BENCHSTAT="$(go env GOPATH)/bin/benchstat"
 if [[ ! -x "$BENCHSTAT" ]]; then
-    echo "Installing benchstat..."
-    go install golang.org/x/perf/cmd/benchstat@latest
+  echo "Installing benchstat..."
+  go install golang.org/x/perf/cmd/benchstat@latest
 fi
 
 # Clone or update upstream
 UPSTREAM_DIR="/tmp/upstream-starlark-go"
 if [[ -d "$UPSTREAM_DIR" ]]; then
-    echo "Updating upstream starlark-go..."
-    (cd "$UPSTREAM_DIR" && git pull --quiet)
+  echo "Updating upstream starlark-go..."
+  (cd "$UPSTREAM_DIR" && git pull --quiet)
 else
-    echo "Cloning upstream starlark-go..."
-    git clone --depth=1 https://github.com/google/starlark-go.git "$UPSTREAM_DIR"
+  echo "Cloning upstream starlark-go..."
+  git clone --depth=1 https://github.com/google/starlark-go.git "$UPSTREAM_DIR"
 fi
 
 # Find starlark-go-x
 STARLARK_GO_X="${STARLARK_GO_X:-}"
 if [[ -z "$STARLARK_GO_X" ]]; then
-    # Try common locations
-    for dir in \
-        "/Users/adsc/dev/ws/starlark-go-x/trunk" \
-        "../starlark-go-x/trunk" \
-        "../../starlark-go-x/trunk" \
-        "$HOME/starlark-go-x/trunk"; do
-        if [[ -d "$dir" ]]; then
-            STARLARK_GO_X="$dir"
-            break
-        fi
-    done
+  # Try common locations
+  for dir in \
+    "/Users/adsc/dev/ws/starlark-go-x/trunk" \
+    "../starlark-go-x/trunk" \
+    "../../starlark-go-x/trunk" \
+    "$HOME/starlark-go-x/trunk"; do
+    if [[ -d "$dir" ]]; then
+      STARLARK_GO_X="$dir"
+      break
+    fi
+  done
 fi
 
 if [[ -z "$STARLARK_GO_X" ]] || [[ ! -d "$STARLARK_GO_X" ]]; then
-    echo "Error: Cannot find starlark-go-x/trunk directory"
-    echo "Set STARLARK_GO_X environment variable to the trunk directory path"
-    exit 1
+  echo "Error: Cannot find starlark-go-x/trunk directory"
+  echo "Set STARLARK_GO_X environment variable to the trunk directory path"
+  exit 1
 fi
 
 echo "Using starlark-go-x: $STARLARK_GO_X"
@@ -83,9 +83,9 @@ echo ""
 # Generate report
 echo "=== Generating markdown report ==="
 "$SCRIPT_DIR/generate-benchmark-report.sh" \
-    "$RESULTS_DIR/upstream.txt" \
-    "$RESULTS_DIR/starlark-go-x.txt" \
-    "$RESULTS_DIR/benchmark-report.md"
+  "$RESULTS_DIR/upstream.txt" \
+  "$RESULTS_DIR/starlark-go-x.txt" \
+  "$RESULTS_DIR/benchmark-report.md"
 
 echo ""
 echo "=== Done ==="

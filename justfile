@@ -36,6 +36,15 @@ lint:
 format:
     gofmt -w $(find . -name '*.go' -not -path './vendor/*' -not -path './bazel-*')
 
+# Format all shell scripts
+format-sh:
+    shfmt -w -i 2 -ci $(find . -name '*.sh' -not -path './vendor/*' -not -path './bazel-*')
+
+# Lint all shell scripts
+lint-sh:
+    shellcheck $(find . -name '*.sh' -not -path './vendor/*' -not -path './bazel-*')
+    shfmt -d -i 2 -ci $(find . -name '*.sh' -not -path './vendor/*' -not -path './bazel-*')
+
 # Update BUILD.bazel files via Gazelle
 gazelle:
     bazel run //:gazelle
@@ -45,7 +54,7 @@ tidy:
     bazel run @rules_go//go -- mod tidy
 
 # Run format + lint + test (CI check)
-check: format lint test
+check: format format-sh lint lint-sh test
 
 # Install git hooks via lefthook
 hooks:
