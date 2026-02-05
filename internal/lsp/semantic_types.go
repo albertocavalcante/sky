@@ -5,22 +5,22 @@ import "go.lsp.dev/protocol"
 // Semantic token types - indices into the legend.
 // Order matters! These are encoded as integers in LSP responses.
 const (
-	TokenNamespace  uint32 = iota // module names in load()
-	TokenType                     // type names (depset, Target, etc.)
-	TokenClass                    // rule definitions
-	TokenFunction                 // function/macro definitions
-	TokenMethod                   // methods on objects
-	TokenProperty                 // struct fields, rule attributes
-	TokenVariable                 // local variables
-	TokenParameter                // function parameters
-	TokenKeyword                  // def, if, for, load, etc.
-	TokenString                   // string literals
-	TokenNumber                   // numeric literals
-	TokenOperator                 // +, -, *, /, etc.
-	TokenComment                  // # comments
-	TokenMacro                    // macro invocations (Bazel rules)
-	TokenDecorator                // @decorator (if applicable)
-	TokenLabel                    // Bazel labels "//pkg:target"
+	TokenNamespace uint32 = iota // module names in load()
+	TokenType                    // type names (depset, Target, etc.)
+	TokenClass                   // rule definitions
+	TokenFunction                // function/macro definitions
+	TokenMethod                  // methods on objects
+	TokenProperty                // struct fields, rule attributes
+	TokenVariable                // local variables
+	TokenParameter               // function parameters
+	TokenKeyword                 // def, if, for, load, etc.
+	TokenString                  // string literals
+	TokenNumber                  // numeric literals
+	TokenOperator                // +, -, *, /, etc.
+	TokenComment                 // # comments
+	TokenMacro                   // macro invocations (Bazel rules)
+	TokenDecorator               // @decorator (if applicable)
+	TokenLabel                   // Bazel labels "//pkg:target"
 )
 
 // TokenTypeNames maps token types to their LSP legend names (protocol types).

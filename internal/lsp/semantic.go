@@ -971,4 +971,3 @@ func findKeywordPosition(content string, keyword string, startLine, startCol, en
 
 	return build.Position{}
 }
-

@@ -38,7 +38,7 @@ func TestEncodeTokens_SingleToken(t *testing.T) {
 func TestEncodeTokens_SameLine(t *testing.T) {
 	// Two tokens on the same line: "def foo"
 	tokens := []SemanticToken{
-		{Line: 0, StartChar: 0, Length: 3, Type: TokenKeyword, Modifiers: 0},           // def
+		{Line: 0, StartChar: 0, Length: 3, Type: TokenKeyword, Modifiers: 0},              // def
 		{Line: 0, StartChar: 4, Length: 3, Type: TokenFunction, Modifiers: ModDefinition}, // foo
 	}
 	encoded := encodeTokens(tokens)
