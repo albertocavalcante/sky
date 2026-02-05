@@ -216,6 +216,100 @@ func (r *JUnitReporter) ReportSummary(w io.Writer, result *RunResult) {
 	_, _ = fmt.Fprintln(w)
 }
 
+// MarkdownReporter outputs results in GitHub-flavored Markdown format.
+// Suitable for $GITHUB_STEP_SUMMARY.
+type MarkdownReporter struct {
+	// fileResults stores file results for summary output.
+	fileResults []*FileResult
+}
+
+// ReportFile implements Reporter (accumulates for summary).
+func (r *MarkdownReporter) ReportFile(_ io.Writer, result *FileResult) {
+	// Accumulate file results for the summary
+	r.fileResults = append(r.fileResults, result)
+}
+
+// ReportSummary implements Reporter.
+func (r *MarkdownReporter) ReportSummary(w io.Writer, result *RunResult) {
+	passed, failed, files := result.Summary()
+	total := passed + failed
+
+	// Count skipped tests
+	skipped := 0
+	for _, fr := range result.Files {
+		skipped += fr.SkippedCount()
+	}
+
+	// Header
+	_, _ = fmt.Fprintln(w, "## \U0001F9EA Test Results")
+	_, _ = fmt.Fprintln(w)
+
+	// Summary line
+	_, _ = fmt.Fprintf(w, "**%d tests** in %d files completed in **%s**\n",
+		total, files, result.Duration.Round(time.Millisecond))
+	_, _ = fmt.Fprintln(w)
+
+	// Status table
+	_, _ = fmt.Fprintln(w, "| Status | Count |")
+	_, _ = fmt.Fprintln(w, "|--------|-------|")
+	_, _ = fmt.Fprintf(w, "| \u2705 Passed | %d |\n", passed)
+	_, _ = fmt.Fprintf(w, "| \u274C Failed | %d |\n", failed)
+	_, _ = fmt.Fprintf(w, "| \u23ED\uFE0F Skipped | %d |\n", skipped)
+	_, _ = fmt.Fprintln(w)
+
+	// Failed tests section
+	if failed > 0 {
+		_, _ = fmt.Fprintln(w, "### \u274C Failed Tests")
+		_, _ = fmt.Fprintln(w)
+
+		for _, fr := range result.Files {
+			for _, t := range fr.Tests {
+				// Skip passed, skipped, and expected failures
+				if t.Passed || t.Skipped || (t.XFail && !t.XPass) {
+					continue
+				}
+
+				_, _ = fmt.Fprintf(w, "<details>\n")
+				_, _ = fmt.Fprintf(w, "<summary><code>%s::%s</code></summary>\n", fr.File, t.Name)
+				_, _ = fmt.Fprintln(w)
+				_, _ = fmt.Fprintln(w, "```")
+				if t.Error != nil {
+					// Indent error message for readability
+					errStr := t.Error.Error()
+					for _, line := range strings.Split(errStr, "\n") {
+						_, _ = fmt.Fprintln(w, line)
+					}
+				}
+				_, _ = fmt.Fprintln(w, "```")
+				_, _ = fmt.Fprintln(w)
+				_, _ = fmt.Fprintln(w, "</details>")
+				_, _ = fmt.Fprintln(w)
+			}
+		}
+	}
+
+	// Skipped tests section (if any)
+	if skipped > 0 {
+		_, _ = fmt.Fprintln(w, "### \u23ED\uFE0F Skipped Tests")
+		_, _ = fmt.Fprintln(w)
+
+		for _, fr := range result.Files {
+			for _, t := range fr.Tests {
+				if !t.Skipped {
+					continue
+				}
+
+				if t.SkipReason != "" {
+					_, _ = fmt.Fprintf(w, "- `%s::%s` - %s\n", fr.File, t.Name, t.SkipReason)
+				} else {
+					_, _ = fmt.Fprintf(w, "- `%s::%s`\n", fr.File, t.Name)
+				}
+			}
+		}
+		_, _ = fmt.Fprintln(w)
+	}
+}
+
 // JSONReporter outputs results in JSON format.
 type JSONReporter struct{}
 

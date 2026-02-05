@@ -340,6 +340,97 @@ func TestTextReporter(t *testing.T) {
 	}
 }
 
+func TestMarkdownReporter(t *testing.T) {
+	result := &RunResult{
+		Files: []FileResult{
+			{
+				File: "math_test.star",
+				Tests: []TestResult{
+					{Name: "test_addition", Passed: true},
+					{Name: "test_subtraction", Passed: true},
+					{Name: "test_divide", Passed: false, Error: &testError{msg: "assertion failed: eq(None, 5)\n  at math_test.star:15"}},
+					{Name: "test_skipped", Passed: true, Skipped: true, SkipReason: "Not implemented yet"},
+				},
+			},
+		},
+	}
+
+	reporter := &MarkdownReporter{}
+	var buf strings.Builder
+
+	// ReportFile accumulates results
+	reporter.ReportFile(&buf, &result.Files[0])
+
+	// ReportSummary generates the markdown
+	reporter.ReportSummary(&buf, result)
+	output := buf.String()
+
+	// Check header
+	if !strings.Contains(output, "## \U0001F9EA Test Results") {
+		t.Error("expected markdown header")
+	}
+
+	// Check summary counts
+	if !strings.Contains(output, "| \u2705 Passed | 2 |") {
+		t.Error("expected 2 passed tests in summary")
+	}
+	if !strings.Contains(output, "| \u274C Failed | 1 |") {
+		t.Error("expected 1 failed test in summary")
+	}
+	if !strings.Contains(output, "| \u23ED\uFE0F Skipped | 1 |") {
+		t.Error("expected 1 skipped test in summary")
+	}
+
+	// Check failed test details section
+	if !strings.Contains(output, "### \u274C Failed Tests") {
+		t.Error("expected Failed Tests section")
+	}
+	if !strings.Contains(output, "<details>") {
+		t.Error("expected collapsible details")
+	}
+	if !strings.Contains(output, "math_test.star::test_divide") {
+		t.Error("expected failed test name in details")
+	}
+
+	// Check skipped test section
+	if !strings.Contains(output, "### \u23ED\uFE0F Skipped Tests") {
+		t.Error("expected Skipped Tests section")
+	}
+	if !strings.Contains(output, "Not implemented yet") {
+		t.Error("expected skip reason")
+	}
+}
+
+func TestMarkdownReporterNoFailures(t *testing.T) {
+	result := &RunResult{
+		Files: []FileResult{
+			{
+				File: "test.star",
+				Tests: []TestResult{
+					{Name: "test_pass", Passed: true},
+				},
+			},
+		},
+	}
+
+	reporter := &MarkdownReporter{}
+	var buf strings.Builder
+
+	reporter.ReportFile(&buf, &result.Files[0])
+	reporter.ReportSummary(&buf, result)
+	output := buf.String()
+
+	// Should not have failed tests section
+	if strings.Contains(output, "### \u274C Failed Tests") {
+		t.Error("should not have Failed Tests section when no failures")
+	}
+
+	// Should not have skipped tests section
+	if strings.Contains(output, "### \u23ED\uFE0F Skipped Tests") {
+		t.Error("should not have Skipped Tests section when no skips")
+	}
+}
+
 type testError struct {
 	msg string
 }

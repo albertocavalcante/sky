@@ -1873,3 +1873,174 @@ func TestRun_MockWithFixture(t *testing.T) {
 		t.Errorf("RunWithIO(mock with fixture) returned %d, want 0\nstderr: %s\nstdout: %s", code, stderr.String(), stdout.String())
 	}
 }
+
+// ============================================================================
+// Markdown Reporter Tests
+// ============================================================================
+
+func TestRun_MarkdownOutput(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_markdown.star")
+	content := `def test_passing():
+    assert.eq(1, 1)
+
+def test_another_passing():
+    assert.eq("a", "a")
+
+def test_failing():
+    assert.eq(1, 2, "expected 1 to equal 2")
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-markdown", file}, nil, &stdout, &stderr)
+
+	// Should return 1 because there's a failing test
+	if code != 1 {
+		t.Errorf("RunWithIO(-markdown) returned %d, want 1 (failing test)", code)
+	}
+
+	output := stdout.String()
+
+	// Verify markdown header
+	if !strings.Contains(output, "## \U0001F9EA Test Results") {
+		t.Error("expected markdown header in output")
+	}
+
+	// Verify status table
+	if !strings.Contains(output, "| Status | Count |") {
+		t.Error("expected status table in output")
+	}
+	if !strings.Contains(output, "\u2705 Passed") {
+		t.Error("expected passed emoji in output")
+	}
+	if !strings.Contains(output, "\u274C Failed") {
+		t.Error("expected failed emoji in output")
+	}
+
+	// Verify failed tests section
+	if !strings.Contains(output, "### \u274C Failed Tests") {
+		t.Error("expected Failed Tests section")
+	}
+	if !strings.Contains(output, "<details>") {
+		t.Error("expected collapsible details")
+	}
+	if !strings.Contains(output, "test_failing") {
+		t.Error("expected failed test name in output")
+	}
+	if !strings.Contains(output, "expected 1 to equal 2") {
+		t.Error("expected error message in output")
+	}
+}
+
+func TestRun_MarkdownWithSkipped(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_markdown_skip.star")
+	content := `__test_meta__ = {
+    "test_skipped": {"skip": "Feature not ready"},
+}
+
+def test_passing():
+    assert.eq(1, 1)
+
+def test_skipped():
+    assert.true(False)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-markdown", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(-markdown with skips) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Verify skipped section
+	if !strings.Contains(output, "### \u23ED\uFE0F Skipped Tests") {
+		t.Error("expected Skipped Tests section")
+	}
+	if !strings.Contains(output, "Feature not ready") {
+		t.Error("expected skip reason in output")
+	}
+}
+
+func TestRun_MarkdownAllPass(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_markdown_pass.star")
+	content := `def test_one():
+    assert.eq(1, 1)
+
+def test_two():
+    assert.eq(2, 2)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-markdown", file}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(-markdown all pass) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Should NOT have failed tests section
+	if strings.Contains(output, "### \u274C Failed Tests") {
+		t.Error("should not have Failed Tests section when all pass")
+	}
+
+	// Should NOT have skipped tests section
+	if strings.Contains(output, "### \u23ED\uFE0F Skipped Tests") {
+		t.Error("should not have Skipped Tests section when no skips")
+	}
+}
+
+func TestRun_JUnitWithCoverage(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_combined.star")
+	content := `def test_combined():
+    assert.eq(1 + 1, 2)
+`
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	coverageFile := filepath.Join(dir, "coverage.json")
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{
+		"-junit",
+		"--coverage",
+		"--coverprofile=" + coverageFile,
+		file,
+	}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("RunWithIO(-junit --coverage) returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+
+	// Verify JUnit XML output
+	output := stdout.String()
+	if !strings.Contains(output, "<?xml") {
+		t.Error("expected XML declaration in stdout")
+	}
+	if !strings.Contains(output, "<testsuites") {
+		t.Error("expected testsuites element in stdout")
+	}
+	if !strings.Contains(output, "test_combined") {
+		t.Error("expected test name in JUnit output")
+	}
+
+	// Verify coverage file was created
+	if _, err := os.Stat(coverageFile); os.IsNotExist(err) {
+		t.Error("expected coverage file to be created")
+	}
+}

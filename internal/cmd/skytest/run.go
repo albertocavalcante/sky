@@ -54,6 +54,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	var (
 		jsonFlag            bool
 		junitFlag           bool
+		markdownFlag        bool
 		versionFlag         bool
 		verboseFlag         bool
 		recursiveFlag       bool
@@ -79,6 +80,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	fs.SetOutput(stderr)
 	fs.BoolVar(&jsonFlag, "json", false, "output results as JSON")
 	fs.BoolVar(&junitFlag, "junit", false, "output results as JUnit XML")
+	fs.BoolVar(&markdownFlag, "markdown", false, "output results as GitHub-flavored Markdown (for $GITHUB_STEP_SUMMARY)")
 	fs.BoolVar(&versionFlag, "version", false, "print version and exit")
 	fs.BoolVar(&verboseFlag, "v", false, "verbose output")
 	fs.BoolVar(&recursiveFlag, "r", false, "search directories recursively")
@@ -116,7 +118,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writeln(stderr, "Features:")
 		writeln(stderr, "  - Built-in assert module (assert.eq, assert.true, etc.)")
 		writeln(stderr, "  - Per-file setup() and teardown() functions")
-		writeln(stderr, "  - Multiple output formats (text, JSON, JUnit)")
+		writeln(stderr, "  - Multiple output formats (text, JSON, JUnit, Markdown)")
 		writeln(stderr, "  - Test filtering with -k flag")
 		writeln(stderr, "  - Prelude files for shared helpers (--prelude)")
 		writeln(stderr, "  - Per-test timeouts (--timeout)")
@@ -143,6 +145,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writeln(stderr, "  skytest -x                      # Stop on first failure (short)")
 		writeln(stderr, "  skytest -json tests/            # JSON output")
 		writeln(stderr, "  skytest -junit tests/ > out.xml # JUnit output for CI")
+		writeln(stderr, "  skytest -markdown tests/ >> $GITHUB_STEP_SUMMARY  # Markdown for GitHub")
 		writeln(stderr, "  skytest --watch tests/          # Watch mode, re-run on changes")
 		writeln(stderr, "  skytest -w --affected-only .    # Watch, only run affected tests")
 		writeln(stderr, "  skytest -j auto tests/          # Run tests in parallel (auto-detect CPUs)")
@@ -331,6 +334,8 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		reporter = &tester.JSONReporter{}
 	case junitFlag:
 		reporter = &tester.JUnitReporter{}
+	case markdownFlag:
+		reporter = &tester.MarkdownReporter{}
 	default:
 		reporter = &tester.TextReporter{
 			Verbose:      effectiveVerbose,
