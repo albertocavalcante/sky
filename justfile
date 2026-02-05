@@ -225,6 +225,22 @@ install:
     @echo "Make sure {{install_dir_windows}} is in your PATH"
 
 # ============================================================================
+# Code Generation
+# ============================================================================
+
+# Sync LSP protocol types from gopls (for LSP 3.17+ types like InlayHint)
+sync-protocol:
+    go run ./tools/sync-protocol
+
+# Sync protocol with verbose output
+sync-protocol-verbose:
+    go run ./tools/sync-protocol -verbose
+
+# Preview protocol sync without writing
+sync-protocol-dry:
+    go run ./tools/sync-protocol -dry-run
+
+# ============================================================================
 # Release Management (uses tools/release)
 # ============================================================================
 

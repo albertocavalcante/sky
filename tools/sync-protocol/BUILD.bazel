@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "sync-protocol_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/albertocavalcante/sky/tools/sync-protocol",
+    visibility = ["//visibility:private"],
+)
+
+go_binary(
+    name = "sync-protocol",
+    embed = [":sync-protocol_lib"],
+    visibility = ["//visibility:public"],
+)
