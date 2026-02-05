@@ -2,12 +2,19 @@
 
 Sky - Go monorepo for Starlark tooling.
 
+## Setup (Run Once After Clone)
+
+```bash
+just setup     # Install git hooks (lefthook) and verify tools
+```
+
 ## Commands
 
 Prefer `just` (modern command runner). `make` also works for compatibility.
 
 ```bash
 # Using just (preferred)
+just setup     # ONE-TIME: Install git hooks
 just build     # Build all CLI tools
 just test      # Run all tests
 just lint      # Run linter (nogo via bazel)

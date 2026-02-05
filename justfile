@@ -6,6 +6,17 @@ default:
     @just --list
 
 # ============================================================================
+# Setup (run once after clone)
+# ============================================================================
+
+# One-time setup: install git hooks and verify tools
+setup:
+    @echo "Setting up development environment..."
+    @command -v lefthook >/dev/null 2>&1 || { echo "Installing lefthook..."; go install github.com/evilmartians/lefthook@latest; }
+    lefthook install
+    @echo "Setup complete! Git hooks are now active."
+
+# ============================================================================
 # Development
 # ============================================================================
 
