@@ -13,9 +13,175 @@ Starlark is a configuration language used by many build systems and tools. Each 
 
 skyls solves this with **custom dialect support**. You can configure which files use which dialect, and provide builtin definitions for each dialect.
 
-## What is a Dialect?
+## Understanding Starlark Dialects
 
-A dialect is a specific extension of Starlark with predefined functions, types, and globals. Common dialects include:
+### What is a Dialect?
+
+The term "dialect" describes how different tools extend vanilla Starlark with custom builtins, rules, and behaviors. This is **not an official Starlark term** - it is how sky and other tools describe Starlark variations.
+
+<Aside type="note">
+Think of it like how we might say "Django templates are a dialect of Python-like syntax" - it is technically a distinct language, but rooted in and extending Python concepts.
+</Aside>
+
+### A Python Analogy
+
+If you come from the Python world, dialects are similar to how different frameworks and implementations extend or modify core Python:
+
+| Python Concept | Starlark Parallel | Description |
+|----------------|-------------------|-------------|
+| **CPython vs PyPy vs MicroPython** | **starlark-go vs starlark-rust vs starlark-java** | Same language, different interpreters with varying features |
+| **Django's template language** | **Bazel's BUILD files** | Python-like but with restrictions and custom builtins |
+| **Jinja2 templates** | **Tilt's Tiltfiles** | "Python-like but not Python" - familiar syntax, different capabilities |
+| **NumPy's array syntax extensions** | **Buck2's `record` and `enum` types** | Implementation-specific extensions beyond the core spec |
+| **Flask vs Django vs FastAPI** | **Bazel vs Buck2 vs Tilt** | Same language, different frameworks with different builtins |
+
+### The Layered Architecture
+
+Every Starlark dialect builds on layers:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Tool-Specific Builtins                       │
+│  (docker_build, cc_library, cxx_library, core.workflow, etc.)   │
+├─────────────────────────────────────────────────────────────────┤
+│                  Implementation Extensions                       │
+│          (record, enum, union types - starlark-rust)            │
+├─────────────────────────────────────────────────────────────────┤
+│                    Core Starlark Builtins                       │
+│     (len, range, str, dict, list, print, getattr, hasattr)      │
+├─────────────────────────────────────────────────────────────────┤
+│                   Starlark Language Spec                        │
+│      (syntax, semantics, data types, control flow)              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Vanilla Starlark vs Dialects
+
+**Vanilla Starlark** (the [official specification](https://github.com/bazelbuild/starlark/blob/master/spec.md)) provides:
+
+```starlark
+# Core data types
+numbers = [1, 2, 3]
+mapping = {"key": "value"}
+text = "hello"
+
+# Core builtins
+length = len(numbers)           # 3
+items = range(10)               # [0, 1, 2, ..., 9]
+joined = ", ".join(["a", "b"])  # "a, b"
+
+# Functions and control flow
+def greet(name):
+    if name:
+        return "Hello, " + name
+    return "Hello, World"
+
+# Module loading
+load("//lib:utils.star", "helper")
+```
+
+**Bazel** extends this with build-system concepts:
+
+```starlark
+# Bazel-specific: rule definitions
+cc_library(
+    name = "mylib",
+    srcs = ["lib.cc"],
+    hdrs = ["lib.h"],
+    deps = ["//other:lib"],
+)
+
+# Bazel-specific: native module in .bzl files
+def _my_rule_impl(ctx):
+    # ctx is a Bazel-specific object
+    output = ctx.actions.declare_file(ctx.label.name + ".out")
+    ctx.actions.run(
+        outputs = [output],
+        inputs = ctx.files.srcs,
+        executable = ctx.executable._tool,
+    )
+    return [DefaultInfo(files = depset([output]))]
+
+# Bazel-specific: rule() and provider()
+MyInfo = provider(fields = ["value"])
+my_rule = rule(implementation = _my_rule_impl, attrs = {...})
+```
+
+**Buck2** has similar concepts but different names and additional type features:
+
+```starlark
+# Buck2-specific: different rule names
+cxx_library(
+    name = "mylib",
+    srcs = ["lib.cpp"],
+    headers = ["lib.h"],  # Note: 'headers' not 'hdrs'
+)
+
+# Buck2-specific: record and enum types (starlark-rust extensions)
+BuildConfig = record(
+    name = str,
+    srcs = list[str],
+    debug = field(bool, False),
+)
+
+Status = enum("pending", "running", "complete")
+
+# Buck2-specific: BXL scripts for build graph queries
+def _query_impl(ctx):
+    deps = ctx.cquery().deps(ctx.cli_args.target)
+    ctx.output.print("Dependencies: {}".format(len(deps)))
+```
+
+**Tilt** extends for Kubernetes development:
+
+```starlark
+# Tilt-specific: container and K8s functions
+docker_build(
+    'myapp-image',
+    context='.',
+    dockerfile='Dockerfile',
+    live_update=[
+        sync('./src', '/app/src'),
+        run('pip install -r requirements.txt', trigger=['requirements.txt']),
+    ],
+)
+
+k8s_yaml('k8s/deployment.yaml')
+k8s_resource('myapp', port_forwards='8080:8080')
+
+# Tilt-specific: local development utilities
+local_resource(
+    'compile',
+    cmd='make build',
+    deps=['./src'],
+)
+```
+
+### Why Dialects Exist
+
+Each tool has domain-specific needs that core Starlark cannot address:
+
+| Tool | Domain | Why Custom Builtins? |
+|------|--------|---------------------|
+| **Bazel** | Build systems | Needs rules, actions, providers, dependency graphs |
+| **Buck2** | Build systems | Similar to Bazel, plus BXL for scripting the build graph |
+| **Tilt** | K8s development | Needs container builds, K8s resources, live updates |
+| **Copybara** | Code migration | Needs git operations, transformations, workflows |
+| **Kurtosis** | Test environments | Needs service orchestration, networking, plans |
+| **ytt** | YAML templating | Needs YAML-specific operations, overlays |
+
+### Dialect Detection
+
+The challenge for tooling is identifying which dialect a file uses. skyls uses several signals:
+
+1. **Filename patterns**: `BUILD` files are Bazel, `Tiltfile` is Tilt
+2. **Workspace markers**: Presence of `WORKSPACE`, `.buckconfig`, etc.
+3. **Explicit configuration**: The `.starlark/config.json` file
+4. **File extensions**: `.bzl` vs `.star` vs `.bara.sky`
+
+## Common Dialects Reference
+
+The following table shows which builtins are available in each dialect:
 
 | Dialect | Tool | Files | Example Builtins |
 |---------|------|-------|------------------|
@@ -23,9 +189,245 @@ A dialect is a specific extension of Starlark with predefined functions, types, 
 | **Buck2** | Buck2 build system | `BUCK`, `*.bzl` | `cxx_library`, `genrule`, `bxl` functions |
 | **Tilt** | Tilt local dev | `Tiltfile`, `*.star` | `docker_build`, `k8s_yaml`, `local_resource` |
 | **Copybara** | Copybara migration | `*.bara.sky` | `core.workflow`, `git.origin`, transformations |
+| **Kurtosis** | Test environments | `*.star` | `plan.add_service`, `ServiceConfig`, `plan.wait` |
 | **Custom** | Your own tools | Any pattern | Your DSL functions |
 
-Without dialect awareness, skyls would report errors like `undefined: docker_build` when editing a Tiltfile, because it doesn't know about Tilt's builtins.
+Without dialect awareness, skyls would report errors like `undefined: docker_build` when editing a Tiltfile, because it does not know about Tilt's builtins.
+
+### Detailed Dialect Comparison
+
+<Tabs>
+<TabItem label="Core Starlark">
+**Available everywhere** - these builtins are part of the Starlark specification:
+
+```starlark
+# Type constructors
+bool(x)              # Convert to boolean
+dict(**kwargs)       # Create dictionary
+int(x)               # Convert to integer
+list(iterable)       # Create list
+str(x)               # Convert to string
+tuple(iterable)      # Create tuple
+
+# Sequence operations
+len(x)               # Length of sequence
+range(stop)          # Integer sequence
+range(start, stop)   # Integer sequence with start
+sorted(x)            # Sorted copy
+reversed(x)          # Reversed iterator
+
+# Dictionary operations
+{}.get(key, default) # Get with default
+{}.items()           # Key-value pairs
+{}.keys()            # Keys iterator
+{}.values()          # Values iterator
+{}.update(other)     # Merge dictionaries
+
+# String operations
+"".format(*args)     # String formatting
+"".join(iterable)    # Join strings
+"".split(sep)        # Split string
+
+# Attribute access
+getattr(obj, name)   # Get attribute
+hasattr(obj, name)   # Check attribute exists
+dir(obj)             # List attributes
+
+# Other
+print(*args)         # Output (implementation-defined)
+type(x)              # Type name as string
+zip(a, b)            # Pair up iterables
+enumerate(x)         # Index-value pairs
+any(iterable)        # True if any truthy
+all(iterable)        # True if all truthy
+```
+</TabItem>
+<TabItem label="Bazel">
+**BUILD files** have these globals:
+
+```starlark
+# Native rules (subset - many more exist)
+cc_library(name, srcs, hdrs, deps, ...)
+cc_binary(name, srcs, deps, ...)
+java_library(name, srcs, deps, ...)
+java_binary(name, srcs, main_class, deps, ...)
+py_library(name, srcs, deps, ...)
+py_binary(name, srcs, main, deps, ...)
+genrule(name, srcs, outs, cmd, ...)
+filegroup(name, srcs, ...)
+sh_binary(name, srcs, ...)
+alias(name, actual)
+
+# BUILD file utilities
+package(default_visibility, features, ...)
+licenses(license_types)
+exports_files(srcs, visibility, ...)
+glob(include, exclude, ...)
+select(conditions, no_match_error)
+```
+
+**.bzl files** also have:
+
+```starlark
+# Rule definition
+rule(implementation, attrs, outputs, ...)
+provider(doc, fields)
+aspect(implementation, attr_aspects, ...)
+
+# Actions (in rule implementation)
+ctx.actions.run(outputs, inputs, executable, ...)
+ctx.actions.run_shell(outputs, inputs, command, ...)
+ctx.actions.write(output, content, ...)
+ctx.actions.declare_file(name)
+ctx.actions.declare_directory(name)
+
+# Native module (in .bzl files)
+native.cc_library(...)
+native.glob(...)
+native.package_name()
+native.repository_name()
+```
+</TabItem>
+<TabItem label="Buck2">
+**BUCK files** have:
+
+```starlark
+# Native rules (Buck2 naming)
+cxx_library(name, srcs, headers, deps, ...)
+cxx_binary(name, srcs, deps, ...)
+python_library(name, srcs, deps, ...)
+python_binary(name, main, deps, ...)
+genrule(name, srcs, out, cmd, ...)
+filegroup(name, srcs, ...)
+export_file(name, src, ...)
+
+# Configuration
+select(conditions)
+read_config(section, key, default)
+```
+
+**BXL scripts** (`.bxl` files) have:
+
+```starlark
+# BXL entry point
+bxl_main(impl, cli_args)
+
+# CLI argument types
+cli_args.target_label()
+cli_args.string()
+cli_args.bool()
+cli_args.list()
+
+# Context operations
+ctx.cquery()           # Configured query
+ctx.uquery()           # Unconfigured query
+ctx.analysis(target)   # Run analysis
+ctx.build(targets)     # Build targets
+ctx.output.print(msg)  # Print output
+ctx.output.write_json(path, data)  # Write JSON
+
+# Query operations
+ctx.cquery().deps(target)
+ctx.cquery().kind(pattern, targets)
+ctx.cquery().owner(files)
+```
+
+**Type extensions** (starlark-rust):
+
+```starlark
+# Record types
+MyConfig = record(
+    name = str,
+    debug = field(bool, False),
+)
+
+# Enum types
+Status = enum("pending", "running", "done")
+
+# Type annotations
+def process(cfg: MyConfig) -> str:
+    return cfg.name
+```
+</TabItem>
+<TabItem label="Tilt">
+**Tiltfile** builtins:
+
+```starlark
+# Container builds
+docker_build(ref, context, dockerfile, ...)
+docker_build_with_restart(ref, context, entrypoint, ...)
+custom_build(ref, command, deps, ...)
+
+# Kubernetes resources
+k8s_yaml(yaml, allow_duplicates)
+k8s_resource(workload, port_forwards, resource_deps, ...)
+k8s_custom_deploy(name, apply_cmd, delete_cmd, ...)
+
+# Local operations
+local(cmd, quiet, echo_off)
+local_resource(name, cmd, serve_cmd, deps, ...)
+read_file(path, default)
+read_json(path, default)
+read_yaml(path, default)
+
+# Live update
+sync(local_path, remote_path)
+run(cmd, trigger)
+restart_container()
+fall_back_on(files)
+
+# Utilities
+helm(chart, name, namespace, values, ...)
+kustomize(path)
+blob(content)
+encode_json(obj)
+decode_json(str)
+
+# Extensions
+load('ext://restart_process', 'docker_build_with_restart')
+load('ext://namespace', 'namespace_create')
+```
+</TabItem>
+<TabItem label="Copybara">
+**`.bara.sky` file** builtins:
+
+```starlark
+# Workflow definition
+core.workflow(
+    name, origin, destination, authoring,
+    transformations, mode, ...
+)
+
+# Git operations
+git.origin(url, ref)
+git.destination(url, push, fetch)
+git.github_origin(url, ref)
+git.github_destination(url, push)
+git.github_pr_origin(url, branch, ...)
+git.github_pr_destination(url, destination_ref, ...)
+
+# Authoring
+authoring.pass_thru(default)
+authoring.overwrite(default)
+authoring.allowed(default, allowlist)
+
+# Transformations
+core.replace(before, after, paths, ...)
+core.move(before, after, paths, ...)
+core.remove(paths)
+core.rename(before, after)
+core.verify_match(regex, paths, ...)
+core.transform(transformations, ...)
+
+# Globs
+glob(include, exclude)
+
+# Metadata
+metadata.squash_notes(prefix, ...)
+metadata.expose_label(name, ...)
+```
+</TabItem>
+</Tabs>
 
 ## Configuration File
 

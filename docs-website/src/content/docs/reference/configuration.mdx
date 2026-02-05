@@ -687,7 +687,98 @@ No changes to the file contents are needed - the format is identical.
    skytest -v tests/
    ```
 
+## Understanding Starlark Dialects
+
+Sky tools need to understand which "flavor" of Starlark you are using. Different tools extend vanilla Starlark with their own builtins, and sky needs to know about these extensions to provide accurate diagnostics.
+
+### What is a Dialect?
+
+A "dialect" describes how a specific tool extends the core Starlark language. This is similar to how Python frameworks extend Python:
+
+| Python Parallel | Starlark Equivalent |
+|-----------------|---------------------|
+| Django templates (Python-like but not Python) | Bazel BUILD files (Starlark with build rules) |
+| Jinja2 templates | Tiltfiles (Starlark with K8s functions) |
+| NumPy array extensions | Buck2's `record` and `enum` types |
+
+### Why Dialects Matter for Configuration
+
+When sky tools analyze your Starlark files, they need to know:
+
+1. **Which builtins exist**: Is `docker_build()` a valid function? (Yes in Tilt, no in Bazel)
+2. **What parameters are valid**: Does `cc_library` have an `hdrs` or `headers` parameter?
+3. **Which lint rules apply**: Should we enforce Bazel-specific conventions?
+
+### How Dialects Relate to sky.toml
+
+The `sky.toml` configuration focuses on **tool behavior** (timeouts, parallelism, preludes), while dialect configuration in `.starlark/config.json` focuses on **language understanding** (builtins, type definitions).
+
+<Tabs>
+<TabItem label="sky.toml">
+```toml
+# Tool behavior configuration
+[test]
+timeout = "60s"
+parallel = "auto"
+
+[lint]
+enable = ["all"]
+disable = ["native-*"]
+```
+</TabItem>
+<TabItem label=".starlark/config.json">
+```json
+{
+  "version": 1,
+  "dialect": "bazel",
+  "settings": {
+    "reportUndefinedNames": true
+  }
+}
+```
+</TabItem>
+</Tabs>
+
+### Common Dialect Scenarios
+
+**Bazel monorepo** - Default dialect detection usually works:
+```toml
+# sky.toml - no dialect config needed
+# skyls auto-detects Bazel from WORKSPACE file
+[lint]
+enable = ["all"]
+```
+
+**Tilt project** - Need explicit dialect configuration:
+```json
+// .starlark/config.json
+{
+  "version": 1,
+  "rules": [
+    {"files": ["Tiltfile"], "dialect": "tilt"}
+  ]
+}
+```
+
+**Multi-tool monorepo** - Map files to dialects:
+```json
+// .starlark/config.json
+{
+  "version": 1,
+  "rules": [
+    {"files": ["Tiltfile"], "dialect": "tilt"},
+    {"files": ["*.bara.sky"], "dialect": "copybara"},
+    {"files": ["BUILD", "**/*.bzl"], "dialect": "bazel"}
+  ]
+}
+```
+
+<Aside type="tip">
+For complete dialect configuration, see the [Custom Dialects Guide](/sky/lsp/custom-dialects/). The dialect system allows you to define custom builtins for any Starlark-based tool.
+</Aside>
+
 ## Related Documentation
 
 - [skytest](/sky/tools/skytest/) - Test runner documentation
 - [Configuration Schema](/sky/reference/config-schema/) - LSP dialect configuration
+- [Custom Dialects](/sky/lsp/custom-dialects/) - Understanding and configuring Starlark dialects
