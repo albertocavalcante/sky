@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/albertocavalcante/sky/internal/skyconfig"
 	"github.com/albertocavalcante/sky/internal/starlark/coverage"
 	"github.com/albertocavalcante/sky/internal/starlark/tester"
 	"github.com/albertocavalcante/sky/internal/version"
@@ -70,6 +71,8 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		watchFlag           bool
 		affectedOnlyFlag    bool
 		parallelFlag        string
+		configFlag          string
+		configTimeoutFlag   time.Duration
 	)
 
 	fs := flag.NewFlagSet("skytest", flag.ContinueOnError)
@@ -79,25 +82,27 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	fs.BoolVar(&versionFlag, "version", false, "print version and exit")
 	fs.BoolVar(&verboseFlag, "v", false, "verbose output")
 	fs.BoolVar(&recursiveFlag, "r", false, "search directories recursively")
-	fs.StringVar(&prefixFlag, "prefix", "test_", "test function prefix")
+	fs.StringVar(&prefixFlag, "prefix", "", "test function prefix (default: from config or test_)")
 	fs.BoolVar(&durationFlag, "duration", false, "show test durations")
 	fs.StringVar(&filterFlag, "k", "", "filter tests by name pattern (supports 'not' prefix)")
 	fs.StringVar(&markerFilter, "m", "", "filter tests by marker (supports 'not' prefix, e.g., '-m slow', '-m \"not slow\"')")
 	fs.Var(&preludeFlags, "prelude", "prelude file to load before tests (can be specified multiple times)")
-	fs.DurationVar(&timeoutFlag, "timeout", 30*time.Second, "timeout per test (0 to disable)")
+	fs.DurationVar(&timeoutFlag, "timeout", 0, "timeout per test (0 to use config default)")
 	fs.BoolVar(&bailFlag, "bail", false, "stop on first test failure")
 	fs.BoolVar(&bailShortFlag, "x", false, "stop on first test failure (short for --bail)")
 	// EXPERIMENTAL: Coverage collection requires starlark-go-x with OnExec hook.
 	// Uncomment the replace directive in go.mod to enable.
 	// TODO(upstream): Remove experimental note once OnExec is merged.
 	fs.BoolVar(&coverageFlag, "coverage", false, "collect coverage data (EXPERIMENTAL)")
-	fs.StringVar(&coverageOut, "coverprofile", "coverage.json", "coverage output file")
+	fs.StringVar(&coverageOut, "coverprofile", "", "coverage output file (default: from config or coverage.json)")
 	fs.BoolVar(&updateSnapshotsFlag, "update-snapshots", false, "update snapshots instead of comparing")
 	fs.BoolVar(&updateSnapshotsFlag, "u", false, "update snapshots (short for --update-snapshots)")
 	fs.BoolVar(&watchFlag, "watch", false, "watch for file changes and re-run tests")
 	fs.BoolVar(&watchFlag, "w", false, "watch mode (short for --watch)")
 	fs.BoolVar(&affectedOnlyFlag, "affected-only", false, "in watch mode, only run tests affected by changes")
 	fs.StringVar(&parallelFlag, "j", "", "number of parallel test files (auto, 1-N)")
+	fs.StringVar(&configFlag, "config", "", "config file path (config.sky, sky.star, or sky.toml)")
+	fs.DurationVar(&configTimeoutFlag, "config-timeout", skyconfig.DefaultStarlarkTimeout, "timeout for Starlark config execution")
 
 	fs.Usage = func() {
 		writeln(stderr, "Usage: skytest [flags] <paths...>")
@@ -119,6 +124,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writeln(stderr, "  - Parallel test execution (-j)")
 		writeln(stderr, "  - Watch mode for continuous testing (--watch / -w)")
 		writeln(stderr, "  - Coverage collection (EXPERIMENTAL, requires starlark-go-x)")
+		writeln(stderr, "  - Unified configuration via config.sky, sky.star, or sky.toml")
 		writeln(stderr)
 		writeln(stderr, "Flags:")
 		fs.PrintDefaults()
@@ -141,6 +147,32 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writeln(stderr, "  skytest -w --affected-only .    # Watch, only run affected tests")
 		writeln(stderr, "  skytest -j auto tests/          # Run tests in parallel (auto-detect CPUs)")
 		writeln(stderr, "  skytest -j 4 tests/             # Run tests with 4 parallel workers")
+		writeln(stderr, "  skytest --config=config.sky     # Use specific config file")
+		writeln(stderr, "  SKY_CONFIG=path/to/config.sky   # Config via environment variable")
+		writeln(stderr)
+		writeln(stderr, "Configuration:")
+		writeln(stderr, "  Config resolution order:")
+		writeln(stderr, "    1. --config flag (if specified)")
+		writeln(stderr, "    2. SKY_CONFIG environment variable (if set)")
+		writeln(stderr, "    3. Walk up directories looking for: config.sky, sky.star, sky.toml")
+		writeln(stderr)
+		writeln(stderr, "  Only one config file may exist per directory. CLI flags override config.")
+		writeln(stderr)
+		writeln(stderr, "  sky.toml example:")
+		writeln(stderr, "    [test]")
+		writeln(stderr, "    timeout = \"60s\"")
+		writeln(stderr, "    parallel = \"auto\"")
+		writeln(stderr, "    prelude = [\"test/helpers.star\"]")
+		writeln(stderr)
+		writeln(stderr, "  config.sky example (dynamic):")
+		writeln(stderr, "    def configure():")
+		writeln(stderr, "        ci = getenv(\"CI\", \"\") != \"\"")
+		writeln(stderr, "        return {")
+		writeln(stderr, "            \"test\": {")
+		writeln(stderr, "                \"timeout\": \"120s\" if ci else \"30s\",")
+		writeln(stderr, "                \"parallel\": \"1\" if ci else \"auto\",")
+		writeln(stderr, "            },")
+		writeln(stderr, "        }")
 		writeln(stderr)
 		writeln(stderr, "Assert module:")
 		writeln(stderr, "  assert.eq(a, b, msg=None)       # Assert a == b")
@@ -162,6 +194,82 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	if versionFlag {
 		writef(stdout, "skytest %s\n", version.String())
 		return exitOK
+	}
+
+	// Load configuration (config file provides defaults, CLI overrides)
+	var cfg *skyconfig.Config
+	if configFlag != "" {
+		// Explicit config file specified
+		var err error
+		ext := filepath.Ext(configFlag)
+		if ext == ".star" || ext == ".sky" {
+			cfg, err = skyconfig.LoadStarlarkConfig(configFlag, configTimeoutFlag)
+		} else {
+			cfg, err = skyconfig.LoadConfig(configFlag)
+		}
+		if err != nil {
+			writef(stderr, "skytest: loading config %s: %v\n", configFlag, err)
+			return exitError
+		}
+	} else {
+		// Auto-discover config
+		var configPath string
+		var err error
+		cfg, configPath, err = skyconfig.DiscoverConfig("")
+		if err != nil {
+			writef(stderr, "skytest: %v\n", err)
+			return exitError
+		}
+		if configPath != "" && verboseFlag {
+			writef(stderr, "skytest: using config %s\n", configPath)
+		}
+	}
+
+	// Apply config defaults, then CLI overrides
+	// Timeout: CLI > config > default (30s)
+	effectiveTimeout := cfg.Test.Timeout.Duration
+	if effectiveTimeout == 0 {
+		effectiveTimeout = 30 * time.Second
+	}
+	if timeoutFlag != 0 {
+		effectiveTimeout = timeoutFlag
+	}
+
+	// Parallel: CLI > config > default (empty = sequential)
+	effectiveParallel := cfg.Test.Parallel
+	if parallelFlag != "" {
+		effectiveParallel = parallelFlag
+	}
+
+	// Prefix: CLI > config > default (test_)
+	effectivePrefix := cfg.Test.Prefix
+	if effectivePrefix == "" {
+		effectivePrefix = "test_"
+	}
+	if prefixFlag != "" {
+		effectivePrefix = prefixFlag
+	}
+
+	// Prelude: config + CLI (additive)
+	effectivePreludes := append([]string{}, cfg.Test.Prelude...)
+	effectivePreludes = append(effectivePreludes, preludeFlags...)
+
+	// FailFast: CLI > config
+	effectiveFailFast := cfg.Test.FailFast || bailFlag || bailShortFlag
+
+	// Verbose: CLI > config
+	effectiveVerbose := cfg.Test.Verbose || verboseFlag
+
+	// Coverage: CLI > config
+	effectiveCoverage := cfg.Test.Coverage.Enabled || coverageFlag
+
+	// Coverage output: CLI > config > default
+	effectiveCoverageOut := cfg.Test.Coverage.Output
+	if effectiveCoverageOut == "" {
+		effectiveCoverageOut = "coverage.json"
+	}
+	if coverageOut != "" {
+		effectiveCoverageOut = coverageOut
 	}
 
 	paths := fs.Args()
@@ -198,21 +306,21 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 
 	// Create base options for runners
 	opts := tester.DefaultOptions()
-	opts.TestPrefix = prefixFlag
-	opts.Verbose = verboseFlag
-	opts.Coverage = coverageFlag
+	opts.TestPrefix = effectivePrefix
+	opts.Verbose = effectiveVerbose
+	opts.Coverage = effectiveCoverage
 	opts.Filter = filterFlag
 	opts.MarkerFilter = markerFilter
-	opts.Preludes = preludeFlags
-	opts.Timeout = timeoutFlag
-	opts.FailFast = bailFlag || bailShortFlag
+	opts.Preludes = effectivePreludes
+	opts.Timeout = effectiveTimeout
+	opts.FailFast = effectiveFailFast
 	opts.UpdateSnapshots = updateSnapshotsFlag
 
 	// Create a single runner for coverage reporting (if enabled)
 	// Note: We create per-file runners for execution to support :: syntax,
 	// but use a single runner to aggregate coverage data.
 	var coverageRunner *tester.Runner
-	if coverageFlag {
+	if effectiveCoverage {
 		coverageRunner = tester.New(opts)
 	}
 
@@ -225,7 +333,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		reporter = &tester.JUnitReporter{}
 	default:
 		reporter = &tester.TextReporter{
-			Verbose:      verboseFlag,
+			Verbose:      effectiveVerbose,
 			ShowDuration: durationFlag,
 		}
 	}
@@ -236,7 +344,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	}
 
 	// Determine parallelism level
-	workers := parseParallelism(parallelFlag)
+	workers := parseParallelism(effectiveParallel)
 
 	// Run tests (parallel or sequential)
 	var result *tester.RunResult
@@ -258,8 +366,8 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	// Write coverage output if enabled
 	// EXPERIMENTAL: Coverage collection requires starlark-go-x with OnExec hook.
 	// TODO(upstream): Remove experimental note once OnExec is merged.
-	if coverageFlag && coverageRunner != nil {
-		if err := writeCoverageReport(coverageRunner, coverageOut, stderr); err != nil {
+	if effectiveCoverage && coverageRunner != nil {
+		if err := writeCoverageReport(coverageRunner, effectiveCoverageOut, stderr); err != nil {
 			writef(stderr, "skytest: coverage: %v\n", err)
 			// Don't fail the run for coverage errors, just warn
 		}

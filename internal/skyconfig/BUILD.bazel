@@ -1,0 +1,22 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "skyconfig",
+    srcs = [
+        "config.go",
+        "starlark.go",
+        "toml.go",
+    ],
+    importpath = "github.com/albertocavalcante/sky/internal/skyconfig",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@com_github_burntsushi_toml//:toml",
+        "@net_starlark_go//starlark",
+    ],
+)
+
+go_test(
+    name = "skyconfig_test",
+    srcs = ["config_test.go"],
+    embed = [":skyconfig"],
+)

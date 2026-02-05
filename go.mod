@@ -29,6 +29,7 @@ require (
 replace go.starlark.net => github.com/albertocavalcante/starlark-go-x v0.0.0-20260203191202-da5a35fe16a6
 
 require (
+	github.com/BurntSushi/toml v1.3.2 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/golang/protobuf v1.5.0 // indirect
 	github.com/gostaticanalysis/analysisutil v0.7.1 // indirect

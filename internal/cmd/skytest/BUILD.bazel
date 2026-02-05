@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/albertocavalcante/sky/internal/cmd/skytest",
     visibility = ["//:__subpackages__"],
     deps = [
+        "//internal/skyconfig",
         "//internal/starlark/coverage",
         "//internal/starlark/tester",
         "//internal/version",
