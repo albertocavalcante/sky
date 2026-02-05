@@ -1,20 +1,43 @@
 ---
 title: CI Integration
-description: Integrate Starlark coverage with CI systems
+description: Integrate Starlark coverage with GitHub Actions, GitLab CI, Jenkins, and more
 ---
 
-import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import { Tabs, TabItem, Aside, Steps, Card, CardGrid } from '@astrojs/starlight/components';
 
 # CI Integration
 
-Integrate Starlark code coverage into your CI/CD pipeline.
+Integrate Starlark code coverage into your CI/CD pipeline. This guide covers the major CI platforms with copy-paste configurations.
+
+## Quick Setup
+
+<Steps>
+
+1. **Configure coverage output**
+
+   Use Cobertura XML for best CI compatibility:
+
+   ```toml title="sky.toml"
+   [test.coverage]
+   enabled = true
+   output = "coverage.xml"
+   fail_under = 80.0
+   ```
+
+2. **Add CI configuration** (see platform-specific sections below)
+
+3. **Upload to coverage service** (optional: Codecov, Coveralls)
+
+</Steps>
+
+---
 
 ## GitHub Actions
 
 ### Basic Coverage
 
-```yaml
-name: Test with Coverage
+```yaml title=".github/workflows/test.yml"
+name: Test
 
 on: [push, pull_request]
 
@@ -30,35 +53,63 @@ jobs:
           go-version: '1.22'
 
       - name: Install Sky
-        run: go install github.com/albertocavalcante/sky/cmd/sky@latest
+        run: go install github.com/example/sky/cmd/skytest@latest
 
       - name: Run tests with coverage
-        run: |
-          skytest --coverage tests/
-          skycov --format=cobertura coverage.json > coverage.xml
+        run: skytest --coverage --coverage-output=coverage.xml tests/
 
-      - name: Upload coverage to Codecov
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+```
+
+### With Codecov
+
+```yaml title=".github/workflows/test.yml"
+name: Test with Codecov
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install Sky
+        run: go install github.com/example/sky/cmd/skytest@latest
+
+      - name: Run tests with coverage
+        run: skytest --coverage --coverage-output=coverage.xml tests/
+
+      - name: Upload to Codecov
         uses: codecov/codecov-action@v4
         with:
           files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
 ```
 
-### Coverage with Thresholds
+### Coverage Threshold Check
 
 ```yaml
       - name: Check coverage threshold
         run: |
-          skycov --min-coverage=80 coverage.json || {
-            echo "Coverage below 80%"
-            exit 1
-          }
+          # skytest will exit non-zero if coverage < threshold
+          skytest --coverage --coverage-output=coverage.xml --coverage-fail-under=80 tests/
 ```
 
-### Coverage Comment on PRs
+### PR Coverage Comment
 
-```yaml
-      - name: Coverage Report
+```yaml title=".github/workflows/test.yml"
+      - name: Generate coverage report
         uses: irongut/CodeCoverageSummary@v1.3.0
         with:
           filename: coverage.xml
@@ -66,7 +117,7 @@ jobs:
           format: markdown
           output: both
 
-      - name: Add Coverage PR Comment
+      - name: Add coverage PR comment
         uses: marocchino/sticky-pull-request-comment@v2
         if: github.event_name == 'pull_request'
         with:
@@ -74,11 +125,13 @@ jobs:
           path: code-coverage-results.md
 ```
 
+---
+
 ## GitLab CI
 
 ### Basic Coverage
 
-```yaml
+```yaml title=".gitlab-ci.yml"
 stages:
   - test
 
@@ -86,53 +139,81 @@ test:
   stage: test
   image: golang:1.22
   before_script:
-    - go install github.com/albertocavalcante/sky/cmd/sky@latest
+    - go install github.com/example/sky/cmd/skytest@latest
   script:
-    - skytest --coverage tests/
-    - skycov --format=cobertura coverage.json > coverage.xml
+    - skytest --coverage --coverage-output=coverage.xml tests/
   artifacts:
     reports:
       coverage_report:
         coverage_format: cobertura
         path: coverage.xml
-  coverage: '/Total:\s+\d+\/\d+\s+lines\s+\((\d+\.?\d*)%\)/'
+  coverage: '/Coverage: (\d+\.?\d*)%/'
 ```
 
-### Coverage Visualization
+### Coverage Visualization in MRs
 
-GitLab automatically visualizes Cobertura coverage in merge requests:
+GitLab automatically shows coverage diff in merge requests when using Cobertura:
 
-```yaml
+```yaml title=".gitlab-ci.yml"
 test:
+  stage: test
+  image: golang:1.22
   script:
-    - skytest --coverage tests/
-    - skycov --format=cobertura coverage.json > coverage.xml
+    - go install github.com/example/sky/cmd/skytest@latest
+    - skytest --coverage --coverage-output=coverage.xml tests/
   artifacts:
     reports:
       coverage_report:
         coverage_format: cobertura
         path: coverage.xml
 ```
+
+The MR diff view will show:
+- Green highlighting for covered new lines
+- Red highlighting for uncovered new lines
+- Coverage percentage change
+
+### With Coverage Threshold
+
+```yaml title=".gitlab-ci.yml"
+test:
+  stage: test
+  script:
+    - skytest --coverage --coverage-output=coverage.xml --coverage-fail-under=80 tests/
+  allow_failure: false
+```
+
+---
 
 ## Jenkins
 
 ### Declarative Pipeline
 
-```groovy
+```groovy title="Jenkinsfile"
 pipeline {
     agent any
 
+    tools {
+        go 'go-1.22'
+    }
+
     stages {
+        stage('Install') {
+            steps {
+                sh 'go install github.com/example/sky/cmd/skytest@latest'
+            }
+        }
+
         stage('Test') {
             steps {
-                sh '''
-                    skytest --coverage tests/
-                    skycov --format=cobertura coverage.json > coverage.xml
-                '''
+                sh 'skytest --coverage --coverage-output=coverage.xml tests/'
             }
             post {
                 always {
-                    cobertura coberturaReportFile: 'coverage.xml'
+                    cobertura coberturaReportFile: 'coverage.xml',
+                              onlyStable: false,
+                              failNoReports: true,
+                              sourceEncoding: 'UTF-8'
                 }
             }
         }
@@ -142,25 +223,40 @@ pipeline {
 
 ### Scripted Pipeline
 
-```groovy
+```groovy title="Jenkinsfile"
 node {
+    stage('Checkout') {
+        checkout scm
+    }
+
+    stage('Install') {
+        sh 'go install github.com/example/sky/cmd/skytest@latest'
+    }
+
     stage('Test') {
-        sh 'skytest --coverage tests/'
-        sh 'skycov --format=cobertura coverage.json > coverage.xml'
+        sh 'skytest --coverage --coverage-output=coverage.xml tests/'
     }
 
     stage('Publish Coverage') {
         cobertura coberturaReportFile: 'coverage.xml',
                   onlyStable: false,
                   failNoReports: true,
-                  sourceEncoding: 'UTF-8'
+                  sourceEncoding: 'UTF-8',
+                  lineCoverageTargets: '80, 60, 0',
+                  conditionalCoverageTargets: '80, 60, 0'
     }
 }
 ```
 
+<Aside type="note">
+Requires the [Cobertura Plugin](https://plugins.jenkins.io/cobertura/) for Jenkins.
+</Aside>
+
+---
+
 ## Azure DevOps
 
-```yaml
+```yaml title="azure-pipelines.yml"
 trigger:
   - main
 
@@ -171,56 +267,67 @@ steps:
   - task: GoTool@0
     inputs:
       version: '1.22'
+    displayName: 'Set up Go'
 
-  - script: go install github.com/albertocavalcante/sky/cmd/sky@latest
+  - script: go install github.com/example/sky/cmd/skytest@latest
     displayName: 'Install Sky'
 
-  - script: |
-      skytest --coverage tests/
-      skycov --format=cobertura coverage.json > coverage.xml
+  - script: skytest --coverage --coverage-output=coverage.xml tests/
     displayName: 'Run tests with coverage'
 
-  - task: PublishCodeCoverageResults@1
+  - task: PublishCodeCoverageResults@2
     inputs:
-      codeCoverageTool: 'Cobertura'
       summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage.xml'
+      codecoverageTool: 'Cobertura'
+    displayName: 'Publish coverage'
 ```
+
+---
 
 ## CircleCI
 
-```yaml
+```yaml title=".circleci/config.yml"
 version: 2.1
+
+orbs:
+  go: circleci/go@1.7
+  codecov: codecov/codecov@3
 
 jobs:
   test:
-    docker:
-      - image: cimg/go:1.22
+    executor:
+      name: go/default
+      tag: '1.22'
     steps:
       - checkout
       - run:
           name: Install Sky
-          command: go install github.com/albertocavalcante/sky/cmd/sky@latest
+          command: go install github.com/example/sky/cmd/skytest@latest
       - run:
           name: Run tests
-          command: |
-            skytest --coverage tests/
-            skycov --format=cobertura coverage.json > coverage.xml
+          command: skytest --coverage --coverage-output=coverage.xml tests/
       - store_artifacts:
           path: coverage.xml
       - codecov/upload:
           file: coverage.xml
 
-orbs:
-  codecov: codecov/codecov@3
+workflows:
+  test:
+    jobs:
+      - test
 ```
 
-## Codecov Integration
+---
+
+## Coverage Services
+
+### Codecov
 
 Upload coverage to [Codecov](https://codecov.io) for tracking and PR comments.
 
-### Configuration (codecov.yml)
+#### Configuration
 
-```yaml
+```yaml title="codecov.yml"
 coverage:
   status:
     project:
@@ -236,7 +343,7 @@ comment:
   behavior: default
 ```
 
-### Upload in CI
+#### Upload Methods
 
 <Tabs>
   <TabItem label="GitHub Actions">
@@ -249,92 +356,162 @@ comment:
   </TabItem>
   <TabItem label="GitLab CI">
 ```yaml
-- bash <(curl -s https://codecov.io/bash) -f coverage.xml
+- curl -Os https://cli.codecov.io/latest/linux/codecov
+- chmod +x codecov
+- ./codecov upload-process -f coverage.xml -t $CODECOV_TOKEN
 ```
   </TabItem>
   <TabItem label="Generic">
 ```bash
-# Install codecov uploader
-curl -Os https://uploader.codecov.io/latest/linux/codecov
+# Download uploader
+curl -Os https://cli.codecov.io/latest/linux/codecov
 chmod +x codecov
 
 # Upload
-./codecov -f coverage.xml -t $CODECOV_TOKEN
+./codecov upload-process -f coverage.xml -t $CODECOV_TOKEN
 ```
   </TabItem>
 </Tabs>
 
-## Coveralls Integration
+### Coveralls
 
 Upload coverage to [Coveralls](https://coveralls.io).
 
+<Tabs>
+  <TabItem label="GitHub Actions">
 ```yaml
-# GitHub Actions
 - name: Upload to Coveralls
   uses: coverallsapp/github-action@v2
   with:
     file: coverage.xml
     format: cobertura
 ```
+  </TabItem>
+  <TabItem label="Generic">
+```bash
+# Install goveralls
+go install github.com/mattn/goveralls@latest
+
+# Convert and upload (requires LCOV format)
+skytest --coverage --coverage-output=coverage.lcov tests/
+goveralls -coverprofile=coverage.lcov -service=local
+```
+  </TabItem>
+</Tabs>
+
+---
 
 ## Coverage Badges
 
-### Shields.io with Codecov
+### Codecov Badge
 
 ```markdown
-![Coverage](https://codecov.io/gh/user/repo/branch/main/graph/badge.svg)
+[![codecov](https://codecov.io/gh/USER/REPO/branch/main/graph/badge.svg)](https://codecov.io/gh/USER/REPO)
 ```
 
 ### Dynamic Badge from CI
 
 Generate a badge based on coverage percentage:
 
-```yaml
-# GitHub Actions
-- name: Generate Badge
-  run: |
-    COVERAGE=$(skycov --format=json coverage.json | jq -r '.summary.percentage')
-    echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
+```yaml title=".github/workflows/test.yml"
+      - name: Extract coverage
+        id: coverage
+        run: |
+          # Extract percentage from JSON output
+          COVERAGE=$(skytest --coverage --coverage-output=/dev/stdout --coverage-format=json tests/ | jq -r '.percentage')
+          echo "percentage=$COVERAGE" >> $GITHUB_OUTPUT
 
-- name: Update Badge
-  uses: schneegans/dynamic-badges-action@v1.6.0
-  with:
-    auth: ${{ secrets.GIST_TOKEN }}
-    gistID: your-gist-id
-    filename: coverage.json
-    label: coverage
-    message: ${{ env.COVERAGE }}%
-    color: ${{ env.COVERAGE >= 80 && 'green' || env.COVERAGE >= 60 && 'yellow' || 'red' }}
+      - name: Update badge
+        uses: schneegans/dynamic-badges-action@v1.6.0
+        with:
+          auth: ${{ secrets.GIST_TOKEN }}
+          gistID: your-gist-id
+          filename: coverage.json
+          label: coverage
+          message: ${{ steps.coverage.outputs.percentage }}%
+          valColorRange: ${{ steps.coverage.outputs.percentage }}
+          maxColorRange: 100
+          minColorRange: 0
 ```
+
+---
 
 ## Best Practices
 
-<Aside type="tip" title="CI Coverage Tips">
+<CardGrid>
+  <Card title="Set Thresholds" icon="warning">
+    Use `fail_under` to prevent coverage regressions. Start at current coverage and increase gradually.
+  </Card>
+  <Card title="Track Trends" icon="graph">
+    Use Codecov or Coveralls to track coverage over time and catch regressions early.
+  </Card>
+  <Card title="Require on PRs" icon="approve-check">
+    Block PR merging if coverage drops significantly.
+  </Card>
+  <Card title="Cache Installation" icon="rocket">
+    Cache the Sky binary to speed up CI runs.
+  </Card>
+</CardGrid>
 
-1. **Set coverage thresholds** - Use `--min-coverage` to prevent regressions
-2. **Track trends** - Use Codecov or Coveralls to track coverage over time
-3. **Require coverage on PRs** - Block merging if coverage drops
-4. **Exclude generated code** - Use `--exclude` for generated files
-5. **Cache Sky installation** - Speed up CI by caching the Go binary
-
-</Aside>
-
-### Caching Sky Installation
+### Caching Examples
 
 <Tabs>
   <TabItem label="GitHub Actions">
 ```yaml
-- uses: actions/cache@v4
+- name: Cache Sky
+  uses: actions/cache@v4
   with:
-    path: ~/go/bin/sky
-    key: ${{ runner.os }}-sky-${{ hashFiles('go.sum') }}
+    path: ~/go/bin/skytest
+    key: ${{ runner.os }}-skytest-${{ hashFiles('go.sum') }}
+
+- name: Install Sky (if not cached)
+  run: |
+    if [ ! -f ~/go/bin/skytest ]; then
+      go install github.com/example/sky/cmd/skytest@latest
+    fi
 ```
   </TabItem>
   <TabItem label="GitLab CI">
 ```yaml
 cache:
+  key: skytest
   paths:
-    - /go/bin/sky
+    - /go/bin/skytest
+
+before_script:
+  - |
+    if [ ! -f /go/bin/skytest ]; then
+      go install github.com/example/sky/cmd/skytest@latest
+    fi
 ```
   </TabItem>
 </Tabs>
+
+---
+
+## Troubleshooting
+
+### Coverage Not Appearing in GitLab MR
+
+1. Ensure the artifact path matches exactly: `coverage.xml`
+2. Verify the file is valid Cobertura XML
+3. Check that the artifact is uploaded in the same job that runs tests
+
+### Codecov Upload Failing
+
+1. Verify `CODECOV_TOKEN` is set in secrets
+2. Check the file path matches what you're uploading
+3. Use `fail_ci_if_error: false` temporarily to debug
+
+### Coverage Percentage Parsing
+
+GitLab extracts coverage from stdout using regex. Ensure your output matches:
+
+```yaml
+coverage: '/Coverage: (\d+\.?\d*)%/'
+```
+
+The skytest output format:
+```
+Coverage: 85.0% (17/20 lines)
+```

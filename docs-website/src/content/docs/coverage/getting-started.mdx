@@ -1,110 +1,238 @@
 ---
-title: Coverage - Getting Started
-description: Collect code coverage for Starlark files
+title: Getting Started with Coverage
+description: Collect line and function coverage from Starlark test runs
 ---
 
-import { Tabs, TabItem, Code } from '@astrojs/starlight/components';
+import { Tabs, TabItem, Aside, Steps, Card, CardGrid } from '@astrojs/starlight/components';
 
-# Code Coverage for Starlark
+# Starlark Code Coverage
 
-Sky provides code coverage collection for Starlark files through `skytest` and `skycov`.
+Measure which lines of your Starlark code execute during tests. Track coverage over time and enforce minimum thresholds in CI.
 
 ## Quick Start
 
-```bash
-# Run tests with coverage collection
-skytest --coverage tests/
+<Steps>
 
-# View coverage report
-skycov coverage.json
+1. **Enable coverage in your config**
+
+   Create or update `sky.toml`:
+
+   ```toml
+   [test.coverage]
+   enabled = true
+   output = "coverage.lcov"
+   ```
+
+2. **Run your tests**
+
+   ```bash
+   skytest tests/
+   ```
+
+   Output:
+   ```
+   PASS  test_add (0.002s)
+   PASS  test_subtract (0.001s)
+
+   Results: 2 passed, 0 failed
+   Coverage: 85.0% (17/20 lines)
+   Coverage written to coverage.lcov
+   ```
+
+3. **View the report**
+
+   Open in your IDE or generate HTML:
+
+   ```bash
+   genhtml coverage.lcov -o coverage-html/
+   open coverage-html/index.html
+   ```
+
+</Steps>
+
+## How Coverage Works
+
+Coverage collection uses the `OnExec` hook in [starlark-go-x](/sky/starlark-go-x/hooks/) to track each line executed during test runs.
+
+```
+┌─────────────────────────┐
+│   Your Starlark files   │
+└───────────┬─────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│   skytest --coverage    │ ← OnExec hook records each line
+└───────────┬─────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│   Coverage Report       │ ← LCOV, Cobertura, JSON, HTML, Text
+└─────────────────────────┘
 ```
 
-## How It Works
+## Example Workflow
 
-Coverage collection uses the `OnExec` hook in [starlark-go-x](/sky/starlark-go-x/hooks/) to track which lines are executed during test runs.
+Create a module and test:
 
-```
-┌─────────────────────┐
-│  Your .star files   │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│  skytest --coverage │  ← OnExec hook fires for each instruction
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│   coverage.json     │  ← Raw coverage data
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│       skycov        │  ← Format and report
-└─────────────────────┘
-```
-
-## Example
-
-Create a test file:
-
-```starlark title="math_test.star"
+```starlark title="math.star"
 def add(a, b):
     return a + b
 
+def divide(a, b):
+    if b == 0:
+        return None  # This line may not be covered
+    return a / b
+```
+
+```starlark title="math_test.star"
+load("math.star", "add", "divide")
+
 def test_add():
-    assert.eq(add(1, 2), 3)
-    assert.eq(add(0, 0), 0)
+    assert.eq(add(2, 3), 5)
+    assert.eq(add(-1, 1), 0)
+
+def test_divide():
+    assert.eq(divide(10, 2), 5)
+    # Missing: test for divide by zero
 ```
 
 Run with coverage:
 
 ```bash
 $ skytest --coverage math_test.star
-PASS  test_add
+PASS  test_add (0.001s)
+PASS  test_divide (0.001s)
+
+Results: 2 passed, 0 failed
+Coverage: 83.3% (5/6 lines)
+```
+
+The report shows line 6 (`return None`) was never executed.
+
+## Coverage Metrics
+
+<CardGrid>
+  <Card title="Line Coverage" icon="document">
+    Tracks how many times each line executed. A line with 0 hits is uncovered.
+  </Card>
+  <Card title="Function Coverage" icon="puzzle">
+    Tracks which functions were called. Inferred from line hits at function entry points.
+  </Card>
+</CardGrid>
+
+| Metric | Status | Description |
+|--------|--------|-------------|
+| Line coverage | ✅ Supported | Which lines executed and how many times |
+| Function coverage | ✅ Supported | Which functions were called |
+| Branch coverage | 🔜 Planned | Which conditional branches were taken |
+
+## Configuration
+
+### TOML Configuration
+
+```toml title="sky.toml"
+[test.coverage]
+# Enable coverage collection
+enabled = true
+
+# Output file path (extension determines format)
+output = "coverage.lcov"
+
+# Fail if coverage falls below threshold (0 = disabled)
+fail_under = 80.0
+```
+
+### Starlark Configuration
+
+For dynamic configuration based on environment:
+
+```starlark title="config.sky"
+def configure():
+    ci = getenv("CI", "") != ""
+
+    return {
+        "test": {
+            "coverage": {
+                "enabled": ci,  # Only collect in CI
+                "output": "coverage.xml" if ci else "coverage.html",
+                "fail_under": 80 if ci else 0,
+            },
+        },
+    }
+```
+
+### CLI Flags
+
+Override config from the command line:
+
+```bash
+# Enable coverage
+skytest --coverage tests/
+
+# Specify output file
+skytest --coverage --coverage-output=coverage.xml tests/
+
+# Set minimum threshold
+skytest --coverage --coverage-fail-under=80 tests/
+```
+
+## Output Format Selection
+
+The output format is determined by the file extension:
+
+| Extension | Format | Best For |
+|-----------|--------|----------|
+| `.txt` | Text | Terminal viewing |
+| `.json` | JSON | Custom tooling |
+| `.xml` | Cobertura | CI systems (Jenkins, GitLab) |
+| `.lcov` | LCOV | IDE extensions, genhtml |
+| `.html` | HTML | Browser viewing, sharing |
+
+```toml title="sky.toml"
+[test.coverage]
+enabled = true
+# Change extension to change format:
+output = "coverage.html"  # HTML report
+# output = "coverage.xml"   # Cobertura XML
+# output = "coverage.lcov"  # LCOV tracefile
+```
+
+## Enforcing Coverage Thresholds
+
+Prevent coverage regressions by setting a minimum threshold:
+
+```toml title="sky.toml"
+[test.coverage]
+enabled = true
+output = "coverage.lcov"
+fail_under = 80.0
+```
+
+When coverage drops below the threshold:
+
+```bash
+$ skytest tests/
+PASS  test_add (0.001s)
 
 Results: 1 passed, 0 failed
-skytest: coverage written to coverage.json
-
-$ skycov coverage.json
-Coverage Report
-===============
-Total: 100.0% (3/3 lines)
+Coverage: 75.0% (15/20 lines)
+FAIL: Coverage 75.0% is below threshold 80.0%
 ```
 
-## Coverage Data
-
-The coverage JSON contains line-level hit counts:
-
-```json
-{
-  "files": {
-    "math_test.star": {
-      "lines": {
-        "1": 1,
-        "2": 3,
-        "4": 1,
-        "5": 2,
-        "6": 2
-      }
-    }
-  },
-  "totalLines": 5,
-  "coveredLines": 5,
-  "percentage": 100
-}
-```
-
-## Coverage Types
-
-| Type | Status | Description |
-|------|--------|-------------|
-| Line coverage | ✅ Full | Which lines were executed |
-| Statement coverage | ✅ Full | Which statements were executed |
-| Function coverage | ⚠️ Basic | Inferred from line hits |
-| Branch coverage | 🔜 Planned | Which branches were taken |
+<Aside type="tip">
+Start with your current coverage percentage as the threshold, then gradually increase it as you add tests.
+</Aside>
 
 ## Next Steps
 
-- [Output Formats](/sky/coverage/output-formats/) - Cobertura, LCOV, JSON
-- [CI Integration](/sky/coverage/ci-integration/) - GitHub Actions, GitLab CI
+<CardGrid>
+  <Card title="Output Formats" icon="document">
+    Learn about each format: [Text, JSON, Cobertura, LCOV, HTML](/sky/coverage/output-formats/)
+  </Card>
+  <Card title="CI Integration" icon="rocket">
+    Set up coverage in [GitHub Actions, GitLab, Jenkins](/sky/coverage/ci-integration/)
+  </Card>
+  <Card title="IDE Setup" icon="laptop">
+    View coverage in [VS Code, JetBrains IDEs](/sky/coverage/ide-integration/)
+  </Card>
+</CardGrid>

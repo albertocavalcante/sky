@@ -130,6 +130,7 @@ export default defineConfig({
 						{ label: 'Getting Started', slug: 'coverage/getting-started' },
 						{ label: 'Output Formats', slug: 'coverage/output-formats' },
 						{ label: 'CI Integration', slug: 'coverage/ci-integration' },
+						{ label: 'IDE Integration', slug: 'coverage/ide-integration' },
 					],
 				},
 				{

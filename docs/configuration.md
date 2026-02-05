@@ -163,11 +163,13 @@ warnings_as_errors = false
 
 ### Coverage Configuration Options
 
-| Option       | Type   | Default           | Description                 |
-| ------------ | ------ | ----------------- | --------------------------- |
-| `enabled`    | bool   | `false`           | Enable coverage collection  |
-| `fail_under` | float  | `0`               | Minimum coverage percentage |
-| `output`     | string | `"coverage.json"` | Coverage output file path   |
+| Option       | Type   | Default           | Description                         |
+| ------------ | ------ | ----------------- | ----------------------------------- |
+| `enabled`    | bool   | `false`           | Enable coverage collection          |
+| `fail_under` | float  | `0`               | Minimum coverage % (0 = disabled)   |
+| `output`     | string | `"coverage.json"` | Output file (extension sets format) |
+
+For detailed coverage documentation including output formats, CI integration, and IDE setup, see [Coverage](coverage.md).
 
 ### Lint Configuration Options
 

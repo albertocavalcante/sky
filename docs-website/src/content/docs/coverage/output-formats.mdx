@@ -1,89 +1,196 @@
 ---
-title: Output Formats
-description: Coverage output formats supported by skycov
+title: Coverage Output Formats
+description: Detailed guide to all coverage output formats - Text, JSON, Cobertura, LCOV, and HTML
 ---
 
-import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import { Tabs, TabItem, Aside, Card, CardGrid } from '@astrojs/starlight/components';
 
 # Output Formats
 
-skycov converts the raw `coverage.json` into formats compatible with various CI tools and coverage platforms.
+Skytest supports five coverage output formats. The format is automatically selected based on the output file extension.
 
-## Text (default)
+## Format Summary
+
+| Extension | Format | Use Case | Tools |
+|-----------|--------|----------|-------|
+| `.txt` | Text | Terminal, quick inspection | Human readable |
+| `.json` | JSON | Custom tooling, APIs | jq, scripts |
+| `.xml` | Cobertura | CI systems | Jenkins, GitLab, Azure |
+| `.lcov` | LCOV | IDE extensions | VS Code, genhtml |
+| `.html` | HTML | Browser viewing | Self-contained |
+
+---
+
+## Text Format
 
 Human-readable summary for terminal output.
 
-```bash
-skycov coverage.json
+```toml title="sky.toml"
+[test.coverage]
+enabled = true
+output = "coverage.txt"
 ```
 
-```
+### Output Example
+
+```txt
 Coverage Report
 ===============
-File: math.star
-  Lines: 15/20 (75.0%)
-  Functions: 3/4 (75.0%)
 
-File: utils.star
-  Lines: 8/10 (80.0%)
-  Functions: 2/2 (100.0%)
+src/parser.star                                              87.5% (14/16 lines)
+  Missing: 23-24
+src/lexer.star                                               100.0% (12/12 lines)
+src/utils.star                                               66.7% (8/12 lines)
+  Missing: 5, 18-20
 
-Total: 23/30 lines (76.7%)
+Total: 85.0% (34/40 lines)
 ```
 
-## JSON
+### Features
 
-Machine-readable format for custom tooling.
+- Per-file coverage percentage
+- Line counts (covered/total)
+- Missing line numbers displayed as ranges
+- Aggregate total at bottom
 
-```bash
-skycov --format=json coverage.json
+### When to Use
+
+- Quick terminal inspection
+- Commit hooks
+- Local development feedback
+
+---
+
+## JSON Format
+
+Machine-readable format for programmatic access.
+
+```toml title="sky.toml"
+[test.coverage]
+enabled = true
+output = "coverage.json"
 ```
+
+### Output Example
 
 ```json
 {
-  "summary": {
-    "totalLines": 30,
-    "coveredLines": 23,
-    "percentage": 76.7
-  },
-  "files": {
-    "math.star": {
-      "totalLines": 20,
-      "coveredLines": 15,
-      "percentage": 75.0,
-      "lines": {
-        "1": 5,
-        "2": 5,
-        "3": 0,
-        "4": 10
-      }
+  "timestamp": "2024-01-15T10:30:00Z",
+  "total_lines": 40,
+  "covered_lines": 34,
+  "percentage": 85.0,
+  "files": [
+    {
+      "path": "src/parser.star",
+      "total_lines": 16,
+      "covered_lines": 14,
+      "percentage": 87.5,
+      "missing_lines": [23, 24]
+    },
+    {
+      "path": "src/lexer.star",
+      "total_lines": 12,
+      "covered_lines": 12,
+      "percentage": 100.0
+    },
+    {
+      "path": "src/utils.star",
+      "total_lines": 12,
+      "covered_lines": 8,
+      "percentage": 66.67,
+      "missing_lines": [5, 18, 19, 20]
     }
-  }
+  ]
 }
 ```
 
-## Cobertura XML
+### Schema Reference
 
-Standard format supported by most CI platforms (Jenkins, Azure DevOps, GitLab).
+| Field | Type | Description |
+|-------|------|-------------|
+| `timestamp` | string | ISO 8601 timestamp |
+| `total_lines` | int | Total executable lines |
+| `covered_lines` | int | Lines executed at least once |
+| `percentage` | float | Coverage percentage (0-100) |
+| `files` | array | Per-file coverage data |
+| `files[].path` | string | File path |
+| `files[].missing_lines` | array | Line numbers not covered |
+
+### Processing with jq
 
 ```bash
-skycov --format=cobertura coverage.json > coverage.xml
+# Get overall percentage
+jq '.percentage' coverage.json
+
+# List files below 80% coverage
+jq '.files[] | select(.percentage < 80) | .path' coverage.json
+
+# Get missing lines for a file
+jq '.files[] | select(.path == "src/utils.star") | .missing_lines' coverage.json
 ```
 
+### When to Use
+
+- Custom dashboards
+- Coverage trend analysis
+- Integration with internal tools
+
+---
+
+## Cobertura XML Format
+
+Standard format supported by most CI platforms.
+
+```toml title="sky.toml"
+[test.coverage]
+enabled = true
+output = "coverage.xml"
+```
+
+### Supported Platforms
+
+<CardGrid>
+  <Card title="Jenkins" icon="setting">
+    Cobertura plugin provides coverage reports and trends
+  </Card>
+  <Card title="GitLab CI" icon="rocket">
+    Built-in coverage visualization in merge requests
+  </Card>
+  <Card title="Azure DevOps" icon="document">
+    PublishCodeCoverageResults task
+  </Card>
+  <Card title="Codecov" icon="external">
+    Full Cobertura format support
+  </Card>
+</CardGrid>
+
+### Output Example
+
 ```xml
-<?xml version="1.0" ?>
-<coverage version="1.0" timestamp="1704067200000"
-          lines-valid="30" lines-covered="23"
-          line-rate="0.767" branch-rate="0" complexity="0">
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage line-rate="0.8500" branch-rate="0" version="1.0" timestamp="1705312200"
+          lines-valid="40" lines-covered="34">
+  <sources>
+    <source>.</source>
+  </sources>
   <packages>
-    <package name="." line-rate="0.767" branch-rate="0" complexity="0">
+    <package name="src" line-rate="0.8500" branch-rate="0" complexity="0">
       <classes>
-        <class name="math.star" filename="math.star" line-rate="0.75">
+        <class name="parser.star" filename="src/parser.star" line-rate="0.8750"
+               branch-rate="0" complexity="0">
           <lines>
-            <line number="1" hits="5"/>
-            <line number="2" hits="5"/>
-            <line number="3" hits="0"/>
-            <line number="4" hits="10"/>
+            <line number="1" hits="1"/>
+            <line number="2" hits="3"/>
+            <line number="10" hits="5"/>
+            <line number="23" hits="0"/>
+            <line number="24" hits="0"/>
+          </lines>
+        </class>
+        <class name="lexer.star" filename="src/lexer.star" line-rate="1.0000"
+               branch-rate="0" complexity="0">
+          <lines>
+            <line number="1" hits="2"/>
+            <line number="2" hits="2"/>
           </lines>
         </class>
       </classes>
@@ -92,103 +199,111 @@ skycov --format=cobertura coverage.json > coverage.xml
 </coverage>
 ```
 
-## LCOV
+### XML Element Reference
 
-Standard format supported by coverage visualization tools (Codecov, Coveralls, genhtml).
+| Element | Attribute | Description |
+|---------|-----------|-------------|
+| `coverage` | `line-rate` | Overall coverage (0.0-1.0) |
+| `coverage` | `lines-valid` | Total executable lines |
+| `coverage` | `lines-covered` | Covered lines |
+| `package` | `name` | Directory/package name |
+| `class` | `filename` | Source file path |
+| `line` | `number` | Line number (1-based) |
+| `line` | `hits` | Execution count |
 
-```bash
-skycov --format=lcov coverage.json > coverage.lcov
+### When to Use
+
+- Jenkins with Cobertura plugin
+- GitLab CI coverage reports
+- Azure DevOps pipelines
+- Any CI requiring XML coverage
+
+---
+
+## LCOV Format
+
+Tracefile format compatible with genhtml and IDE extensions.
+
+```toml title="sky.toml"
+[test.coverage]
+enabled = true
+output = "coverage.lcov"
 ```
+
+### Supported Tools
+
+<CardGrid>
+  <Card title="VS Code" icon="laptop">
+    Coverage Gutters extension shows inline coverage
+  </Card>
+  <Card title="JetBrains" icon="laptop">
+    Built-in coverage visualization
+  </Card>
+  <Card title="genhtml" icon="document">
+    Generate HTML reports from LCOV
+  </Card>
+  <Card title="SonarQube" icon="setting">
+    Import LCOV for analysis
+  </Card>
+</CardGrid>
+
+### Output Example
 
 ```
 TN:
-SF:math.star
-DA:1,5
-DA:2,5
-DA:3,0
-DA:4,10
-LF:4
-LH:3
+SF:src/parser.star
+FN:10,parse_expression
+FNDA:5,parse_expression
+FN:25,parse_statement
+FNDA:3,parse_statement
+FNF:2
+FNH:2
+DA:1,1
+DA:2,3
+DA:10,5
+DA:11,5
+DA:23,0
+DA:24,0
+LF:16
+LH:14
 end_of_record
-SF:utils.star
+TN:
+SF:src/lexer.star
 DA:1,2
 DA:2,2
-LF:2
-LH:2
+DA:3,2
+LF:12
+LH:12
 end_of_record
 ```
 
-### LCOV Field Reference
+### Field Reference
 
-| Field | Meaning |
-|-------|---------|
-| `TN:` | Test name (empty for aggregate) |
-| `SF:` | Source file path |
-| `DA:line,hits` | Line data: line number and hit count |
-| `LF:` | Lines found (total lines) |
-| `LH:` | Lines hit (covered lines) |
+| Field | Format | Description |
+|-------|--------|-------------|
+| `TN:` | `TN:<name>` | Test name (usually empty) |
+| `SF:` | `SF:<path>` | Source file path |
+| `FN:` | `FN:<line>,<name>` | Function definition: start line and name |
+| `FNDA:` | `FNDA:<hits>,<name>` | Function hit data: call count and name |
+| `FNF:` | `FNF:<count>` | Functions found (total) |
+| `FNH:` | `FNH:<count>` | Functions hit (covered) |
+| `DA:` | `DA:<line>,<hits>` | Line data: line number and hit count |
+| `LF:` | `LF:<count>` | Lines found (total) |
+| `LH:` | `LH:<count>` | Lines hit (covered) |
+| `end_of_record` | - | End of file record |
 
-## Filtering Output
-
-Filter coverage to specific files or directories:
-
-```bash
-# Only show files matching pattern
-skycov --include="src/**/*.star" coverage.json
-
-# Exclude test files
-skycov --exclude="*_test.star" coverage.json
-
-# Combine filters
-skycov --include="src/**" --exclude="**/vendor/**" coverage.json
-```
-
-## Threshold Checks
-
-Fail CI if coverage drops below a threshold:
-
-```bash
-# Fail if coverage < 80%
-skycov --min-coverage=80 coverage.json
-
-# Exit code: 0 if >= threshold, 1 if below
-echo $?
-```
-
-<Aside type="tip">
-Set `--min-coverage` in CI to prevent coverage regressions. Start with your current coverage and increase over time.
-</Aside>
-
-## Combining Coverage Files
-
-Merge coverage from multiple test runs:
-
-```bash
-# Run different test suites
-skytest --coverage tests/unit/ -o unit.json
-skytest --coverage tests/integration/ -o integration.json
-
-# Merge coverage
-skycov --merge unit.json integration.json > combined.json
-
-# Generate report from merged data
-skycov --format=cobertura combined.json > coverage.xml
-```
-
-## Generating HTML Reports
-
-Convert LCOV to HTML for local viewing:
+### Generate HTML with genhtml
 
 ```bash
 # Generate LCOV
-skycov --format=lcov coverage.json > coverage.lcov
+skytest --coverage --coverage-output=coverage.lcov tests/
 
-# Use genhtml (from lcov package)
+# Convert to HTML
 genhtml coverage.lcov --output-directory coverage-html
+
+# Open in browser
 open coverage-html/index.html
 ```
-
-Install genhtml:
 
 <Tabs>
   <TabItem label="macOS">
@@ -207,3 +322,116 @@ dnf install lcov
 ```
   </TabItem>
 </Tabs>
+
+### When to Use
+
+- IDE coverage visualization
+- VS Code Coverage Gutters
+- JetBrains coverage
+- Generating detailed HTML with genhtml
+
+---
+
+## HTML Format
+
+Self-contained HTML report with embedded CSS. No external dependencies.
+
+```toml title="sky.toml"
+[test.coverage]
+enabled = true
+output = "coverage.html"
+```
+
+### Features
+
+- **Dark theme** - Easy on the eyes
+- **Collapsible files** - Click to expand/collapse per-file details
+- **Color-coded badges**:
+  - 🟢 Green: ≥80% coverage
+  - 🟡 Yellow: 50-79% coverage
+  - 🔴 Red: <50% coverage
+- **Per-line hit counts** - See exactly how many times each line ran
+- **No external dependencies** - Single file, works offline
+
+### Output Preview
+
+The HTML report includes:
+
+1. **Summary section** - Overall percentage, covered/total lines, file count
+2. **Progress bar** - Visual coverage indicator
+3. **File list** - Each file with coverage badge
+4. **Line details** - Expand any file to see line-by-line coverage
+
+```
+┌─────────────────────────────────────────────────┐
+│  Coverage Report                                │
+│  ═══════════════                                │
+│                                                 │
+│  ████████████░░░░  85.0%    34 Lines   3 Files  │
+│                    Covered                      │
+│                                                 │
+│  ┌─────────────────────────────────────────┐   │
+│  │ src/parser.star          14/16   87.5%  │   │
+│  │ ▼ (click to expand)                     │   │
+│  │   1  │ 1x │ def parse():                │   │
+│  │   2  │ 3x │     token = next()          │   │
+│  │  23  │ 0x │     return error  ← RED     │   │
+│  └─────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────┐   │
+│  │ src/lexer.star           12/12  100.0%  │   │
+│  └─────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────┘
+```
+
+### Usage
+
+```bash
+# Generate HTML report
+skytest --coverage --coverage-output=coverage.html tests/
+
+# Open in browser
+open coverage.html
+```
+
+### When to Use
+
+- Sharing coverage with team
+- Local development review
+- Offline viewing
+- No external tool dependencies needed
+
+---
+
+## Merging Coverage Reports
+
+Combine coverage from multiple test runs:
+
+```bash
+# Run different test suites
+skytest --coverage --coverage-output=unit.lcov tests/unit/
+skytest --coverage --coverage-output=integration.lcov tests/integration/
+
+# Merge with lcov
+lcov -a unit.lcov -a integration.lcov -o combined.lcov
+
+# Generate combined report
+genhtml combined.lcov -o coverage-html/
+```
+
+<Aside type="note">
+Merging combines hit counts, so a line hit once in unit tests and twice in integration tests shows 3 total hits.
+</Aside>
+
+---
+
+## Format Comparison
+
+| Feature | Text | JSON | Cobertura | LCOV | HTML |
+|---------|------|------|-----------|------|------|
+| Human readable | ✅ | ❌ | ❌ | ❌ | ✅ |
+| Machine parseable | ❌ | ✅ | ✅ | ✅ | ❌ |
+| CI integration | ❌ | ⚠️ | ✅ | ⚠️ | ❌ |
+| IDE support | ❌ | ❌ | ❌ | ✅ | ❌ |
+| Self-contained | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Function coverage | ❌ | ❌ | ❌ | ✅ | ❌ |
+| Hit counts | ❌ | ❌ | ✅ | ✅ | ✅ |
