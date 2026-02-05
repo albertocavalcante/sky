@@ -4,6 +4,7 @@ import starlightLinksValidator from 'starlight-links-validator';
 import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
 import fs from 'node:fs';
+import { validateSidebar } from './src/validate-sidebar';
 
 // Load TextMate grammars for syntax highlighting
 const starlarkGrammar = JSON.parse(
@@ -23,6 +24,7 @@ export default defineConfig({
 
 	integrations: [
 		sitemap(),
+		validateSidebar({ failOnOrphans: true }),
 		starlight({
 			plugins: [starlightLinksValidator()],
 			title: 'Sky',
@@ -87,6 +89,8 @@ export default defineConfig({
 						{ label: 'Tooling & IDE Support', slug: 'starlark/tooling' },
 						{ label: 'Use Cases', slug: 'starlark/use-cases' },
 						{ label: 'Type System Roadmap', slug: 'starlark/types-roadmap' },
+						{ label: 'Build Systems Comparison', slug: 'starlark/build-systems-comparison' },
+						{ label: 'Aspect CLI & AXL', slug: 'starlark/aspect-cli-axl' },
 						{ label: 'Best Practices', slug: 'starlark/best-practices' },
 						{ label: 'Resources', slug: 'starlark/resources' },
 					],
