@@ -167,6 +167,12 @@ func (s *Server) Handle(ctx context.Context, req *Request) (any, error) {
 	case "workspace/symbol":
 		return s.handleWorkspaceSymbol(ctx, req.Params)
 
+	// Semantic tokens
+	case "textDocument/semanticTokens/full":
+		return s.handleSemanticTokensFull(ctx, req.Params)
+	case "textDocument/semanticTokens/range":
+		return s.handleSemanticTokensRange(ctx, req.Params)
+
 	default:
 		log.Printf("unhandled method: %s", req.Method)
 		return nil, ErrMethodNotFound
@@ -221,6 +227,17 @@ func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (
 				PrepareProvider: true,
 			},
 			WorkspaceSymbolProvider: true,
+			// Note: protocol.SemanticTokensOptions in v0.12.0 is minimal and
+			// doesn't have Legend/Full/Range fields, so we use a map for proper
+			// JSON serialization per LSP spec.
+			SemanticTokensProvider: map[string]interface{}{
+				"legend": protocol.SemanticTokensLegend{
+					TokenTypes:     TokenTypeNames,
+					TokenModifiers: TokenModifierNames,
+				},
+				"full":  true,
+				"range": true,
+			},
 		},
 		ServerInfo: &protocol.ServerInfo{
 			Name:    "skyls",
