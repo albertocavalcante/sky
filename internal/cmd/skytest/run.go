@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/albertocavalcante/sky/internal/starlark/coverage"
@@ -60,6 +62,8 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		bailFlag            bool
 		bailShortFlag       bool
 		updateSnapshotsFlag bool
+		watchFlag           bool
+		affectedOnlyFlag    bool
 	)
 
 	fs := flag.NewFlagSet("skytest", flag.ContinueOnError)
@@ -84,6 +88,9 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	fs.StringVar(&coverageOut, "coverprofile", "coverage.json", "coverage output file")
 	fs.BoolVar(&updateSnapshotsFlag, "update-snapshots", false, "update snapshots instead of comparing")
 	fs.BoolVar(&updateSnapshotsFlag, "u", false, "update snapshots (short for --update-snapshots)")
+	fs.BoolVar(&watchFlag, "watch", false, "watch for file changes and re-run tests")
+	fs.BoolVar(&watchFlag, "w", false, "watch mode (short for --watch)")
+	fs.BoolVar(&affectedOnlyFlag, "affected-only", false, "in watch mode, only run tests affected by changes")
 
 	fs.Usage = func() {
 		writeln(stderr, "Usage: skytest [flags] <paths...>")
@@ -102,6 +109,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writeln(stderr, "  - Prelude files for shared helpers (--prelude)")
 		writeln(stderr, "  - Per-test timeouts (--timeout)")
 		writeln(stderr, "  - Fail-fast mode (--bail / -x)")
+		writeln(stderr, "  - Watch mode for continuous testing (--watch / -w)")
 		writeln(stderr, "  - Coverage collection (EXPERIMENTAL, requires starlark-go-x)")
 		writeln(stderr)
 		writeln(stderr, "Flags:")
@@ -121,6 +129,8 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writeln(stderr, "  skytest -x                      # Stop on first failure (short)")
 		writeln(stderr, "  skytest -json tests/            # JSON output")
 		writeln(stderr, "  skytest -junit tests/ > out.xml # JUnit output for CI")
+		writeln(stderr, "  skytest --watch tests/          # Watch mode, re-run on changes")
+		writeln(stderr, "  skytest -w --affected-only .    # Watch, only run affected tests")
 		writeln(stderr)
 		writeln(stderr, "Assert module:")
 		writeln(stderr, "  assert.eq(a, b, msg=None)       # Assert a == b")
@@ -208,6 +218,11 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 			Verbose:      verboseFlag,
 			ShowDuration: durationFlag,
 		}
+	}
+
+	// Watch mode
+	if watchFlag {
+		return runWatchMode(files, opts, fileTestNames, reporter, affectedOnlyFlag, stdout, stderr)
 	}
 
 	// Run tests
@@ -351,4 +366,150 @@ func writef(w io.Writer, format string, args ...any) {
 
 func writeln(w io.Writer, args ...any) {
 	_, _ = fmt.Fprintln(w, args...)
+}
+
+// runWatchMode runs tests in watch mode, re-running on file changes.
+func runWatchMode(
+	files []string,
+	opts tester.Options,
+	fileTestNames map[string][]string,
+	reporter tester.Reporter,
+	affectedOnly bool,
+	stdout, stderr io.Writer,
+) int {
+	// Get root directory for watching
+	cwd, err := os.Getwd()
+	if err != nil {
+		writef(stderr, "skytest: getting working directory: %v\n", err)
+		return exitError
+	}
+
+	// Create watcher
+	watcher, err := tester.NewWatcher(cwd)
+	if err != nil {
+		writef(stderr, "skytest: creating watcher: %v\n", err)
+		return exitError
+	}
+	defer watcher.Close()
+
+	// Add all test files to the watcher
+	for _, file := range files {
+		if err := watcher.Add(file); err != nil {
+			writef(stderr, "skytest: watching %s: %v\n", file, err)
+		}
+	}
+
+	writef(stdout, "\n🔍 Watch mode active. Watching %d test file(s).\n", len(files))
+	writef(stdout, "   Press Ctrl+C to stop.\n\n")
+
+	// Run initial tests
+	runTests(files, opts, fileTestNames, reporter, stdout, stderr)
+
+	// Set up signal handling for graceful shutdown
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	// Watch for changes
+	for {
+		select {
+		case <-sigCh:
+			writef(stdout, "\n\n👋 Stopping watch mode.\n")
+			return exitOK
+
+		case event := <-watcher.Events:
+			// Clear screen for fresh output
+			writef(stdout, "\033[2J\033[H") // ANSI escape to clear screen and move cursor home
+
+			writef(stdout, "📝 File changed: %s\n\n", filepath.Base(event.File))
+
+			// Determine which files to run
+			var filesToRun []string
+			if affectedOnly {
+				filesToRun = event.AffectedTests
+			} else {
+				filesToRun = files
+			}
+
+			if len(filesToRun) == 0 {
+				writef(stdout, "No affected tests to run.\n")
+				continue
+			}
+
+			// Refresh dependencies for changed file (in case loads changed)
+			if err := watcher.RefreshDependencies(event.File); err != nil {
+				writef(stderr, "skytest: refreshing dependencies: %v\n", err)
+			}
+
+			runTests(filesToRun, opts, fileTestNames, reporter, stdout, stderr)
+
+			writef(stdout, "\n🔍 Watching for changes...\n")
+
+		case err := <-watcher.Errors:
+			writef(stderr, "skytest: watcher error: %v\n", err)
+		}
+	}
+}
+
+// runTests runs the given test files and reports results.
+func runTests(
+	files []string,
+	opts tester.Options,
+	fileTestNames map[string][]string,
+	reporter tester.Reporter,
+	stdout, stderr io.Writer,
+) {
+	result := &tester.RunResult{}
+	start := time.Now()
+
+	for _, file := range files {
+		src, err := os.ReadFile(file)
+		if err != nil {
+			writef(stderr, "skytest: %v\n", err)
+			continue
+		}
+
+		// Convert to absolute path for clearer output
+		absPath, _ := filepath.Abs(file)
+		if absPath == "" {
+			absPath = file
+		}
+
+		// Check if this file has specific test names from :: syntax
+		var testNames []string
+		for origPath, names := range fileTestNames {
+			origAbs, _ := filepath.Abs(origPath)
+			if origPath == file || origAbs == absPath {
+				testNames = names
+				break
+			}
+		}
+
+		// Create a runner with the appropriate test names for this file
+		fileOpts := opts
+		fileOpts.TestNames = testNames
+		fileRunner := tester.New(fileOpts)
+
+		fileResult, err := fileRunner.RunFile(absPath, src)
+		if err != nil {
+			writef(stderr, "skytest: %s: %v\n", file, err)
+			continue
+		}
+
+		result.Files = append(result.Files, *fileResult)
+
+		// Report file immediately in text mode
+		if _, ok := reporter.(*tester.TextReporter); ok {
+			reporter.ReportFile(stdout, fileResult)
+		}
+
+		// Fail-fast: stop processing more files after first failure
+		if opts.FailFast && fileResult.HasFailures() {
+			break
+		}
+	}
+
+	result.Duration = time.Since(start)
+
+	// Report summary
+	reporter.ReportSummary(stdout, result)
 }
