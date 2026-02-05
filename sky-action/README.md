@@ -5,10 +5,10 @@ GitHub Action for running Starlark tests with [skytest](https://github.com/alber
 ## Features
 
 - **Cross-platform**: Works on Linux, macOS, and Windows runners
+- **Plugin architecture**: Uses `sky-ci` plugin for CI-specific output
 - Native GitHub PR annotations (no third-party actions needed)
 - Automatic job summary generation
-- Coverage collection and threshold checking
-- Parallel test execution support
+- Coverage threshold checking
 - Fail-fast mode
 
 ## Usage
@@ -22,14 +22,13 @@ GitHub Action for running Starlark tests with [skytest](https://github.com/alber
     path: tests/
 ```
 
-### With Coverage
+### With Coverage Threshold
 
 ```yaml
-- name: Test with coverage
+- name: Test with coverage check
   uses: albertocavalcante/sky/sky-action@v1
   with:
     path: .
-    coverage: true
     coverage-threshold: 80
 ```
 
@@ -60,8 +59,6 @@ jobs:
         with:
           path: .
           recursive: true
-          coverage: true
-          coverage-threshold: 80
           annotations: true
           summary: true
 
@@ -70,7 +67,6 @@ jobs:
         run: |
           echo "Passed: ${{ steps.test.outputs.passed }}"
           echo "Failed: ${{ steps.test.outputs.failed }}"
-          echo "Coverage: ${{ steps.test.outputs.coverage }}%"
 ```
 
 ## Inputs
@@ -79,7 +75,6 @@ jobs:
 | -------------------- | ------------------------------------------------ | -------- |
 | `path`               | Path to test files                               | `.`      |
 | `recursive`          | Search directories recursively                   | `true`   |
-| `coverage`           | Enable coverage collection                       | `false`  |
 | `coverage-threshold` | Minimum coverage percentage (0 to disable)       | `0`      |
 | `annotations`        | Enable GitHub PR annotations                     | `true`   |
 | `summary`            | Write to job summary                             | `true`   |
@@ -95,32 +90,36 @@ jobs:
 | `failed`   | Number of failed tests                         |
 | `coverage` | Coverage percentage (when coverage is enabled) |
 
-## How It Works
+## Architecture
 
-1. **Installs skytest** - Downloads and installs the cross-platform skytest binary via `go install`
-2. **Runs tests with `skytest action`** - The built-in action subcommand handles:
-   - GitHub workflow commands for PR annotations (`-github` flag internally)
-   - Markdown summary generation (`-markdown` flag internally)
-   - Writing outputs to `$GITHUB_OUTPUT`
-   - Coverage threshold checking
+This action follows Sky's plugin-first philosophy:
 
-The entire action is powered by a single Go binary, ensuring consistent behavior across all platforms.
+```
+skytest -json .  ───►  sky-ci  ───►  GitHub-specific outputs
+     │                   │
+     │                   ├── PR annotations (::error::, ::notice::)
+     │                   ├── $GITHUB_OUTPUT (passed, failed, coverage)
+     │                   └── $GITHUB_STEP_SUMMARY (Markdown table)
+     │
+     └── Core tool (test execution, JSON output)
+```
+
+The pipeline pattern (`skytest | sky-ci`) keeps the core tool minimal while allowing CI-specific logic in a dedicated plugin.
 
 ## PR Annotations
 
 When `annotations: true` (default), test failures appear as annotations directly in your PR:
 
-- Failed tests show as error annotations in the diff
+- Failed tests show as error annotations with file and line info
 - Skipped tests show as notice annotations
-- Line numbers are included when available
 
 ## Job Summary
 
-When `summary: true` (default), a Markdown summary is added to the job output showing:
+When `summary: true` (default), a Markdown summary is added showing:
 
 - Total tests, passed, failed, skipped counts
 - Collapsible details for failed tests
-- Coverage statistics (when enabled)
+- Test duration
 
 ## Cross-Platform Support
 
@@ -130,11 +129,31 @@ This action works identically on:
 - **macOS** (macos-latest, macos-14, etc.)
 - **Windows** (windows-latest, windows-2022, etc.)
 
-The cross-platform support is achieved through:
+Cross-platform support is achieved through:
 
-1. Go's native cross-compilation - skytest is a single binary with no dependencies
+1. Go's native cross-compilation - both `skytest` and `sky-ci` are single binaries
 2. GitHub Actions' bash support on all platforms (Windows uses Git Bash)
-3. All file path handling and I/O done in Go code, not shell scripts
+3. All file path handling done in Go, not shell scripts
+
+## Using sky-ci Directly
+
+You can also use the `sky-ci` plugin directly in custom workflows:
+
+```yaml
+- name: Run tests with custom reporter
+  run: |
+    skytest -json ./tests | sky-ci --system=github
+```
+
+The `sky-ci` plugin auto-detects the CI system from environment variables:
+
+| CI System      | Detection Variable |
+| -------------- | ------------------ |
+| GitHub Actions | `GITHUB_ACTIONS`   |
+| GitLab CI      | `GITLAB_CI`        |
+| CircleCI       | `CIRCLECI`         |
+| Azure DevOps   | `TF_BUILD`         |
+| Jenkins        | `JENKINS_URL`      |
 
 ## License
 

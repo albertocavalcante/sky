@@ -60,30 +60,40 @@ runs:
         go-version: '1.22'
         cache: true
 
-    - name: Install skytest
+    - name: Install sky tools
       shell: bash
       run: |
         if [ "${{ inputs.version }}" = "latest" ]; then
           go install github.com/albertocavalcante/sky/cmd/skytest@latest
+          go install github.com/albertocavalcante/sky/cmd/sky-ci@latest
         else
           go install github.com/albertocavalcante/sky/cmd/skytest@${{ inputs.version }}
+          go install github.com/albertocavalcante/sky/cmd/sky-ci@${{ inputs.version }}
         fi
 
-    # Uses bash on all platforms (Linux, macOS, Windows via Git Bash)
-    # The skytest binary is cross-platform Go, handling all platform differences
+    # Pipeline pattern: skytest outputs JSON, sky-ci transforms to GitHub format
+    # This is cross-platform - bash is available on all GitHub runners
     - name: Run tests
       id: test
       shell: bash
       run: |
-        skytest action \
-          -path="${{ inputs.path }}" \
-          -recursive=${{ inputs.recursive }} \
-          -coverage=${{ inputs.coverage }} \
-          -coverage-threshold=${{ inputs.coverage-threshold }} \
-          -annotations=${{ inputs.annotations }} \
-          -summary=${{ inputs.summary }} \
-          -fail-fast=${{ inputs.fail-fast }} \
-          -timeout=${{ inputs.timeout }}
+        FLAGS=""
+        if [ "${{ inputs.recursive }}" = "true" ]; then
+          FLAGS="$FLAGS -r"
+        fi
+        if [ "${{ inputs.fail-fast }}" = "true" ]; then
+          FLAGS="$FLAGS -x"
+        fi
+        if [ "${{ inputs.timeout }}" != "" ]; then
+          FLAGS="$FLAGS -timeout=${{ inputs.timeout }}"
+        fi
+
+        # Run tests and pipe to CI reporter
+        # shellcheck disable=SC2086
+        skytest -json $FLAGS "${{ inputs.path }}" | sky-ci \
+          --annotations=${{ inputs.annotations }} \
+          --summary=${{ inputs.summary }} \
+          --coverage-threshold=${{ inputs.coverage-threshold }}
 
 branding:
   icon: 'check-circle'
