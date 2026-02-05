@@ -227,6 +227,9 @@ func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (
 				PrepareProvider: true,
 			},
 			WorkspaceSymbolProvider: true,
+			// Note: protocol.SemanticTokensOptions in v0.12.0 is minimal and
+			// doesn't have Legend/Full/Range fields, so we use a map for proper
+			// JSON serialization per LSP spec.
 			SemanticTokensProvider: map[string]interface{}{
 				"legend": protocol.SemanticTokensLegend{
 					TokenTypes:     TokenTypeNames,

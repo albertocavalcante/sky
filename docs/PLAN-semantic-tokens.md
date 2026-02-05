@@ -3,7 +3,7 @@
 **Status:** Draft
 **Date:** 2026-02-05
 **Branch:** `feat/lsp-semantic-tokens`
-**Worktree:** `/Users/adsc/dev/ws/sky/semantic-tokens`
+**Worktree:** `../semantic-tokens` (relative to main)
 
 ## Overview
 

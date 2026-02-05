@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/bazelbuild/buildtools/build"
 	"go.lsp.dev/protocol"
@@ -17,8 +19,13 @@ func (s *Server) handleSemanticTokensFull(ctx context.Context, params json.RawMe
 		return nil, err
 	}
 
+	// Copy content while holding lock to avoid data race
 	s.mu.RLock()
 	doc, ok := s.documents[p.TextDocument.URI]
+	var content string
+	if ok {
+		content = doc.Content
+	}
 	s.mu.RUnlock()
 
 	if !ok {
@@ -28,7 +35,7 @@ func (s *Server) handleSemanticTokensFull(ctx context.Context, params json.RawMe
 	log.Printf("semanticTokens/full: %s", p.TextDocument.URI)
 
 	// Tokenize the content
-	tokens := tokenizeContent(doc.Content)
+	tokens := tokenizeContent(content)
 
 	// Encode to LSP format
 	encoded := encodeTokens(tokens)
@@ -45,8 +52,13 @@ func (s *Server) handleSemanticTokensRange(ctx context.Context, params json.RawM
 		return nil, err
 	}
 
+	// Copy content while holding lock to avoid data race
 	s.mu.RLock()
 	doc, ok := s.documents[p.TextDocument.URI]
+	var content string
+	if ok {
+		content = doc.Content
+	}
 	s.mu.RUnlock()
 
 	if !ok {
@@ -59,7 +71,7 @@ func (s *Server) handleSemanticTokensRange(ctx context.Context, params json.RawM
 		p.Range.End.Line, p.Range.End.Character)
 
 	// Tokenize the content
-	tokens := tokenizeContent(doc.Content)
+	tokens := tokenizeContent(content)
 
 	// Filter to range
 	filtered := filterTokensInRange(tokens, p.Range)
@@ -809,6 +821,7 @@ func tokenizeIdent(ident *build.Ident, scope *Scope) []SemanticToken {
 }
 
 // tokenizeString tokenizes a string literal.
+// For multi-line strings, we create separate tokens per line to avoid LSP issues.
 func tokenizeString(s *build.StringExpr) []SemanticToken {
 	var tokens []SemanticToken
 
@@ -821,13 +834,32 @@ func tokenizeString(s *build.StringExpr) []SemanticToken {
 		typ = TokenLabel
 	}
 
-	tokens = append(tokens, SemanticToken{
-		Line:      uint32(start.Line - 1),
-		StartChar: uint32(start.LineRune - 1),
-		Length:    uint32(end.LineRune - start.LineRune),
-		Type:      typ,
-		Modifiers: 0,
-	})
+	// Handle multi-line strings: LSP expects each token to be on a single line
+	if start.Line == end.Line {
+		// Single line string - simple case
+		length := end.LineRune - start.LineRune
+		if length > 0 {
+			tokens = append(tokens, SemanticToken{
+				Line:      uint32(start.Line - 1),
+				StartChar: uint32(start.LineRune - 1),
+				Length:    uint32(length),
+				Type:      typ,
+				Modifiers: 0,
+			})
+		}
+	} else {
+		// Multi-line string: tokenize the opening quote on the first line
+		// We can't easily determine line lengths without the content,
+		// so we use a conservative approach: just mark the start position
+		// with a reasonable length for the opening delimiter
+		tokens = append(tokens, SemanticToken{
+			Line:      uint32(start.Line - 1),
+			StartChar: uint32(start.LineRune - 1),
+			Length:    3, // Assume """ or ''' for multi-line
+			Type:      typ,
+			Modifiers: 0,
+		})
+	}
 
 	return tokens
 }
@@ -886,19 +918,17 @@ func filterTokensInRange(tokens []SemanticToken, r protocol.Range) []SemanticTok
 
 // sortTokens sorts tokens by position (line, then character).
 func sortTokens(tokens []SemanticToken) {
-	// Simple bubble sort for now - can optimize later if needed
-	for i := 0; i < len(tokens)-1; i++ {
-		for j := 0; j < len(tokens)-i-1; j++ {
-			if tokens[j].Line > tokens[j+1].Line ||
-				(tokens[j].Line == tokens[j+1].Line && tokens[j].StartChar > tokens[j+1].StartChar) {
-				tokens[j], tokens[j+1] = tokens[j+1], tokens[j]
-			}
+	sort.Slice(tokens, func(i, j int) bool {
+		if tokens[i].Line != tokens[j].Line {
+			return tokens[i].Line < tokens[j].Line
 		}
-	}
+		return tokens[i].StartChar < tokens[j].StartChar
+	})
 }
 
 // findIdentPosition finds the position of an identifier in content.
 // This is a helper for cases where AST doesn't give us exact positions.
+// startCol is 1-based rune offset.
 func findIdentPosition(content string, name string, startLine, startCol int) (build.Position, bool) {
 	lines := strings.Split(content, "\n")
 	if startLine <= 0 || startLine > len(lines) {
@@ -909,62 +939,105 @@ func findIdentPosition(content string, name string, startLine, startCol int) (bu
 	if startCol <= 0 {
 		startCol = 1
 	}
-	if startCol > len(line) {
+
+	// Convert rune offset to byte offset
+	byteOffset := 0
+	runeCount := 0
+	for byteOffset < len(line) && runeCount < startCol-1 {
+		_, size := utf8.DecodeRuneInString(line[byteOffset:])
+		byteOffset += size
+		runeCount++
+	}
+
+	if byteOffset >= len(line) {
 		return build.Position{}, false
 	}
 
-	idx := strings.Index(line[startCol-1:], name)
-	if idx == -1 {
-		return build.Position{}, false
+	// Search for the identifier as a whole word
+	searchArea := line[byteOffset:]
+	idx := strings.Index(searchArea, name)
+	for idx != -1 {
+		absPos := byteOffset + idx
+		// Check if it's a standalone identifier (not part of another word)
+		beforeOK := absPos == 0 || !isIdentChar(line[absPos-1])
+		afterPos := absPos + len(name)
+		afterOK := afterPos >= len(line) || !isIdentChar(line[afterPos])
+		if beforeOK && afterOK {
+			// Convert byte position back to rune position
+			runePos := utf8.RuneCountInString(line[:absPos]) + 1 // 1-based
+			return build.Position{
+				Line:     startLine,
+				LineRune: runePos,
+			}, true
+		}
+		// Continue searching
+		nextIdx := strings.Index(searchArea[idx+1:], name)
+		if nextIdx == -1 {
+			break
+		}
+		idx = idx + 1 + nextIdx
 	}
 
-	return build.Position{
-		Line:     startLine,
-		LineRune: startCol + idx,
-	}, true
+	return build.Position{}, false
 }
 
 // findKeywordPosition finds a keyword between two positions.
+// startCol and endCol are 1-based rune offsets.
 func findKeywordPosition(content string, keyword string, startLine, startCol, endLine, endCol int) build.Position {
 	lines := strings.Split(content, "\n")
 
-	for line := startLine; line <= endLine && line <= len(lines); line++ {
-		lineText := lines[line-1]
+	for lineNum := startLine; lineNum <= endLine && lineNum <= len(lines); lineNum++ {
+		lineText := lines[lineNum-1]
 
-		fromCol := 0
-		if line == startLine {
-			fromCol = startCol - 1
-			if fromCol < 0 {
-				fromCol = 0
+		// Convert rune offsets to byte offsets
+		fromByte := 0
+		if lineNum == startLine && startCol > 1 {
+			runeCount := 0
+			for fromByte < len(lineText) && runeCount < startCol-1 {
+				_, size := utf8.DecodeRuneInString(lineText[fromByte:])
+				fromByte += size
+				runeCount++
 			}
 		}
 
-		toCol := len(lineText)
-		if line == endLine && endCol > 0 {
-			toCol = endCol - 1
-			if toCol > len(lineText) {
-				toCol = len(lineText)
+		toByte := len(lineText)
+		if lineNum == endLine && endCol > 0 {
+			runeCount := 0
+			bytePos := 0
+			for bytePos < len(lineText) && runeCount < endCol-1 {
+				_, size := utf8.DecodeRuneInString(lineText[bytePos:])
+				bytePos += size
+				runeCount++
+			}
+			if bytePos < toByte {
+				toByte = bytePos
 			}
 		}
 
-		searchArea := lineText[fromCol:toCol]
+		if fromByte >= toByte {
+			continue
+		}
+
+		searchArea := lineText[fromByte:toByte]
 		idx := strings.Index(searchArea, keyword)
 		if idx != -1 {
 			// Make sure it's a standalone keyword (not part of another word)
-			pos := fromCol + idx
+			absPos := fromByte + idx
 			// Check character before
-			if pos > 0 && isIdentChar(lineText[pos-1]) {
+			if absPos > 0 && isIdentChar(lineText[absPos-1]) {
 				continue
 			}
 			// Check character after
-			afterPos := pos + len(keyword)
+			afterPos := absPos + len(keyword)
 			if afterPos < len(lineText) && isIdentChar(lineText[afterPos]) {
 				continue
 			}
 
+			// Convert byte position back to rune position (1-based)
+			runePos := utf8.RuneCountInString(lineText[:absPos]) + 1
 			return build.Position{
-				Line:     line,
-				LineRune: pos + 1, // 1-based
+				Line:     lineNum,
+				LineRune: runePos,
 			}
 		}
 	}
