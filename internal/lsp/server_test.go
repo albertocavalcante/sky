@@ -30,16 +30,27 @@ func TestServerInitialize(t *testing.T) {
 		t.Fatalf("initialize failed: %v", err)
 	}
 
-	initResult, ok := result.(*protocol.InitializeResult)
+	// Server returns map[string]interface{} to support LSP fields not in protocol v0.12.0
+	initResult, ok := result.(map[string]interface{})
 	if !ok {
-		t.Fatalf("result is not InitializeResult: %T", result)
+		t.Fatalf("result is not map[string]interface{}: %T", result)
 	}
 
-	if initResult.ServerInfo.Name != "skyls" {
-		t.Errorf("ServerInfo.Name = %q, want %q", initResult.ServerInfo.Name, "skyls")
+	serverInfo, ok := initResult["serverInfo"].(map[string]string)
+	if !ok {
+		t.Fatal("expected serverInfo map")
 	}
 
-	if !initResult.Capabilities.HoverProvider.(bool) {
+	if serverInfo["name"] != "skyls" {
+		t.Errorf("ServerInfo.Name = %q, want %q", serverInfo["name"], "skyls")
+	}
+
+	capabilities, ok := initResult["capabilities"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected capabilities map")
+	}
+
+	if capabilities["hoverProvider"] != true {
 		t.Error("HoverProvider should be true")
 	}
 }

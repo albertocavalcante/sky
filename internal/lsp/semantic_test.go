@@ -374,7 +374,11 @@ func TestSemanticTokens_InitializeCapability(t *testing.T) {
 	initResult := initializeServerWithResult(t, server, "file:///test")
 
 	// Check that SemanticTokensProvider is set
-	if initResult.Capabilities.SemanticTokensProvider == nil {
+	capabilities, ok := initResult["capabilities"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected capabilities map")
+	}
+	if capabilities["semanticTokensProvider"] == nil {
 		t.Fatal("SemanticTokensProvider should be advertised")
 	}
 }
@@ -402,8 +406,9 @@ func TestSemanticTokens_FullRequest(t *testing.T) {
 	}
 }
 
-// initializeServerWithResult initializes a server and returns the result.
-func initializeServerWithResult(t *testing.T, server *Server, rootURI string) *protocol.InitializeResult {
+// initializeServerWithResult initializes a server and returns the capabilities as a map.
+// The server returns a map to support LSP fields not present in protocol v0.12.0.
+func initializeServerWithResult(t *testing.T, server *Server, rootURI string) map[string]interface{} {
 	t.Helper()
 
 	initParams, _ := json.Marshal(protocol.InitializeParams{
@@ -418,9 +423,9 @@ func initializeServerWithResult(t *testing.T, server *Server, rootURI string) *p
 		t.Fatalf("initialize failed: %v", err)
 	}
 
-	initResult, ok := result.(*protocol.InitializeResult)
+	initResult, ok := result.(map[string]interface{})
 	if !ok {
-		t.Fatalf("expected InitializeResult, got %T", result)
+		t.Fatalf("expected map[string]interface{}, got %T", result)
 	}
 
 	_, err = server.Handle(context.Background(), &Request{

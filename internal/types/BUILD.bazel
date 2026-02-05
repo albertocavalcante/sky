@@ -3,18 +3,23 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "types",
     srcs = [
+        "builtins.go",
+        "inference.go",
         "parser.go",
         "typeref.go",
     ],
     importpath = "github.com/albertocavalcante/sky/internal/types",
     visibility = ["//:__subpackages__"],
+    deps = ["@com_github_bazelbuild_buildtools//build"],
 )
 
 go_test(
     name = "types_test",
     srcs = [
+        "inference_test.go",
         "parser_test.go",
         "typeref_test.go",
     ],
     embed = [":types"],
+    deps = ["@com_github_bazelbuild_buildtools//build"],
 )

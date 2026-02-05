@@ -179,13 +179,19 @@ func TestCodeAction_InitializeCapability(t *testing.T) {
 		t.Fatalf("initialize failed: %v", err)
 	}
 
-	initResult, ok := result.(*protocol.InitializeResult)
+	// Server returns map[string]interface{} to support LSP fields not in protocol v0.12.0
+	initResult, ok := result.(map[string]interface{})
 	if !ok {
-		t.Fatalf("result is not InitializeResult: %T", result)
+		t.Fatalf("result is not map[string]interface{}: %T", result)
+	}
+
+	capabilities, ok := initResult["capabilities"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected capabilities map")
 	}
 
 	// Check CodeActionProvider capability
-	if initResult.Capabilities.CodeActionProvider == nil {
+	if capabilities["codeActionProvider"] == nil {
 		t.Error("CodeActionProvider should not be nil")
 	}
 }

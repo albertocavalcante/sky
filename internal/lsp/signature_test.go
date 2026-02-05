@@ -552,16 +552,29 @@ func TestSignatureHelp_InitializeCapability(t *testing.T) {
 		t.Fatalf("initialize failed: %v", err)
 	}
 
-	initResult, ok := result.(*protocol.InitializeResult)
+	// Server returns map[string]interface{} to support LSP fields not in protocol v0.12.0
+	initResult, ok := result.(map[string]interface{})
 	if !ok {
-		t.Fatalf("result is not InitializeResult: %T", result)
+		t.Fatalf("result is not map[string]interface{}: %T", result)
 	}
 
-	if initResult.Capabilities.SignatureHelpProvider == nil {
+	capabilities, ok := initResult["capabilities"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected capabilities map")
+	}
+
+	sigProvider := capabilities["signatureHelpProvider"]
+	if sigProvider == nil {
 		t.Fatal("SignatureHelpProvider capability should be advertised")
 	}
 
-	sigOpts := initResult.Capabilities.SignatureHelpProvider
+	// Check trigger characters - need to marshal/unmarshal to access
+	sigProviderBytes, _ := json.Marshal(sigProvider)
+	var sigOpts protocol.SignatureHelpOptions
+	if err := json.Unmarshal(sigProviderBytes, &sigOpts); err != nil {
+		t.Fatalf("failed to unmarshal SignatureHelpOptions: %v", err)
+	}
+
 	if sigOpts.TriggerCharacters == nil || len(sigOpts.TriggerCharacters) == 0 {
 		t.Error("SignatureHelpProvider should have trigger characters")
 	}

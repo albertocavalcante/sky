@@ -321,18 +321,19 @@ func TestReferences_InitializeCapability(t *testing.T) {
 		t.Fatalf("initialize failed: %v", err)
 	}
 
-	initResult, ok := result.(*protocol.InitializeResult)
+	// Server returns map[string]interface{} to support LSP fields not in protocol v0.12.0
+	initResult, ok := result.(map[string]interface{})
 	if !ok {
-		t.Fatalf("result is not InitializeResult: %T", result)
+		t.Fatalf("result is not map[string]interface{}: %T", result)
+	}
+
+	capabilities, ok := initResult["capabilities"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected capabilities map")
 	}
 
 	// ReferencesProvider should be true
-	refsProvider, ok := initResult.Capabilities.ReferencesProvider.(bool)
-	if !ok {
-		t.Fatalf("ReferencesProvider is not bool: %T", initResult.Capabilities.ReferencesProvider)
-	}
-
-	if !refsProvider {
+	if capabilities["referencesProvider"] != true {
 		t.Error("ReferencesProvider should be true")
 	}
 }

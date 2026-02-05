@@ -173,6 +173,10 @@ func (s *Server) Handle(ctx context.Context, req *Request) (any, error) {
 	case "textDocument/semanticTokens/range":
 		return s.handleSemanticTokensRange(ctx, req.Params)
 
+	// Inlay hints
+	case "textDocument/inlayHint":
+		return s.handleInlayHint(ctx, req.Params)
+
 	default:
 		log.Printf("unhandled method: %s", req.Method)
 		return nil, ErrMethodNotFound
@@ -197,51 +201,53 @@ func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (
 
 	log.Printf("initialize: root=%s", s.rootURI)
 
-	return &protocol.InitializeResult{
-		Capabilities: protocol.ServerCapabilities{
-			TextDocumentSync: protocol.TextDocumentSyncOptions{
-				OpenClose: true,
-				Change:    protocol.TextDocumentSyncKindFull,
-				Save: &protocol.SaveOptions{
-					IncludeText: true,
-				},
-			},
-			HoverProvider:          true,
-			DefinitionProvider:     true,
-			DocumentSymbolProvider: true,
-			CompletionProvider: &protocol.CompletionOptions{
-				TriggerCharacters: []string{".", "("},
-			},
-			DocumentFormattingProvider: true,
-			SignatureHelpProvider: &protocol.SignatureHelpOptions{
-				TriggerCharacters:   []string{"(", ","},
-				RetriggerCharacters: []string{","},
-			},
-			FoldingRangeProvider: true,
-			DocumentLinkProvider: &protocol.DocumentLinkOptions{},
-			CodeActionProvider: &protocol.CodeActionOptions{
-				CodeActionKinds: []protocol.CodeActionKind{protocol.QuickFix},
-			},
-			ReferencesProvider: true,
-			RenameProvider: &protocol.RenameOptions{
-				PrepareProvider: true,
-			},
-			WorkspaceSymbolProvider: true,
-			// Note: protocol.SemanticTokensOptions in v0.12.0 is minimal and
-			// doesn't have Legend/Full/Range fields, so we use a map for proper
-			// JSON serialization per LSP spec.
-			SemanticTokensProvider: map[string]interface{}{
-				"legend": protocol.SemanticTokensLegend{
-					TokenTypes:     TokenTypeNames,
-					TokenModifiers: TokenModifierNames,
-				},
-				"full":  true,
-				"range": true,
+	// Build capabilities using a map to include fields not in protocol v0.12.0
+	capabilities := map[string]interface{}{
+		"textDocumentSync": protocol.TextDocumentSyncOptions{
+			OpenClose: true,
+			Change:    protocol.TextDocumentSyncKindFull,
+			Save: &protocol.SaveOptions{
+				IncludeText: true,
 			},
 		},
-		ServerInfo: &protocol.ServerInfo{
-			Name:    "skyls",
-			Version: "0.1.0",
+		"hoverProvider":              true,
+		"definitionProvider":         true,
+		"documentSymbolProvider":     true,
+		"documentFormattingProvider": true,
+		"foldingRangeProvider":       true,
+		"referencesProvider":         true,
+		"workspaceSymbolProvider":    true,
+		"completionProvider": &protocol.CompletionOptions{
+			TriggerCharacters: []string{".", "("},
+		},
+		"signatureHelpProvider": &protocol.SignatureHelpOptions{
+			TriggerCharacters:   []string{"(", ","},
+			RetriggerCharacters: []string{","},
+		},
+		"documentLinkProvider": &protocol.DocumentLinkOptions{},
+		"codeActionProvider": &protocol.CodeActionOptions{
+			CodeActionKinds: []protocol.CodeActionKind{protocol.QuickFix},
+		},
+		"renameProvider": &protocol.RenameOptions{
+			PrepareProvider: true,
+		},
+		"semanticTokensProvider": map[string]interface{}{
+			"legend": protocol.SemanticTokensLegend{
+				TokenTypes:     TokenTypeNames,
+				TokenModifiers: TokenModifierNames,
+			},
+			"full":  true,
+			"range": true,
+		},
+		// InlayHintProvider is not in protocol v0.12.0, but we include it here
+		"inlayHintProvider": true,
+	}
+
+	return map[string]interface{}{
+		"capabilities": capabilities,
+		"serverInfo": map[string]string{
+			"name":    "skyls",
+			"version": "0.1.0",
 		},
 	}, nil
 }

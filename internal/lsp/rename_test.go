@@ -306,27 +306,29 @@ func TestRename_InitializeCapability(t *testing.T) {
 		t.Fatalf("initialize failed: %v", err)
 	}
 
-	initResult, ok := result.(*protocol.InitializeResult)
+	// Server returns map[string]interface{} to support LSP fields not in protocol v0.12.0
+	initResult, ok := result.(map[string]interface{})
 	if !ok {
-		t.Fatalf("result is not InitializeResult: %T", result)
+		t.Fatalf("result is not map[string]interface{}: %T", result)
+	}
+
+	capabilities, ok := initResult["capabilities"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected capabilities map")
 	}
 
 	// Check that RenameProvider is advertised
-	renameProvider := initResult.Capabilities.RenameProvider
+	renameProvider := capabilities["renameProvider"]
 	if renameProvider == nil {
 		t.Fatal("RenameProvider capability should be set")
 	}
 
-	// It should be a RenameOptions with PrepareProvider=true
-	renameOpts, ok := renameProvider.(*protocol.RenameOptions)
-	if !ok {
-		// Could also be just `true` as a bool
-		if b, ok := renameProvider.(bool); ok && b {
-			// That's acceptable too, but we want PrepareProvider
-			t.Log("RenameProvider is bool true, but we want RenameOptions with PrepareProvider")
-		}
-		t.Skipf("RenameProvider is %T, checking if PrepareProvider is available", renameProvider)
-		return
+	// It should be a *protocol.RenameOptions with PrepareProvider=true
+	// Marshal and unmarshal to check
+	renameBytes, _ := json.Marshal(renameProvider)
+	var renameOpts protocol.RenameOptions
+	if err := json.Unmarshal(renameBytes, &renameOpts); err != nil {
+		t.Fatalf("failed to unmarshal RenameOptions: %v", err)
 	}
 
 	if !renameOpts.PrepareProvider {
