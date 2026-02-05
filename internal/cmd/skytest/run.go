@@ -362,7 +362,7 @@ func runWatchMode(
 		writef(stderr, "skytest: creating watcher: %v\n", err)
 		return exitError
 	}
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	// Add all test files to the watcher
 	for _, file := range files {
