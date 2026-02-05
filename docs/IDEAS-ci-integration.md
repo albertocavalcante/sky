@@ -296,10 +296,10 @@ ok 5 - test_list_ops # SKIP not implemented
 
 ## Implementation Roadmap
 
-### Phase 1: Quick Wins
+### Phase 1: Quick Wins ✅
 
-- [ ] Combined `-junit --coverage` in single run
-- [ ] `--format=markdown` reporter
+- [x] Combined `-junit --coverage` in single run (verified working)
+- [x] `-markdown` reporter (commit 565e4ce)
 
 ### Phase 2: GitHub Native
 

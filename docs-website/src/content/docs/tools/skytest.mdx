@@ -51,6 +51,7 @@ skytest -prefix="check_" .
 | `-v` | Verbose output |
 | `-json` | Output results as JSON |
 | `-junit` | Output results as JUnit XML |
+| `-markdown` | Output results as GitHub-flavored Markdown |
 | `-prefix` | Test function prefix (default: `test_`) |
 | `-duration` | Show test durations |
 | `-coverage` | Collect coverage data (EXPERIMENTAL) |
@@ -234,6 +235,28 @@ skytest -junit . > results.xml
 </testsuites>
 ```
 
+### Markdown Output
+
+```bash
+skytest -markdown . >> $GITHUB_STEP_SUMMARY
+```
+
+Output (GitHub-flavored Markdown for job summaries):
+
+```markdown
+## 🧪 Test Results
+
+**2 tests** in 1 files completed in **1ms**
+
+| Status | Count |
+|--------|-------|
+| ✅ Passed | 2 |
+| ❌ Failed | 0 |
+| ⏭️ Skipped | 0 |
+```
+
+Failed tests appear in collapsible `<details>` blocks with error messages.
+
 ## CI Integration
 
 ### GitHub Actions
@@ -272,19 +295,17 @@ This displays test results directly in the GitHub PR checks tab with:
 - Individual test case results
 - File annotations on failures
 
-#### With Job Summary
+#### With Job Summary (Recommended)
 
-Write results to the native GitHub Actions job summary:
+Use `-markdown` flag for native GitHub job summaries:
 
 ```yaml
 - name: Run tests with summary
   run: |
-    skytest -r . | tee output.txt
-    echo "## Test Results" >> $GITHUB_STEP_SUMMARY
-    echo '```' >> $GITHUB_STEP_SUMMARY
-    cat output.txt >> $GITHUB_STEP_SUMMARY
-    echo '```' >> $GITHUB_STEP_SUMMARY
+    skytest -markdown -r . >> $GITHUB_STEP_SUMMARY
 ```
+
+This produces a formatted summary with pass/fail counts, emoji indicators, and collapsible error details.
 
 ### GitLab CI
 
