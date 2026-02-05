@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -519,7 +520,7 @@ func runSequential(
 	for _, file := range files {
 		src, err := os.ReadFile(file)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("reading file %s: %w", file, err)
 		}
 
 		// Convert to absolute path for clearer output
@@ -592,16 +593,11 @@ func runParallel(
 
 	// Track if we should stop early (fail-fast or error)
 	var stopFlag int32 // 0 = running, 1 = stop
-	var stopMu sync.Mutex
 	shouldStop := func() bool {
-		stopMu.Lock()
-		defer stopMu.Unlock()
-		return stopFlag == 1
+		return atomic.LoadInt32(&stopFlag) == 1
 	}
 	setStop := func() {
-		stopMu.Lock()
-		defer stopMu.Unlock()
-		stopFlag = 1
+		atomic.StoreInt32(&stopFlag, 1)
 	}
 
 	// Start workers

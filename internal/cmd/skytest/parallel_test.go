@@ -523,18 +523,14 @@ func TestRun_ParallelTimingReasonable(t *testing.T) {
 	}
 }
 
-func TestRun_ParallelConcurrentExecution(t *testing.T) {
-	// Verify that files actually run concurrently by tracking execution overlap
-	// We use atomic counters written to temp files to verify concurrency
+func TestRun_ParallelWithManyFiles(t *testing.T) {
+	// This test verifies that running a larger number of files in parallel
+	// completes successfully and all results are aggregated correctly.
 
 	dir := t.TempDir()
-	counterFile := filepath.Join(dir, "counter.txt")
-	if err := os.WriteFile(counterFile, []byte("0"), 0o644); err != nil {
-		t.Fatalf("failed to create counter file: %v", err)
-	}
 
-	// We can't directly measure concurrency in Starlark, but we can verify
-	// that all results are returned correctly when running many files
+	// We can't easily measure true concurrency from within a Starlark test,
+	// but we can verify that all results are returned correctly when running many files.
 	for i := 1; i <= 8; i++ {
 		file := filepath.Join(dir, "test_concurrent"+string(rune('a'+i-1))+".star")
 		content := `def test_concurrent():
