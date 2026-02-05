@@ -24,7 +24,7 @@ func TestWatcher_Basic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	// Add test file
 	if err := watcher.Add(testFile); err != nil {
@@ -66,7 +66,7 @@ def test_with_helper():
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	// Add test file
 	if err := watcher.Add(testFile); err != nil {
@@ -123,7 +123,7 @@ def test_value():
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	// Add test file
 	if err := watcher.Add(testFile); err != nil {
@@ -160,7 +160,7 @@ func TestWatcher_FileChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	// Add test file
 	if err := watcher.Add(testFile); err != nil {
@@ -210,7 +210,7 @@ func TestWatcher_Remove(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	// Add test file
 	if err := watcher.Add(testFile); err != nil {
@@ -249,7 +249,7 @@ def test_bazel():
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	// Add test file - should not fail even though load targets don't exist
 	if err := watcher.Add(testFile); err != nil {
@@ -294,7 +294,7 @@ def test_value():
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %v", err)
 	}
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	// Add test file
 	if err := watcher.Add(testFile); err != nil {

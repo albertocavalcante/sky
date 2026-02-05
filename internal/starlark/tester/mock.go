@@ -411,16 +411,16 @@ func mockCalls(manager *MockManager) func(*starlark.Thread, *starlark.Builtin, s
 		for i, call := range calls {
 			// Convert to a dict with "args" and "kwargs" keys
 			callDict := starlark.NewDict(2)
-			callDict.SetKey(starlark.String("args"), starlark.Tuple(call.args))
+			_ = callDict.SetKey(starlark.String("args"), starlark.Tuple(call.args))
 
 			// Convert kwargs to dict
 			kwargsDict := starlark.NewDict(len(call.kwargs))
 			for _, kw := range call.kwargs {
 				if len(kw) == 2 {
-					kwargsDict.SetKey(kw[0], kw[1])
+					_ = kwargsDict.SetKey(kw[0], kw[1])
 				}
 			}
-			callDict.SetKey(starlark.String("kwargs"), kwargsDict)
+			_ = callDict.SetKey(starlark.String("kwargs"), kwargsDict)
 
 			result[i] = callDict
 		}

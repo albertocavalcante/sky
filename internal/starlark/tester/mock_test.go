@@ -161,7 +161,7 @@ func TestMockManager_Reset(t *testing.T) {
 
 	// Record a call
 	thread := &starlark.Thread{Name: "test"}
-	wrapper.CallInternal(thread, nil, nil)
+	_, _ = wrapper.CallInternal(thread, nil, nil)
 
 	if !mm.wasCalled(wrapper) {
 		t.Error("Expected wasCalled to be true")
@@ -194,7 +194,7 @@ func TestMockWhen_ThenReturn(t *testing.T) {
 	// Configure via then_return
 	thenReturnFn, _ := when.Attr("then_return")
 	builtin := thenReturnFn.(*starlark.Builtin)
-	builtin.CallInternal(thread, starlark.Tuple{starlark.String("mocked value")}, nil)
+	_, _ = builtin.CallInternal(thread, starlark.Tuple{starlark.String("mocked value")}, nil)
 
 	// Call wrapper should return mocked value
 	result, _ := wrapper.CallInternal(thread, nil, nil)
@@ -224,7 +224,7 @@ func TestMockWhen_CalledWith_ThenReturn(t *testing.T) {
 	// Configure via then_return
 	thenReturnFn, _ := whenWithArgs.(*MockWhen).Attr("then_return")
 	thenReturnBuiltin := thenReturnFn.(*starlark.Builtin)
-	thenReturnBuiltin.CallInternal(thread, starlark.Tuple{starlark.String("specific result")}, nil)
+	_, _ = thenReturnBuiltin.CallInternal(thread, starlark.Tuple{starlark.String("specific result")}, nil)
 
 	// Call with matching args
 	result, _ := wrapper.CallInternal(thread, starlark.Tuple{starlark.String("specific_arg")}, nil)
