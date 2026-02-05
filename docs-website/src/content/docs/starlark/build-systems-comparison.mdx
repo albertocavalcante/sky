@@ -1,0 +1,1898 @@
+---
+title: Bazel vs Buck2 Starlark Comparison
+description: The definitive comprehensive comparison of Starlark implementations in Bazel and Buck2 build systems
+---
+
+import { Aside, Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+# Bazel vs Buck2: The Definitive Starlark Deep Dive
+
+While both Bazel and Buck2 use Starlark as their extension language, the implementations differ significantly in architecture, capabilities, and philosophy. This comprehensive guide provides everything developers need to understand these differences when choosing between or migrating between these build systems.
+
+<Aside type="caution">
+Despite both using "Starlark" and `.bzl` files, Bazel and Buck2 are **not compatible**. Rules written for one system will not work in the other without significant modification. The underlying execution models, provider systems, and APIs are fundamentally different.
+</Aside>
+
+## Executive Summary
+
+| Aspect | Bazel | Buck2 |
+|--------|-------|-------|
+| **Core Language** | Java (with some C++) | Rust |
+| **Starlark Interpreter** | starlark-go | starlark-rust |
+| **Rule Location** | Mix of Java built-ins + Starlark | 100% Starlark (prelude) |
+| **Type System** | Basic annotations | Advanced (record, enum, union) |
+| **Extension Mechanism** | Aspects | BXL (Buck Extension Language) |
+| **Build Graph** | Phased (loading, analysis, execution) | Single incremental graph (DICE) |
+| **File Names** | `BUILD`, `.bzl` | `BUCK`, `.bzl`, `.bxl` |
+| **Remote Execution** | Native support (RE first design was added later) | RE-first design from inception |
+| **Open Source** | 2015 | 2023 |
+| **Primary Users** | Google, community | Meta, community |
+
+---
+
+## Part 1: Starlark Implementation Differences
+
+### starlark-go (Bazel) vs starlark-rust (Buck2)
+
+The most fundamental difference between Bazel and Buck2 lies in their Starlark interpreters. This affects performance, available language features, and extension capabilities.
+
+#### starlark-go Architecture
+
+Bazel uses [starlark-go](https://github.com/google/starlark-go), an interpreter implemented in Go:
+
+```go
+// From starlark-go documentation
+// The evaluator uses a simple recursive tree walk, returning a value
+// or an error for each expression.
+```
+
+**Key characteristics:**
+
+- **Tree-walking interpreter**: Uses recursive evaluation rather than bytecode compilation
+- **Go garbage collection**: Benefits from Go's GC but subject to GC pauses
+- **Integer representation**: Uses `big.Int` for arbitrary precision, with small integers (less than 256) preallocated
+- **Parallelism**: Independent Starlark threads can execute in parallel
+- **Freezing**: All mutable values created during module initialization are frozen upon completion
+
+<Aside type="note">
+The starlark-go team experimented with JIT compilation of syntax trees to bytecode, but Go compiler limitations (no computed goto for switch statements, escape analysis issues) prevented this from outperforming the tree-walking evaluator.
+</Aside>
+
+**Performance limitations from starlark-go:**
+
+```
+// Go issue 5496: Switch statements generate binary tree of ordered
+// comparisons instead of computed goto, affecting bytecode dispatch
+// Go issue 20533: Escape analysis assumes make([]Value, n) always escapes
+```
+
+#### starlark-rust Architecture
+
+Buck2 uses [starlark-rust](https://github.com/facebook/starlark-rust), a Rust implementation with significant extensions:
+
+**Key characteristics:**
+
+- **No garbage collection pauses**: Rust's ownership model eliminates GC overhead
+- **Send/Sync semantics**: Frozen values are `Send/Sync`, non-frozen values are not
+- **Rich type extensions**: `record`, `enum`, type annotations with runtime checking
+- **Heap allocation**: Garbage collected values allocated on a dedicated heap
+- **DAP debugging support**: Debug Adapter Protocol for interactive debugging
+
+```rust
+// From starlark-rust - easy interoperability between Rust types and Starlark
+// Rust-friendly types where frozen values are Send/Sync
+```
+
+### Performance Characteristics
+
+| Aspect | starlark-go | starlark-rust |
+|--------|-------------|---------------|
+| **Evaluation** | Tree-walking | Bytecode + optimizations |
+| **Memory** | Go GC managed | Manual (no GC pauses) |
+| **Integer perf** | Relatively poor (big.Int) | Optimized |
+| **Parallelism** | Thread-safe with freezing | Rust Send/Sync semantics |
+| **Debugging** | Limited | DAP support |
+
+### Language Extensions Comparison
+
+| Feature | starlark-go | starlark-rust |
+|---------|-------------|---------------|
+| Recursion | Flag-controlled (`-recursion`) | Supported |
+| Top-level `for` | Flag-controlled | Supported |
+| Type annotations | Limited checking | Runtime enforcement |
+| `record` type | Not available | Built-in |
+| `enum` type | Not available | Built-in |
+| Union types | Not available | Built-in (`A \| B`) |
+| `struct` type | Via starlarkstruct package | Via record |
+
+---
+
+## Part 2: File Structure and Naming
+
+<Tabs>
+<TabItem label="Bazel">
+```plaintext
+project/
+  WORKSPACE               # Root workspace definition (legacy)
+  WORKSPACE.bazel         # Alternative name
+  MODULE.bazel            # Bzlmod dependency management (modern)
+  MODULE.bazel.lock       # Lock file for dependencies
+  BUILD                   # Target definitions
+  BUILD.bazel             # Alternative name for BUILD
+  .bazelrc                # Build configuration
+  .bazelversion           # Bazel version pinning
+  rules/
+    rules.bzl             # Rule definitions
+    defs.bzl              # Macro definitions
+    providers.bzl         # Provider definitions
+```
+</TabItem>
+<TabItem label="Buck2">
+```plaintext
+project/
+  .buckconfig             # Root configuration
+  .buckconfig.d/          # Modular config directory
+  BUCK                    # Target definitions
+  TARGETS                 # Alternative name for BUCK (Buck1 compat)
+  rules/
+    rules.bzl             # Rule definitions
+    defs.bzl              # Macro definitions
+  queries/
+    analysis.bxl          # BXL scripts for introspection
+    build.bxl             # BXL scripts for custom builds
+  prelude/                # Standard rule library (git submodule)
+    native.bzl            # Native rule exports
+    cxx/                  # C++ rules
+    rust/                 # Rust rules
+    python/               # Python rules
+```
+</TabItem>
+</Tabs>
+
+<Aside type="note">
+Buck2's prelude is typically included as a git submodule pointing to [github.com/facebook/buck2-prelude](https://github.com/facebook/buck2-prelude). It serves as a "standard library" providing rules for C++, Rust, Python, Go, Java, and more.
+</Aside>
+
+---
+
+## Part 3: Type System Deep Dive
+
+Buck2's starlark-rust implementation includes significant type system extensions not available in Bazel's starlark-go.
+
+### Basic Type Annotations
+
+<Tabs>
+<TabItem label="Bazel">
+```starlark
+# Bazel: Type hints supported but loosely enforced
+def compile(src, out):
+    """Compile a source file.
+
+    Args:
+        src: Source file path (string expected)
+        out: Output file path (string expected)
+    """
+    # No runtime type checking
+    pass
+
+def typed_compile(src: str, out: str) -> None:
+    """Type annotations allowed but provide limited checking."""
+    # Annotations are primarily documentation
+    pass
+```
+</TabItem>
+<TabItem label="Buck2">
+```starlark
+# Buck2: Type annotations are enforced at runtime
+def compile(src: str, out: Artifact) -> DefaultInfo:
+    """Compile a source file.
+
+    Type errors are treated as actual errors at runtime.
+    """
+    pass
+
+# Generic types are fully supported
+def process(items: list[str]) -> dict[str, int]:
+    """Process items with full generic type support."""
+    result = {}
+    for item in items:
+        result[item] = len(item)
+    return result
+
+# Callable types
+def apply_transform(
+    data: list[str],
+    transform: typing.Callable[[str], str]
+) -> list[str]:
+    return [transform(d) for d in data]
+```
+</TabItem>
+</Tabs>
+
+### Record Types (Buck2 Only)
+
+Records provide structured data types with compile-time field definitions. This is extensively used in Buck2's prelude.
+
+**Real example from Buck2's prelude** (`/refs/buck2/prelude/artifact_tset.bzl`):
+
+```starlark
+# Buck2: Define structured types with records
+ArtifactInfoTag = enum(
+    # Describes artifacts required for debugging Swift code
+    "swift_debug_info",
+)
+
+ArtifactInfo = record(
+    label = field(Label),
+    artifacts = field(list[Artifact]),
+    tags = field(list[ArtifactInfoTag]),
+)
+
+# Records can have optional fields with defaults
+ArtifactTSet = record(
+    _tset = field([_ArtifactTSet, None], None),
+)
+
+# Usage - creating instances
+info = ArtifactInfo(
+    label = ctx.label,
+    artifacts = [output],
+    tags = [ArtifactInfoTag("swift_debug_info")],
+)
+
+# Type-safe field access
+print(info.label)      # Label
+print(info.artifacts)  # list[Artifact]
+```
+
+**Real example from Buck2's cxx rules** (`/refs/buck2/prelude/cxx/cxx_types.bzl`):
+
+```starlark
+# Complex record with many fields and defaults
+CxxRuleSubTargetParams = record(
+    argsfiles = field(bool, True),
+    compilation_database = field(bool, True),
+    clang_remarks = field(bool, True),
+    clang_traces = field(bool, True),
+    headers = field(bool, True),
+    link_group_map = field(bool, True),
+    link_style_outputs = field(bool, True),
+    xcode_data = field(bool, True),
+    objects = field(bool, True),
+    bitcode_bundle = field(bool, True),
+    header_unit = field(bool, True),
+)
+
+# Record with callable fields
+CxxRuleConstructorParams = record(
+    rule_type = str,
+    headers_layout = CxxHeadersLayout,
+    is_test = field(bool, False),
+    extra_preprocessors = field(list[CPreprocessor], []),
+    # Callable field with complex signature
+    output_style_sub_targets_and_providers_factory = field(
+        typing.Callable,
+        lambda _link_style, _context, _output: ({}, [])
+    ),
+    # Union type field
+    error_handler = field([typing.Callable, None], None),
+)
+```
+
+<Aside type="tip">
+Records are stored with deduplicating field names, making them more memory efficient than dictionaries for large codebases with many similar structures.
+</Aside>
+
+### Enum Types (Buck2 Only)
+
+**Real examples from Buck2's prelude** (`/refs/buck2/prelude/cxx/cxx_toolchain_types.bzl`):
+
+```starlark
+# Buck2: Define enumerations for type-safe constants
+LinkerType = enum("gnu", "darwin", "windows", "wasm")
+
+ShlibInterfacesMode = enum(
+    "disabled",
+    "defined_only",
+    "stub_from_library",
+    "stub_from_object_files",
+    "stub_from_linker_invocation",
+)
+
+DepTrackingMode = enum(
+    "makefile",      # gcc -MD -MF depfile
+    "show_includes", # cl.exe /showIncludes
+    "show_headers",  # clang/gcc -H
+    "none",          # No dep tracking (e.g., ml64)
+)
+
+CxxObjectFormat = enum(
+    "native",
+    "bitcode",
+    "embedded-bitcode",
+    "swift",
+)
+
+PicBehavior = enum(
+    "always_enabled",  # x86_64, arm64
+    "supported",       # -fPIC changes output
+    "not_supported",   # Windows
+)
+
+# Usage in functions
+def is_bitcode_format(format: CxxObjectFormat) -> bool:
+    return format in [
+        CxxObjectFormat("bitcode"),
+        CxxObjectFormat("embedded-bitcode")
+    ]
+
+# Enum properties
+print(LinkerType.values())           # ["gnu", "darwin", "windows", "wasm"]
+print(LinkerType("darwin").index)    # 1
+print(len(LinkerType))               # 4
+```
+
+### Union Types (Buck2 Only)
+
+```starlark
+# Buck2: Union types with | operator
+def process(value: int | str | None) -> str:
+    if value == None:
+        return "none"
+    if type(value) == "int":
+        return str(value)
+    return value
+
+# In record field definitions
+CxxToolchainInfo = provider(
+    fields = {
+        "lipo": provider_field([RunInfo, None], default = None),
+        "minimum_os_version": provider_field([str, None], default = None),
+        "objc_compiler_info": provider_field(
+            [ObjcCompilerInfo, None],
+            default = None
+        ),
+    },
+)
+
+# Complex union types
+CGoBuildContext = record(
+    _cxx_toolchain = field(Dependency | None, None),
+)
+```
+
+### Type System Feature Matrix
+
+| Feature | Bazel (starlark-go) | Buck2 (starlark-rust) |
+|---------|---------------------|----------------------|
+| Basic annotations | Yes | Yes |
+| Generic types (`list[T]`) | Limited | Full |
+| Union types (`A \| B`) | No | Yes |
+| `record` type | No | Yes |
+| `enum` type | No | Yes |
+| `field()` with defaults | No | Yes |
+| Static type checking | Limited | `buck2 starlark typecheck` |
+| Runtime type enforcement | Partial | Full |
+| `typing.Callable` | No | Yes |
+| `provider_field` typed | No | Yes |
+
+---
+
+## Part 4: The Prelude System
+
+### Buck2's Prelude Architecture
+
+Buck2's prelude is a comprehensive standard library of rules, all written in Starlark. It's available at [github.com/facebook/buck2-prelude](https://github.com/facebook/buck2-prelude).
+
+**Structure of the prelude:**
+
+```plaintext
+prelude/
+  prelude.bzl           # Entry point, exports native
+  native.bzl            # Native rule definitions (21KB)
+  rules.bzl             # Rule registration
+  rules_impl.bzl        # Rule implementations (26KB)
+  genrule.bzl           # Generic rule implementation (20KB)
+  cxx/
+    cxx.bzl             # C++ rules (41KB)
+    cxx_library.bzl     # Library implementation (102KB)
+    cxx_toolchain.bzl   # Toolchain definition (23KB)
+    cxx_types.bzl       # Type definitions (14KB)
+  rust/
+    rust_library.bzl    # Rust library rules
+    rust-analyzer/
+      resolve_deps.bxl  # IDE integration
+      check.bxl         # Type checking
+  python/
+    python_library.bzl  # Python rules
+  go/
+    package_builder.bzl # Go package rules
+    cgo_builder.bzl     # CGo integration
+  apple/
+    apple_library.bzl   # Apple platform rules
+    swift/              # Swift compilation
+  toolchains/
+    cxx.bzl             # C++ toolchain
+    rust.bzl            # Rust toolchain
+    python.bzl          # Python toolchain
+```
+
+**Real prelude entry point** (`/refs/buck2/prelude/prelude.bzl`):
+
+```starlark
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+load("@prelude//:native.bzl", _native = "native")
+load(
+    "@prelude//utils:buckconfig.bzl",
+    _read_config = "read_config_with_logging",
+    _read_root_config = "read_root_config_with_logging",
+    log_buckconfigs = "LOG_BUCKCONFIGS",
+)
+
+__overridden_builtins__ = {
+    "read_config": _read_config,
+    "read_root_config": _read_root_config,
+} if log_buckconfigs else {}
+
+load_symbols(__overridden_builtins__)
+
+# Public symbols become globals everywhere except bzl files in prelude
+native = _native
+```
+
+### Bazel's rules_* Ecosystem
+
+Bazel uses a distributed ecosystem of rule repositories:
+
+```starlark
+# MODULE.bazel - Modern dependency management
+bazel_dep(name = "rules_cc", version = "0.0.9")
+bazel_dep(name = "rules_java", version = "7.3.2")
+bazel_dep(name = "rules_python", version = "0.31.0")
+bazel_dep(name = "rules_go", version = "0.46.0")
+bazel_dep(name = "rules_rust", version = "0.40.0")
+
+# Or WORKSPACE (legacy)
+http_archive(
+    name = "rules_cc",
+    urls = ["https://github.com/bazelbuild/rules_cc/..."],
+    sha256 = "...",
+)
+```
+
+**Key Bazel rule repositories:**
+
+| Repository | Purpose | Maintained By |
+|------------|---------|---------------|
+| rules_cc | C/C++ compilation | Bazel team |
+| rules_java | Java compilation | Bazel team |
+| rules_python | Python packaging | Community |
+| rules_go | Go compilation | Community |
+| rules_rust | Rust compilation | Community |
+| rules_proto | Protocol buffers | Bazel team |
+| rules_pkg | Package creation | Bazel team |
+
+### Comparison: Prelude vs rules_*
+
+| Aspect | Buck2 Prelude | Bazel rules_* |
+|--------|---------------|---------------|
+| **Location** | Single git submodule | Multiple external repos |
+| **Updates** | Atomic prelude updates | Per-repo version management |
+| **Consistency** | Guaranteed compatible | May have version conflicts |
+| **Customization** | Fork and modify | Fork specific rules repo |
+| **Toolchains** | Explicit target deps | Toolchain resolution registry |
+
+---
+
+## Part 5: Provider Definition Patterns
+
+Providers are the primary mechanism for passing information between rules in both systems.
+
+### Bazel Provider Patterns
+
+**Real example from Bazel** (`/refs/bazel/src/main/starlark/builtins_bzl/common/xcode/providers.bzl`):
+
+```starlark
+# Bazel: Provider with init function for complex initialization
+def _xcode_version_info_init(
+        *,
+        ios_sdk_version,
+        ios_minimum_os_version,
+        visionos_sdk_version,
+        visionos_minimum_os_version,
+        watchos_sdk_version,
+        watchos_minimum_os_version,
+        tvos_sdk_version,
+        tvos_minimum_os_version,
+        macos_sdk_version,
+        macos_minimum_os_version,
+        xcode_version,
+        availability,
+        xcode_version_flag,
+        include_xcode_execution_info):
+
+    execution_requirements = {
+        "requires-darwin": "",
+        "supports-xcode-requirements-set": "",
+    }
+    if availability == "LOCAL":
+        execution_requirements["no-remote"] = ""
+    elif availability == "REMOTE":
+        execution_requirements["no-local"] = ""
+
+    # Methods as closures over init parameters
+    def _minimum_os_for_platform_type(platform_type):
+        if platform_type in (platform_type_struct.ios, platform_type_struct.catalyst):
+            return dotted_ios_minimum_os
+        elif platform_type == platform_type_struct.tvos:
+            return dotted_tvos_minimum_os
+        # ... more cases
+        fail("Unhandled platform type: {}".format(platform_type))
+
+    return {
+        "xcode_version": lambda: _xcode_version(xcode_version),
+        "minimum_os_for_platform_type": _minimum_os_for_platform_type,
+        "sdk_version_for_platform": _sdk_version_for_platform,
+        "availability": lambda: availability.lower(),
+        "execution_info": lambda: execution_requirements,
+    }
+
+XcodeVersionInfo, _new_xcode_version_info = provider(
+    doc = """The set of Apple versions computed from command line options.""",
+    fields = {
+        "xcode_version": "Zero-argument function returning dotted_version",
+        "minimum_os_for_platform_type": "Function taking platform_type element",
+        "sdk_version_for_platform": "Function taking platform element",
+        "availability": "Zero-argument function returning availability string",
+        "execution_info": "Zero-argument function returning execution requirements",
+    },
+    init = _xcode_version_info_init,
+)
+```
+
+**Standard Bazel provider pattern:**
+
+```starlark
+# Bazel: Simple provider definition
+MyInfo = provider(
+    doc = "Contains my rule information",
+    fields = {
+        "output": "The main output file",
+        "transitive_deps": "Depset of transitive dependencies",
+        "metadata": "Dict of string metadata",
+    },
+)
+
+def _my_rule_impl(ctx):
+    output = ctx.actions.declare_file(ctx.label.name + ".out")
+
+    ctx.actions.run(
+        outputs = [output],
+        inputs = ctx.files.srcs,
+        executable = ctx.executable._tool,
+        arguments = [output.path] + [f.path for f in ctx.files.srcs],
+    )
+
+    # Collect transitive deps
+    transitive = [dep[MyInfo].transitive_deps for dep in ctx.attr.deps if MyInfo in dep]
+
+    return [
+        DefaultInfo(files = depset([output])),
+        MyInfo(
+            output = output,
+            transitive_deps = depset([output], transitive = transitive),
+            metadata = {"rule_type": "my_rule"},
+        ),
+    ]
+
+my_rule = rule(
+    implementation = _my_rule_impl,
+    attrs = {
+        "srcs": attr.label_list(allow_files = True),
+        "deps": attr.label_list(providers = [MyInfo]),
+        "_tool": attr.label(
+            executable = True,
+            cfg = "exec",
+            default = "//tools:processor",
+        ),
+    },
+)
+```
+
+### Buck2 Provider Patterns
+
+**Real example from Buck2** (`/refs/buck2/prelude/cxx/cxx_toolchain_types.bzl`):
+
+```starlark
+# Buck2: Provider with typed fields using provider_field
+LinkerInfo = provider(
+    fields = {
+        "archiver": provider_field(typing.Any, default = None),
+        "archiver_flags": provider_field(typing.Any, default = None),
+        "archiver_reads_inputs": provider_field(bool, default = True),
+        "binary_extension": provider_field(typing.Any, default = None),
+        "generate_linker_maps": provider_field(typing.Any, default = None),
+        "link_binaries_locally": provider_field(typing.Any, default = None),
+        "link_libraries_locally": provider_field(typing.Any, default = None),
+        "link_style": provider_field(typing.Any, default = None),
+        "link_weight": provider_field(int, default = 1),
+        "linker": provider_field(typing.Any, default = None),
+        "linker_flags": provider_field(typing.Any, default = None),
+        "lto_mode": provider_field(typing.Any, default = None),
+        "object_file_extension": provider_field(typing.Any, default = None),
+        "shlib_interfaces": provider_field(ShlibInterfacesMode),
+        "shared_library_name_format": provider_field(typing.Any, default = None),
+        "type": LinkerType,  # Enum type!
+        "is_pdb_generated": provider_field(typing.Any, default = None),
+        "sanitizer_runtime_enabled": provider_field(bool, default = False),
+        "sanitizer_runtime_files": provider_field(list[Artifact], default = []),
+    },
+)
+
+# Multiple related providers for compiler info
+CCompilerInfo = provider(fields = [
+    "compiler",
+    "compiler_type",
+    "compiler_flags",
+    "argsfile",
+    "preprocessor",
+    "preprocessor_type",
+    "preprocessor_flags",
+    "allow_cache_upload",
+    "supports_two_phase_compilation",
+])
+
+# Buck2: Library info provider with Label type
+CxxLibraryInfo = provider(
+    fields = dict(
+        target = provider_field(Label),
+        labels = provider_field(list[str]),
+    ),
+)
+```
+
+**Buck2 rule returning providers** (`/refs/buck2/prelude/genrule.bzl`):
+
+```starlark
+def genrule_impl(ctx: AnalysisContext) -> list[Provider]:
+    # Declare outputs
+    out_artifact = ctx.actions.declare_output(
+        GENRULE_OUT_DIR,
+        dir = True,
+        has_content_based_path = content_based
+    )
+
+    # Build command with cmd_args
+    cmd = cmd_args(ctx.attrs.cmd, ignore_artifacts = _ignore_artifacts(ctx))
+
+    # Environment setup
+    env_vars = {
+        "GEN_DIR": "GEN_DIR_DEPRECATED",
+        "OUT": out_artifact.as_output(),
+        "SRCDIR": cmd_args(srcs_artifact, format = "./{}"),
+        "SRCS": srcs,
+    }
+
+    # Run action with category for tracking
+    ctx.actions.run(
+        cmd_args(script_args, hidden = [cmd, srcs_artifact, out_artifact.as_output()]),
+        env = env_vars,
+        local_only = local_only,
+        prefer_local = prefer_local,
+        weight = value_or(ctx.attrs.weight, 1),
+        allow_cache_upload = cacheable,
+        category = category,
+        identifier = identifier,
+        error_handler = genrule_error_handler,
+    )
+
+    # Build providers
+    providers = [DefaultInfo(
+        default_outputs = default_outputs,
+        sub_targets = sub_targets,
+        other_outputs = other_outputs,
+    )]
+
+    if getattr(ctx.attrs, "executable", False):
+        providers.append(RunInfo(args = cmd_args(default_outputs)))
+
+    return providers
+```
+
+### Key Provider API Differences
+
+| Concept | Bazel | Buck2 |
+|---------|-------|-------|
+| Context type | `ctx` | `AnalysisContext` |
+| Declare output | `ctx.actions.declare_file()` | `ctx.actions.declare_output()` |
+| Attribute access | `ctx.attr.srcs` | `ctx.attrs.srcs` |
+| File list | `ctx.files.srcs` | `ctx.attrs.srcs` (already artifacts) |
+| Command builder | `ctx.actions.args()` | `cmd_args()` |
+| Run action | `ctx.actions.run()` | `ctx.actions.run()` with category |
+| Exec dependency | `cfg = "exec"` | `attrs.exec_dep()` |
+| Output marker | N/A | `.as_output()` |
+| Typed provider fields | No | `provider_field(type, default)` |
+
+---
+
+## Part 6: Transitive Dependencies
+
+### Bazel Depsets
+
+```starlark
+# Bazel: Using depsets for efficient transitive data
+def _impl(ctx):
+    # Direct files from this target
+    direct_files = ctx.files.srcs
+
+    # Collect transitive depsets from deps
+    transitive_files = [
+        dep[DefaultInfo].files
+        for dep in ctx.attr.deps
+    ]
+
+    # Create depset with ordering
+    all_files = depset(
+        direct = direct_files,
+        transitive = transitive_files,
+        order = "postorder",  # topological, postorder, preorder
+    )
+
+    # AVOID: Converting to list is O(n), use sparingly
+    file_list = all_files.to_list()
+
+    # Use depset in command args for lazy expansion
+    args = ctx.actions.args()
+    args.add_all(all_files)
+
+    return [DefaultInfo(files = all_files)]
+```
+
+### Buck2 Transitive Sets
+
+**Real example from Buck2** (`/refs/buck2/prelude/artifact_tset.bzl`):
+
+```starlark
+# Buck2: Transitive sets with projections
+_ArtifactTSet = transitive_set(
+    args_projections = {
+        # Transform values for command line
+        "artifacts": _get_artifacts,
+    },
+)
+
+def _get_artifacts(entries: list[ArtifactInfo]) -> list[Artifact]:
+    return flatten([entry.artifacts for entry in entries])
+
+def make_artifact_tset(
+        actions: AnalysisActions,
+        label: Label | None = None,
+        artifacts: list[Artifact] = [],
+        infos: list[ArtifactInfo] = [],
+        children: list[ArtifactTSet] = [],
+        tags: list[ArtifactInfoTag] = []) -> ArtifactTSet:
+
+    # Filter None children efficiently
+    children_tsets = [c._tset for c in children if c._tset != None]
+
+    # Optimization: return singleton for empty case
+    if not artifacts and not infos and not children_tsets:
+        return EmptyArtifactTSet
+
+    # Optimization: single child passthrough
+    if not artifacts and not infos and len(children_tsets) == 1:
+        return children[0]
+
+    # Build list of all non-child values
+    values = []
+    if artifacts:
+        values.append(ArtifactInfo(label = label, artifacts = artifacts, tags = tags))
+    values.extend(infos)
+
+    kwargs = {}
+    if values:
+        kwargs["value"] = values
+    if children_tsets:
+        kwargs["children"] = children_tsets
+
+    return ArtifactTSet(
+        _tset = actions.tset(_ArtifactTSet, **kwargs),
+    )
+
+def project_artifacts(
+        actions: AnalysisActions,
+        tsets: ArtifactTSet | list[ArtifactTSet] = []) -> list[TransitiveSetArgsProjection]:
+    """Project artifacts for use in command lines."""
+    if is_list(tsets):
+        tset = make_artifact_tset(actions = actions, children = tsets)
+    else:
+        tset = tsets
+
+    if tset._tset == None:
+        return []
+
+    # Efficient projection into cmd_args
+    return [tset._tset.project_as_args("artifacts")]
+```
+
+**Using transitive sets in commands:**
+
+```starlark
+# Buck2: Efficient use in command construction
+def _compile_impl(ctx: AnalysisContext) -> list[Provider]:
+    # Create transitive set with projections
+    include_tset = ctx.actions.tset(
+        IncludeTSet,
+        value = ctx.attrs.includes,
+        children = [dep[CxxInfo].includes for dep in ctx.attrs.deps],
+    )
+
+    # Use projection directly in command (very efficient)
+    ctx.actions.run(
+        cmd_args(
+            ctx.attrs._compiler[RunInfo],
+            "-c", ctx.attrs.src,
+            # Project as flags without materializing full list
+            include_tset.project_as_args("as_flags"),
+            "-o", output.as_output(),
+        ),
+        category = "cxx_compile",
+    )
+```
+
+### Comparison
+
+| Feature | Bazel depset | Buck2 transitive_set |
+|---------|--------------|---------------------|
+| Deduplication | Yes | Yes |
+| Ordering control | Yes (3 modes) | Via projections |
+| Projections | No | Yes (args_projections) |
+| Reductions | No | Yes (aggregations) |
+| Graph integration | Memory optimization | Wired into dep graph |
+| Lazy expansion | Via args.add_all | Via project_as_args |
+
+---
+
+## Part 7: Aspects (Bazel) vs BXL (Buck2)
+
+These are the primary extension mechanisms for each system, serving different but overlapping purposes.
+
+### Bazel Aspects
+
+Aspects augment the build graph with additional information and actions, propagating along dependency edges.
+
+**Real example from Bazel** (`/refs/bazel/tools/compliance/gather_packages.bzl`):
+
+```starlark
+# Bazel: Aspect for collecting license information across dep graph
+TransitivePackageInfo = provider(
+    """Transitive list of all SBOM relevant dependencies.""",
+    fields = {
+        "top_level_target": "Label: The top level target label",
+        "license_info": "depset(LicenseInfo)",
+        "package_info": "depset(PackageInfo)",
+        "packages": "depset(label)",
+        "target_under_license": "Label: Associated with licenses",
+        "traces": "list(string) - diagnostic traces",
+    },
+)
+
+# Singleton for efficiency
+NULL_INFO = TransitivePackageInfo(
+    license_info = depset(),
+    package_info = depset(),
+    packages = depset()
+)
+
+def should_traverse(ctx, attr):
+    """Check if the dependent attribute should be traversed."""
+    k = ctx.rule.kind
+    for filters in [aspect_filters, user_aspect_filters]:
+        always_ignored = filters.get("*", [])
+        if k in filters:
+            attr_matches = filters[k]
+            if (attr in attr_matches or
+                "*" in attr_matches or
+                ("_*" in attr_matches and attr.startswith("_")) or
+                attr in always_ignored):
+                return False
+    return True
+
+def _gather_package_impl(target, ctx):
+    # Skip exec configuration targets
+    if "-exec" in ctx.bin_dir.path:
+        return [NULL_INFO]
+
+    # Gather direct license attachments
+    licenses = []
+    if hasattr(ctx.rule.attr, "applicable_licenses"):
+        for dep in ctx.rule.attr.applicable_licenses:
+            if LicenseInfo in dep:
+                licenses.append(dep[LicenseInfo])
+
+    # Gather transitive info from dependencies
+    trans_license_info = []
+    trans_packages = []
+    traces = []
+
+    for name in dir(ctx.rule.attr):
+        if not should_traverse(ctx, name):
+            continue
+        a = getattr(ctx.rule.attr, name)
+        if type(a) != type([]):
+            a = [a]
+        for dep in a:
+            if type(dep) != "Target":
+                continue
+            if TransitivePackageInfo in dep:
+                info = dep[TransitivePackageInfo]
+                if info.license_info:
+                    trans_license_info.append(info.license_info)
+
+    return [TransitivePackageInfo(
+        target_under_license = target.label,
+        license_info = depset(direct = licenses, transitive = trans_license_info),
+        packages = depset(direct = packages, transitive = trans_packages),
+        traces = traces[:10],  # Limit trace output
+    )]
+
+gather_package_info = aspect(
+    doc = """Collects License providers into TransitivePackageInfo.""",
+    implementation = _gather_package_impl,
+    attr_aspects = ["*"],  # Propagate along all deps
+    attrs = {
+        "_trace": attr.label(default = "@rules_license//rules:trace_target"),
+    },
+    provides = [TransitivePackageInfo],
+    apply_to_generating_rules = True,
+)
+
+# Using the aspect in a rule
+packages_used = rule(
+    doc = """Gather transitive package info and write as JSON.""",
+    implementation = _packages_used_impl,
+    attrs = {
+        "target": attr.label(
+            aspects = [gather_package_info],
+            allow_files = True,
+        ),
+        "out": attr.output(mandatory = True),
+    },
+)
+```
+
+### Buck2 BXL (Buck Extension Language)
+
+BXL scripts are standalone Starlark programs that can query, analyze, and build targets interactively.
+
+**Real example: Analysis BXL** (`/refs/buck2/tests/core/bxl/test_analysis_data/analysis.bxl`):
+
+```starlark
+# Buck2: BXL for analyzing target providers
+load(":defs.bzl", "FooInfo")
+
+def _providers_test_impl(ctx):
+    # Get configured target
+    node = ctx.configured_targets("root//:provides_foo")
+
+    # Analyze and access providers
+    providers = ctx.analysis(node).providers()
+    ctx.output.print(providers[FooInfo])
+
+    # Can also analyze by label
+    providers = ctx.analysis(node.label).providers()
+    ctx.output.print(providers[FooInfo])
+
+providers_test = bxl_main(
+    impl = _providers_test_impl,
+    cli_args = {},
+)
+
+def _dependency_test_impl(ctx):
+    node = ctx.configured_targets("root//:stub")
+
+    # Convert analysis result to dependency
+    dep = ctx.analysis(node).as_dependency()
+    ctx.output.print(type(dep))
+    ctx.output.print(dep.label)
+
+dependency_test = bxl_main(
+    impl = _dependency_test_impl,
+    cli_args = {},
+)
+```
+
+**Real example: Build BXL** (`/refs/buck2/tests/core/bxl/test_build_data/build.bxl`):
+
+```starlark
+# Buck2: BXL for building targets and inspecting results
+def _impl(ctx):
+    outputs = {}
+    # Build target and collect artifacts
+    for target, value in ctx.build(ctx.cli_args.target).items():
+        outputs.update({
+            target.raw_target(): ctx.output.ensure_multiple(value.artifacts())
+        })
+
+    ctx.output.print_json(outputs)
+
+build_test = bxl_main(
+    impl = _impl,
+    cli_args = {
+        "target": cli_args.target_label(),
+    },
+)
+
+def _impl_build_stats(ctx):
+    stats = {}
+    for target, value in ctx.build(ctx.cli_args.targets).items():
+        artifacts = value.artifacts()
+        failures = value.failures()
+
+        stats[target.raw_target()] = {
+            "artifacts": len(artifacts),
+            "failures": len(failures),
+        }
+
+    ctx.output.print_json(stats)
+
+build_stats = bxl_main(
+    impl = _impl_build_stats,
+    cli_args = {
+        "targets": cli_args.target_expr(),
+    },
+)
+
+def _cquery_build(ctx):
+    # Query for targets first
+    universe = ctx.target_universe("...").target_set()
+    targets = ctx.cquery().kind("trivial_build", universe)
+
+    # Build queried targets
+    outputs = []
+    for value in ctx.build(targets).values():
+        outputs.extend(ctx.output.ensure_multiple(value.artifacts()))
+
+    ctx.output.print(sep = "\n", *outputs)
+
+cquery_build_test = bxl_main(
+    impl = _cquery_build,
+    cli_args = {},
+)
+```
+
+**Real example: CLI Args BXL** (`/refs/buck2/tests/core/bxl/test_cli_data/cli_args.bxl`):
+
+```starlark
+# Buck2: BXL with comprehensive CLI argument support
+def _impl(ctx):
+    ctx.output.print("bool_arg: " + repr(ctx.cli_args.bool_arg))
+    ctx.output.print("string_arg: " + repr(ctx.cli_args.string_arg))
+    ctx.output.print("int_arg: " + repr(ctx.cli_args.int_arg))
+    ctx.output.print("float_arg: " + repr(ctx.cli_args.float_arg))
+    ctx.output.print("optional: " + repr(ctx.cli_args.optional))
+    ctx.output.print("enum_type: " + repr(ctx.cli_args.enum_type))
+    ctx.output.print("target: " + repr(ctx.cli_args.target))
+    ctx.output.print("list: " + repr(ctx.cli_args.list_type))
+
+cli_test = bxl_main(
+    impl = _impl,
+    cli_args = {
+        "bool_arg": cli_args.bool(),
+        "bool_arg_with_default": cli_args.bool(True),
+        "string_arg": cli_args.string("default"),
+        "int_arg": cli_args.int(),
+        "float_arg": cli_args.float(),
+        "optional": cli_args.option(cli_args.string()),
+        "enum_type": cli_args.enum(["a", "b"]),
+        "target": cli_args.target_label(),
+        "configured_target": cli_args.configured_target_label(),
+        "sub_target": cli_args.sub_target(),
+        "list_type": cli_args.list(cli_args.int()),
+    },
+)
+
+# Short flags support
+cli_test_short = bxl_main(
+    impl = _impl_cli_test_short,
+    cli_args = {
+        "bool_arg": cli_args.bool(short = "b"),
+        "string_arg": cli_args.string(short = "s"),
+        "int_arg": cli_args.int(short = "i"),
+        "target": cli_args.target_label(short = "t"),
+    },
+)
+
+# JSON arguments
+def _impl_cli_json_arg(ctx):
+    my_json = ctx.cli_args.my_json
+    _assert_eq(type(my_json["int"]), "int")
+    _assert_eq(type(my_json["string"]), "string")
+    _assert_eq(my_json["list"], [1, 2, 3])
+
+cli_json_arg = bxl_main(
+    impl = _impl_cli_json_arg,
+    cli_args = {
+        "my-json": cli_args.json(short = "j"),
+    },
+)
+```
+
+**Real example: rust-analyzer Integration** (`/refs/buck2/prelude/rust/rust-analyzer/resolve_deps.bxl`):
+
+```starlark
+# Buck2: BXL for IDE integration (rust-analyzer)
+load("@prelude//rust:link_info.bzl", "RustLinkInfo")
+load("@prelude//rust/rust-analyzer:provider.bzl", "RustAnalyzerInfo")
+
+TargetInfo = dict[str, typing.Any]
+
+MacroOutput = record(
+    actual = TargetLabel,
+    dylib = Artifact,
+)
+
+ExpandedAndResolved = record(
+    expanded_targets = list[TargetLabel],
+    queried_proc_macros = dict[TargetLabel, MacroOutput],
+    resolved_deps = dict[TargetLabel, TargetInfo],
+)
+
+def materialize(ctx: bxl.Context, target: bxl.ConfiguredTargetNode) -> Artifact:
+    analysis = ctx.analysis(target)
+    sources = analysis.providers()[DefaultInfo].sub_targets["sources"][DefaultInfo].default_outputs[0]
+    return sources
+
+def _process_target_config(
+        ctx: bxl.Context,
+        target: bxl.ConfiguredTargetNode,
+        analysis: bxl.AnalysisResult,
+        in_workspace: bool) -> TargetInfo:
+
+    target = target.unwrap_forward()
+    providers = analysis.providers()
+    ra_info = providers[RustAnalyzerInfo]
+
+    resolved_attrs = target.resolved_attrs_eager(ctx)
+
+    # Convert sources to absolute paths
+    srcs = list(resolved_attrs.srcs)
+
+    # Remove configured platform from deps
+    deps = [dep.label.raw_target() for dep in ra_info.rust_deps]
+
+    # Build target info for rust-analyzer
+    attrs = target.attrs_eager()
+    return {
+        "crate": ra_info.crate.simple,
+        "crate_root": ra_info.crate_root,
+        "deps": deps,
+        "edition": ra_info.edition,
+        "env": {k: cmd_args(v, delimiter = "") for k, v in ra_info.env.items()},
+        "features": ra_info.features,
+        "in_workspace": in_workspace,
+        "kind": target.rule_type,
+        "label": target.label.raw_target(),
+        "name": resolved_attrs.name,
+        "proc_macro": _get_nullable_attr(attrs, "proc_macro"),
+        "project_relative_buildfile": ctx.fs.project_rel_path(target.buildfile_path),
+        "rustc_flags": ra_info.rustc_flags,
+        "source_folder": materialize(ctx, target),
+        "srcs": srcs,
+    }
+```
+
+### Comparison: Aspects vs BXL
+
+| Feature | Bazel Aspects | Buck2 BXL |
+|---------|--------------|-----------|
+| **Primary purpose** | Augment build graph | Query and script builds |
+| **Execution** | During analysis phase | Standalone execution |
+| **Graph access** | Shadow graph parallel to targets | Full graph introspection |
+| **Can build targets** | Part of normal build | Yes, explicitly via `ctx.build()` |
+| **CLI arguments** | Via rule attributes | Native CLI parsing |
+| **IDE integration** | Yes (aspects generate data) | Yes (primary use case) |
+| **Artifact access** | Through providers | Direct materialization |
+| **Query capabilities** | Limited (via rule attrs) | Full uquery/cquery/aquery |
+| **Output** | Providers to consumers | Print, JSON, artifacts |
+| **Reusability** | Attach to rules | Standalone scripts |
+
+<Aside type="tip">
+BXL is often described as "Buck2's killer feature" because it enables complex build system integrations that would require external tooling in Bazel. The rust-analyzer and compilation database integrations are prime examples.
+</Aside>
+
+---
+
+## Part 8: Execution Model Deep Dive
+
+### Bazel's Skyframe
+
+Skyframe is Bazel's incremental evaluation framework.
+
+```plaintext
+Bazel Build Phases:
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│   Loading   │ -> │  Analysis   │ -> │  Execution  │
+└─────────────┘    └─────────────┘    └─────────────┘
+  Parse BUILD       Create actions     Run actions
+  Evaluate macros   Resolve configs    Write outputs
+  Build target      Check providers    Cache results
+  graph
+```
+
+**Key Skyframe characteristics:**
+
+- **SkyValues (nodes)**: Immutable objects containing build data
+- **SkyFunctions**: Build nodes based on keys and dependent nodes
+- **Incremental invalidation**: Precisely invalidates changed nodes
+- **Parallel evaluation**: Functions without dependencies run in parallel
+- **Phase boundaries**: Loading must complete before analysis, etc.
+
+### Buck2's DICE (Distributed Incremental Computation Engine)
+
+DICE is Buck2's single-graph incremental computation system.
+
+```plaintext
+Buck2 Single Graph:
+┌─────────────────────────────────────────────────────────┐
+│                    DICE Graph                            │
+│  ┌──────┐   ┌──────┐   ┌──────┐   ┌──────┐   ┌──────┐  │
+│  │Parse │ → │Config│ → │Analyze│ → │Action│ → │Output│  │
+│  └──────┘   └──────┘   └──────┘   └──────┘   └──────┘  │
+│       All nodes in single dependency graph               │
+│       No phase boundaries - continuous parallelism       │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Key DICE characteristics:**
+
+- **No phases**: Single incremental dependency graph
+- **Continuous parallelism**: Targets can transition through states in parallel
+- **Precise invalidation**: Changes invalidate only affected nodes
+- **RE-first design**: Remote execution integrated from the start
+
+### Comparison
+
+| Aspect | Bazel Skyframe | Buck2 DICE |
+|--------|----------------|------------|
+| **Graph structure** | Per-phase graphs | Single unified graph |
+| **Parallelism** | Within phases | Across all operations |
+| **Invalidation** | Per-phase + cross-phase | Single invalidation pass |
+| **Memory model** | JVM garbage collection | Rust ownership (no GC) |
+| **Configuration** | Transitions between phases | Modifiers (experimental) |
+| **Dynamic deps** | Limited (aspects) | `dynamic_output` actions |
+
+---
+
+## Part 9: Dynamic Dependencies
+
+### Bazel Approach
+
+Bazel restricts dynamic dependencies to maintain queryability:
+
+```starlark
+# Bazel: Generate BUILD files externally, then run Bazel
+# Or use aspects to gather info first
+
+genrule(
+    name = "generated_build",
+    srcs = [":gather_info"],  # Aspect output
+    outs = ["generated_BUILD"],
+    cmd = "python generate_build.py $< > $@",
+)
+```
+
+### Buck2 Dynamic Output
+
+**Real example from Buck2** (`/refs/buck2/prelude/http_archive/unarchive.bzl`):
+
+```starlark
+# Buck2: Dynamic output for processing archive contents
+def unarchive(
+        ctx: AnalysisContext,
+        archive: Artifact,
+        output_name: str,
+        ext_type,
+        excludes,
+        strip_prefix,
+        exec_deps: HttpArchiveExecDeps,
+        prefer_local: bool,
+        sub_targets: list[str] | dict[str, list[str]]):
+
+    exclude_flags = []
+    exclude_hidden = []
+
+    if excludes:
+        # First action: list archive contents
+        exclusions = ctx.actions.declare_output(output_name + "_exclusions")
+        contents = ctx.actions.declare_output(output_name + "_contents")
+
+        tar_script, _ = ctx.actions.write(
+            "{}_listing.{}".format(output_name, ext),
+            [cmd_args(archive, format = "tar --list -f {} > " + first_param)],
+            is_executable = True,
+            allow_args = True,
+        )
+
+        ctx.actions.run(
+            cmd_args(interpreter + [tar_script, contents.as_output()], hidden = [archive]),
+            category = "process_exclusions",
+        )
+
+        # Dynamic output: create exclusion list after reading contents
+        def create_exclusion_list(ctx: AnalysisContext, artifacts, outputs):
+            # Read the contents file (artifact is now available)
+            files = artifacts[contents].read_string().splitlines()
+            exclusion_list = []
+            exclude_regexen = [regex(e) for e in excludes]
+
+            for f in files:
+                for exclusion in exclude_regexen:
+                    if exclusion.match(f):
+                        exclusion_list.append(f)
+                        break
+
+            # Write the exclusion list
+            ctx.actions.write(outputs[exclusions], "\n".join(exclusion_list))
+
+        ctx.actions.dynamic_output(
+            dynamic = [contents],      # Read these artifacts
+            inputs = [],               # Additional inputs
+            outputs = [exclusions.as_output()],  # Bind these outputs
+            f = create_exclusion_list, # Function to run
+        )
+
+        exclude_flags.append(cmd_args(exclusions, format = "--exclude-from={}"))
+        exclude_hidden.append(exclusions)
+
+    # Continue with unarchive action using exclusion list
+    output = ctx.actions.declare_output(output_name, dir = True)
+    # ... rest of implementation
+```
+
+### Anonymous Targets (Buck2 Only)
+
+Anonymous targets enable analysis-time graph modifications:
+
+```starlark
+# Buck2: Anonymous targets for shared compilation
+def _swift_library_impl(ctx: AnalysisContext) -> list[Provider]:
+    # Create anonymous target for shared module compilation
+    # Multiple libraries with same Swift module share this target
+    module_target = ctx.actions.anon_target(
+        swift_module_rule,
+        {
+            "module_name": ctx.attrs.module_name,
+            "sources": ctx.attrs.srcs,
+        },
+    )
+
+    # Wait for anonymous target analysis
+    module_info = module_target.artifact("module")
+
+    return [DefaultInfo(default_output = module_info)]
+```
+
+---
+
+## Part 10: Remote Execution
+
+### Shared Foundation: REAPI
+
+Both systems implement the [Remote Execution API](https://github.com/bazelbuild/remote-apis):
+
+```protobuf
+// Shared protocol (simplified)
+service Execution {
+  rpc Execute(ExecuteRequest) returns (Operation);
+  rpc WaitExecution(WaitExecutionRequest) returns (Operation);
+}
+
+service ContentAddressableStorage {
+  rpc FindMissingBlobs(FindMissingBlobsRequest) returns (FindMissingBlobsResponse);
+  rpc BatchUpdateBlobs(BatchUpdateBlobsRequest) returns (BatchUpdateBlobsResponse);
+  rpc BatchReadBlobs(BatchReadBlobsRequest) returns (BatchReadBlobsResponse);
+}
+
+service ActionCache {
+  rpc GetActionResult(GetActionResultRequest) returns (ActionResult);
+  rpc UpdateActionResult(UpdateActionResultRequest) returns (ActionResult);
+}
+```
+
+### Key Differences
+
+| Aspect | Bazel | Buck2 |
+|--------|-------|-------|
+| **Design philosophy** | RE added to existing system | RE-first from inception |
+| **Local execution** | Primary mode, RE optional | Special case of RE |
+| **Directory hashing** | Computed when needed | Pre-computed for RE |
+| **Build Event Protocol** | Yes (BEP) | No (uses BuckEvent) |
+| **Remote persistent workers** | Supported | Local workers only |
+| **Client configurability** | Extensive tuning options | Less configurable |
+| **Hermeticity** | Sandbox available locally | RE enforces, local unsandboxed |
+
+### Compatible RE Backends
+
+Both systems work with:
+
+- [BuildBuddy](https://buildbuddy.io/)
+- [EngFlow](https://engflow.com/)
+- [BuildBarn](https://github.com/buildbarn)
+- [NativeLink](https://github.com/TraceMachina/nativelink)
+
+---
+
+## Part 11: Testing Patterns
+
+### Bazel Test Rules
+
+**Real example from Bazel** (`/refs/bazel/tools/build_rules/test_rules.bzl`):
+
+```starlark
+# Bazel: Test rule utilities
+def success_target(ctx, msg, exe = None):
+    """Return a success for an analysis test."""
+    exe = exe or ctx.outputs.executable
+    ctx.actions.write(
+        output = exe,
+        content = "#!/bin/bash\ncat <<'__eof__'\n" + msg + "\n__eof__\necho",
+        is_executable = True,
+    )
+    return [DefaultInfo(files = depset([exe]))]
+
+def failure_target(ctx, msg, exe = None):
+    """Return a failure for an analysis test."""
+    exe = exe or ctx.outputs.executable
+    ctx.actions.write(
+        output = exe,
+        content = "#!/bin/bash\ncat >&2 <<'__eof__'\n" + msg + "\n__eof__\nexit 1",
+        is_executable = True,
+    )
+    return [DefaultInfo(files = depset([exe]))]
+
+def _rule_test_rule_impl(ctx):
+    """Check that a rule generates the desired outputs and providers."""
+    rule_ = ctx.attr.rule
+    rule_name = str(rule_.label)
+    exe = ctx.outputs.out
+
+    if ctx.attr.generates:
+        # Verify generated files
+        generates = sorted(ctx.attr.generates)
+        generated = sorted([
+            strip_prefix(prefix, f.short_path)
+            for f in rule_.files.to_list()
+        ])
+        if generates != generated:
+            fail("rule %s generates %s not %s" %
+                 (rule_name, repr(generated), repr(generates)))
+
+    if ctx.attr.provides:
+        # Verify providers exist
+        files = []
+        commands = []
+        for k in ctx.attr.provides.keys():
+            if hasattr(rule_, k):
+                v = repr(getattr(rule_, k))
+            else:
+                fail("rule %s doesn't provide attribute %s" % (rule_name, k))
+            # ... create verification script
+
+    return success_target(ctx, "success", exe = exe)
+
+_rule_test_rule = rule(
+    attrs = {
+        "rule": attr.label(mandatory = True),
+        "generates": attr.string_list(),
+        "provides": attr.string_dict(),
+        "out": attr.output(),
+    },
+    implementation = _rule_test_rule_impl,
+)
+
+def rule_test(name, rule, generates = None, provides = None, **kwargs):
+    """Macro to test rule outputs and providers."""
+    _rule_test_rule(
+        name = name + "_impl",
+        rule = rule,
+        generates = generates,
+        provides = provides,
+        out = name + ".sh",
+        testonly = 1,
+        visibility = ["//visibility:private"],
+    )
+
+    sh_test(
+        name = name,
+        srcs = [name + "_impl"],
+        data = [name + "_impl"],
+        deps = [BASH_RUNFILES_DEP],
+        **kwargs
+    )
+
+def file_test(name, file, content = None, regexp = None, matches = None, **kwargs):
+    """Test that a file has given content or matches a pattern."""
+    _file_test_rule(
+        name = name + "_impl",
+        file = file,
+        content = content or "",
+        regexp = regexp or "",
+        matches = matches if matches != None else -1,
+        out = name + "_impl.sh",
+        testonly = 1,
+    )
+    sh_test(name = name, srcs = [name + "_impl"], **kwargs)
+```
+
+### Buck2 Test Patterns
+
+```starlark
+# Buck2: Test rule with providers
+cxx_test(
+    name = "mylib_test",
+    srcs = ["mylib_test.cc"],
+    deps = [
+        ":mylib",
+        "//third_party:gtest",
+    ],
+    # Buck2 test-specific attributes
+    contacts = ["oncall+myteam@example.com"],
+    labels = ["unit", "fast"],
+    env = {
+        "TEST_DATA_DIR": "$(location :test_data)",
+    },
+)
+
+# Using BXL for test introspection
+def _test_discovery_impl(ctx):
+    """Discover all tests matching a pattern."""
+    universe = ctx.target_universe(ctx.cli_args.pattern).target_set()
+    tests = ctx.cquery().kind(".*_test", universe)
+
+    test_info = []
+    for test in tests:
+        analysis = ctx.analysis(test)
+        providers = analysis.providers()
+
+        test_info.append({
+            "label": str(test.label),
+            "type": test.rule_type,
+            "deps": len(providers[DefaultInfo].default_outputs),
+        })
+
+    ctx.output.print_json(test_info)
+
+test_discovery = bxl_main(
+    impl = _test_discovery_impl,
+    cli_args = {
+        "pattern": cli_args.string("..."),
+    },
+)
+```
+
+---
+
+## Part 12: Debugging and Introspection
+
+### Bazel Query Commands
+
+```bash
+# Bazel: Query commands
+bazel query "deps(//my:target)"              # All dependencies
+bazel query "rdeps(//..., //my:target)"      # Reverse dependencies
+bazel query "kind(cc_library, //...)"        # Filter by rule kind
+bazel query "attr(visibility, public, //...)" # Filter by attribute
+
+# Configured query (analysis phase)
+bazel cquery "deps(//my:target)" --output=jsonproto
+
+# Action query
+bazel aquery "//my:target" --output=jsonproto
+bazel aquery "mnemonic(CppCompile, //my:target)"
+
+# Build graph visualization
+bazel query "deps(//my:target)" --output=graph | dot -Tpng > graph.png
+```
+
+### Buck2 Query and BXL
+
+```bash
+# Buck2: Query commands
+buck2 uquery "deps(//my:target)"             # Unconfigured query
+buck2 cquery "deps(//my:target)"             # Configured query
+buck2 aquery "//my:target"                   # Action query
+
+# BXL for advanced queries
+buck2 bxl //queries:analysis.bxl:providers_test
+buck2 bxl //queries:build.bxl:build_test -- --target //my:target
+
+# Target universe queries in BXL
+buck2 bxl //my.bxl:find_tests -- --pattern "//src/..."
+```
+
+**BXL query example** (`/refs/buck2/tests/core/bxl/test_target_universe_data/target_universe.bxl`):
+
+```starlark
+def _target_universe_test(ctx):
+    pattern = "some_cell//:inner"
+
+    target_universe = ctx.target_universe(pattern)
+
+    # Direct targets used to construct universe
+    direct_target_set = target_universe.target_set()
+
+    # All targets in the universe (including transitive)
+    universe_target_set = target_universe.universe_target_set()
+
+    # Query within the universe
+    libraries = ctx.cquery().kind("^library$", universe_target_set)
+
+    ctx.output.print("Direct: {}".format(len(direct_target_set)))
+    ctx.output.print("Universe: {}".format(len(universe_target_set)))
+    ctx.output.print("Libraries: {}".format(len(libraries)))
+
+target_universe_test = bxl_main(
+    impl = _target_universe_test,
+    cli_args = {},
+)
+```
+
+### Comparison
+
+| Capability | Bazel | Buck2 |
+|------------|-------|-------|
+| Unconfigured query | `bazel query` | `buck2 uquery` |
+| Configured query | `bazel cquery` | `buck2 cquery` |
+| Action query | `bazel aquery` | `buck2 aquery` |
+| Programmatic query | External tools | BXL scripts |
+| Build + query | Separate commands | BXL `ctx.build()` |
+| Artifact inspection | `bazel run` | BXL `ctx.output.ensure()` |
+| Custom output format | `--output=jsonproto` | BXL `ctx.output.print_json()` |
+
+---
+
+## Part 13: Configuration and Transitions
+
+### Bazel Transitions
+
+```starlark
+# Bazel: Configuration transition
+def _platform_transition_impl(settings, attr):
+    return {
+        "//command_line_option:cpu": attr.target_cpu,
+        "//command_line_option:compilation_mode": "opt",
+    }
+
+platform_transition = transition(
+    implementation = _platform_transition_impl,
+    inputs = [],
+    outputs = [
+        "//command_line_option:cpu",
+        "//command_line_option:compilation_mode",
+    ],
+)
+
+# Split transition (1:N) for fat binaries
+def _fat_binary_transition_impl(settings, attr):
+    return {
+        "arm64": {"//command_line_option:cpu": "arm64"},
+        "x86_64": {"//command_line_option:cpu": "x86_64"},
+    }
+
+fat_binary_transition = transition(
+    implementation = _fat_binary_transition_impl,
+    inputs = [],
+    outputs = ["//command_line_option:cpu"],
+)
+
+# Apply to rule
+my_rule = rule(
+    implementation = _impl,
+    cfg = platform_transition,
+    attrs = {
+        "deps": attr.label_list(cfg = "target"),
+        "tools": attr.label_list(cfg = "exec"),
+        "_allowlist_function_transition": attr.label(
+            default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
+        ),
+    },
+)
+```
+
+### Buck2 Select and Platforms
+
+```starlark
+# Buck2: Platform-aware configuration with select
+cxx_library(
+    name = "my_lib",
+    srcs = ["common.cpp"] + select({
+        "config//os:linux": ["linux.cpp"],
+        "config//os:macos": ["macos.cpp"],
+        "config//os:windows": ["windows.cpp"],
+    }),
+    compiler_flags = select({
+        "config//build:debug": ["-g", "-O0"],
+        "config//build:release": ["-O3", "-DNDEBUG"],
+    }),
+    # Platform-specific deps
+    deps = select({
+        "config//os:linux": ["//third_party:pthread"],
+        "DEFAULT": [],
+    }),
+)
+
+# Toolchain configuration
+# toolchains/BUCK
+load("@prelude//toolchains:cxx.bzl", "system_cxx_toolchain")
+
+system_cxx_toolchain(
+    name = "cxx",
+    compiler_type = "clang",
+    cxx_flags = select({
+        "config//build:debug": ["-g"],
+        "config//build:release": ["-O3"],
+    }),
+    visibility = ["PUBLIC"],
+)
+```
+
+---
+
+## Part 14: Error Messages and Diagnostics
+
+### Bazel Error Handling
+
+```starlark
+# Bazel: Error in rule implementation
+def _my_rule_impl(ctx):
+    if not ctx.files.srcs:
+        fail("srcs cannot be empty for rule {}".format(ctx.label))
+
+    # Check provider requirements
+    for dep in ctx.attr.deps:
+        if MyInfo not in dep:
+            fail("Dependency {} does not provide MyInfo".format(dep.label))
+```
+
+```
+ERROR: /path/to/BUILD:10:8: in my_rule rule //pkg:target:
+Traceback (most recent call last):
+    File "/path/to/rules.bzl", line 5, column 9, in _my_rule_impl
+        fail("srcs cannot be empty for rule {}".format(ctx.label))
+Error in fail: srcs cannot be empty for rule //pkg:target
+```
+
+### Buck2 Error Handling
+
+```starlark
+# Buck2: Error handling with expect utility
+load("@prelude//utils:expect.bzl", "expect")
+
+def _my_rule_impl(ctx: AnalysisContext) -> list[Provider]:
+    expect(
+        ctx.attrs.srcs,
+        "srcs cannot be empty for rule {}".format(ctx.label)
+    )
+
+    # Type checking is automatic
+    # If ctx.attrs.src is wrong type, runtime error with stack trace
+
+# Custom error handlers for actions
+def _generate_error_handler(category: str, errorformats: list[str] | None):
+    def handler(ctx: ActionErrorCtx) -> list[ActionSubError]:
+        if errorformats != None:
+            return ctx.parse_with_errorformat(
+                category = category,
+                error = ctx.stderr,
+                errorformats = errorformats,
+            )
+        return []
+    return handler
+```
+
+---
+
+## Part 15: Migration Strategies
+
+### Bazel to Buck2
+
+<Card title="Key Migration Steps">
+1. **File renaming**: `BUILD` -> `BUCK`, keep `.bzl` extension
+2. **Provider updates**:
+   - Replace `depset` with transitive sets
+   - Add type annotations
+   - Use `provider_field()` for typed fields
+3. **Rule API changes**:
+   - `ctx.attr` -> `ctx.attrs`
+   - `ctx.actions.declare_file()` -> `ctx.actions.declare_output()`
+   - Add `.as_output()` markers
+   - Use `cmd_args()` for command building
+4. **Convert aspects to BXL** for IDE/tooling integrations
+5. **Update toolchain references** to explicit targets
+</Card>
+
+### Buck2 to Bazel
+
+<Card title="Key Migration Steps">
+1. **File renaming**: `BUCK` -> `BUILD`
+2. **Type system downgrades**:
+   - Replace `record` with dicts
+   - Replace `enum` with string constants
+   - Remove union types
+3. **Provider updates**:
+   - Convert transitive sets to depsets
+   - Remove `provider_field()` type annotations
+4. **Rule API changes**:
+   - `ctx.attrs` -> `ctx.attr`
+   - Remove `.as_output()` markers
+   - Convert `cmd_args()` to `ctx.actions.args()`
+5. **Rewrite BXL as aspects + external tools**
+</Card>
+
+---
+
+## Part 16: Community and Ecosystem
+
+### Bazel Ecosystem
+
+| Category | Resources |
+|----------|-----------|
+| **Documentation** | [bazel.build](https://bazel.build) - comprehensive |
+| **Rules repos** | rules_cc, rules_java, rules_python, rules_go, rules_rust, etc. |
+| **Community** | [Bazel Slack](https://slack.bazel.build/), GitHub Discussions |
+| **IDE Support** | IntelliJ plugin, VSCode extension, multiple LSPs |
+| **Enterprise** | EngFlow, Aspect, BuildBuddy (commercial support) |
+
+### Buck2 Ecosystem
+
+| Category | Resources |
+|----------|-----------|
+| **Documentation** | [buck2.build](https://buck2.build) - growing |
+| **Prelude** | Single comprehensive standard library |
+| **Community** | GitHub Issues, Discord |
+| **IDE Support** | BXL-based (rust-analyzer, compilation DB) |
+| **Enterprise** | Meta internal, emerging community |
+
+---
+
+## Further Reading
+
+### Official Documentation
+
+- [Buck2 Documentation](https://buck2.build/docs/)
+- [Why Buck2](https://buck2.build/docs/about/why/)
+- [Buck2 Starlark Types](https://buck2.build/docs/developers/starlark/types/)
+- [BXL Documentation](https://buck2.build/docs/bxl/)
+- [Dynamic Dependencies](https://buck2.build/docs/rule_authors/dynamic_dependencies/)
+- [Anonymous Targets](https://buck2.build/docs/rule_authors/anon_targets/)
+- [Modern DICE Introduction](https://buck2.build/docs/insights_and_knowledge/modern_dice/)
+- [Bazel Documentation](https://bazel.build/)
+- [Bazel Aspects](https://bazel.build/extending/aspects)
+- [Bazel Configurations](https://bazel.build/extending/config)
+- [Bazel Depsets](https://bazel.build/extending/depsets)
+- [Skyframe Reference](https://bazel.build/reference/skyframe)
+
+### Engineering Blogs
+
+- [Build faster with Buck2 - Meta Engineering](https://engineering.fb.com/2023/04/06/open-source/buck2-open-source-large-scale-build-system/)
+- [5 Things You Didn't Know About Buck2](https://engineering.fb.com/2023/10/23/developer-tools/5-things-you-didnt-know-about-buck2/)
+- [A Tour Around Buck2 - Tweag](https://www.tweag.io/blog/2023-07-06-buck2/)
+- [Buck2 Unboxing - BuildBuddy](https://www.buildbuddy.io/blog/buck2-review/)
+- [From Blaze to Buck2 - History of Build Systems](https://medium.com/better-programming/from-blaze-to-buck2-a-brief-history-of-modern-monorepo-build-systems-563becbcb987)
+
+### Source Code
+
+- [facebook/buck2 on GitHub](https://github.com/facebook/buck2)
+- [facebook/buck2-prelude on GitHub](https://github.com/facebook/buck2-prelude)
+- [facebook/starlark-rust on GitHub](https://github.com/facebook/starlark-rust)
+- [bazelbuild/bazel on GitHub](https://github.com/bazelbuild/bazel)
+- [google/starlark-go on GitHub](https://github.com/google/starlark-go)
+- [bazelbuild/starlark on GitHub](https://github.com/bazelbuild/starlark)
+- [bazelbuild/remote-apis on GitHub](https://github.com/bazelbuild/remote-apis)
+
+### Tooling
+
+- [rust-project for Buck2](https://github.com/facebook/buck2/tree/main/integrations/rust-project) - rust-analyzer integration
+- [Reindeer](https://github.com/facebookincubator/reindeer) - Rust crate importer for Buck2
+- [Buildifier](https://github.com/bazelbuild/buildtools) - Bazel file formatter
