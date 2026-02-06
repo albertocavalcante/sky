@@ -10,9 +10,9 @@ import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 [Copybara](https://github.com/google/copybara) is Google's tool for transforming and moving code between repositories. It uses Starlark configuration files (`.bara.sky`) to define workflows for syncing code between internal and external repositories.
 
 <Aside type="note">
-Copybara uses [**starlark-java**](https://github.com/bazelbuild/bazel/tree/master/src/main/java/net/starlark/java) (`net.starlark.java`), the same Starlark implementation used by Bazel. This ensures compatibility with Bazel's Starlark semantics.
+Copybara uses [**starlark-java**](https://github.com/bazelbuild/bazel/tree/master/src/main/java/net/starlark/java) (`net.starlark.java`), the same Starlark implementation used by Bazel. Copybara imports starlark-java directly from the Bazel repository at a pinned commit (defined in [`third_party/bazel.bzl`](https://github.com/google/copybara/blob/30246465ec209685ba31ecccfe49c9f1ac3b243f/third_party/bazel.bzl)).
 
-*Source: [RemoteFileModule.java](https://github.com/google/copybara/blob/30246465ec209685ba31ecccfe49c9f1ac3b243f/java/com/google/copybara/remotefile/RemoteFileModule.java#L17)*
+*Source: [RemoteFileModule.java imports](https://github.com/google/copybara/blob/30246465ec209685ba31ecccfe49c9f1ac3b243f/java/com/google/copybara/remotefile/RemoteFileModule.java#L17)*
 </Aside>
 
 ## What Copybara Does
