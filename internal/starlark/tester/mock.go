@@ -83,13 +83,6 @@ func (mm *MockManager) Wrap(fn starlark.Value) (*MockWrapper, error) {
 	return wrapper, nil
 }
 
-// getConfig returns the configuration for a mock wrapper.
-func (mm *MockManager) getConfig(wrapper *MockWrapper) *mockConfig {
-	mm.mu.Lock()
-	defer mm.mu.Unlock()
-	return mm.mocks[wrapper]
-}
-
 // recordCall records a call to a mock.
 func (mm *MockManager) recordCall(wrapper *MockWrapper, args starlark.Tuple, kwargs []starlark.Tuple) {
 	mm.mu.Lock()

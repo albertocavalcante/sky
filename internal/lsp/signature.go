@@ -161,14 +161,13 @@ func findCallContext(content string, line, char int) *callContext {
 // extractFunctionName extracts the function name before the opening paren at position i.
 func extractFunctionName(content string, parenPos int) string {
 	// Go backwards from paren to find the identifier
-	end := parenPos
 	start := parenPos - 1
 
 	// Skip whitespace before paren
 	for start >= 0 && (content[start] == ' ' || content[start] == '\t' || content[start] == '\n') {
 		start--
 	}
-	end = start + 1
+	end := start + 1
 
 	// Find start of identifier (letters, digits, underscores)
 	for start >= 0 && isIdentChar(content[start]) {
