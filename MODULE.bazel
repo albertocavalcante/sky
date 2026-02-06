@@ -17,6 +17,9 @@ bazel_dep(name = "aspect_rules_lint", version = "2.0.0-beta.1")
 
 bazel_dep(name = "buildifier_prebuilt", version = "8.0.3", dev_dependency = True)
 
+# Override rules_foreign_cc for Bazel 9.x compatibility (transitive dep from aspect_rules_lint)
+bazel_dep(name = "rules_foreign_cc", version = "0.14.0")
+
 # Copybara rules (dogfooding)
 bazel_dep(name = "rules_copybara", version = "0.0.0", dev_dependency = True)
 git_override(

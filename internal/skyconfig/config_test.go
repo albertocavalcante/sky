@@ -212,6 +212,7 @@ def configure():
         },
     }
 `,
+			env: map[string]string{"CI": ""}, // Explicitly clear CI for this test
 			check: func(t *testing.T, cfg *Config) {
 				if cfg.Test.Timeout.Duration != 30*time.Second {
 					t.Errorf("timeout = %v, want 30s (CI not set)", cfg.Test.Timeout.Duration)
