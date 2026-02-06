@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - "docs-website/**"
+      - "docs/website/**"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -36,17 +36,17 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        working-directory: docs-website
+        working-directory: docs/website
         run: bun install --frozen-lockfile
 
       - name: Build documentation
-        working-directory: docs-website
+        working-directory: docs/website
         run: bun run build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: docs-website/dist
+          path: docs/website/dist
 
   deploy:
     environment:

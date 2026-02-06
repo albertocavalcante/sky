@@ -62,7 +62,7 @@ pre-push:
 
     # Astro docs build check
     astro-build:
-      root: "docs-website/"
+      root: "docs/website/"
       run: bun run build
 
 # Output settings

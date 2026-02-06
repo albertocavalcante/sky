@@ -7,7 +7,7 @@ internal/starlark/dialects/testdata/projects
 
 # Node modules (if present)
 node_modules
-docs-website/node_modules
+docs/website/node_modules
 
 # Bazel output directories
 bazel-bin
