@@ -53,16 +53,28 @@ Examples:
 
 Bazel builds happen in three distinct phases:
 
+```d2
+direction: right
+
+loading: Loading {
+  icon: ../../../assets/icons/file.svg
+}
+analysis: Analysis {
+  icon: ../../../assets/icons/settings.svg
+}
+execution: Execution {
+  icon: ../../../assets/icons/play.svg
+}
+
+loading -> analysis: Starlark
+analysis -> execution: Starlark
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  Loading Phase  │────▶│ Analysis Phase  │────▶│ Execution Phase │
-│                 │     │                 │     │                 │
-│ • Parse BUILD   │     │ • Run rule impl │     │ • Run actions   │
-│ • Evaluate .bzl │     │ • Create actions│     │ • Produce files │
-│ • Expand macros │     │ • Return provs  │     │ • Cache results │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-     Starlark                Starlark               Sandboxed
-```
+
+| Phase | What Happens |
+|-------|--------------|
+| **Loading** | Parse BUILD files, evaluate .bzl, expand macros |
+| **Analysis** | Run rule implementations, create actions, return providers |
+| **Execution** | Run actions in sandbox, produce files, cache results |
 
 ### Loading Phase
 

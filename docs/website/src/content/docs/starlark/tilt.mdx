@@ -19,15 +19,24 @@ Tilt uses [**starlark-go**](https://github.com/google/starlark-go) (`go.starlark
 
 Tilt watches your filesystem, rebuilds containers, and updates running services:
 
+```d2
+direction: right
+
+edit: Edit Code {
+  icon: ../../../assets/icons/edit.svg
+}
+detect: Tilt Detects {
+  icon: ../../../assets/icons/eye.svg
+}
+update: Live Update {
+  icon: ../../../assets/icons/refresh.svg
+}
+
+edit -> detect: file change
+detect -> update: rebuild
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Edit Code     │────▶│   Tilt Detects  │────▶│  Live Update    │
-│                 │     │                 │     │                 │
-│ • Source files  │     │ • File watcher  │     │ • Sync files    │
-│ • Dockerfiles   │     │ • Dependency    │     │ • Run commands  │
-│ • K8s manifests │     │   tracking      │     │ • Restart procs │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-```
+
+Tilt monitors source files, Dockerfiles, and K8s manifests, syncing changes to running containers.
 
 ## Tiltfile Basics
 

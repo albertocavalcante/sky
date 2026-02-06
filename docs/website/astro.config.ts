@@ -5,6 +5,7 @@ import starlightLinksValidator from 'starlight-links-validator';
 // Currently disabled due to gitpkg.vercel.app rate limits (402 error)
 // import starlightSidebarOrphanPages from '@albertocavalcante/starlight-sidebar-orphan-pages';
 import sitemap from '@astrojs/sitemap';
+import d2 from 'astro-d2';
 import tailwindcss from '@tailwindcss/vite';
 import fs from 'node:fs';
 
@@ -25,6 +26,15 @@ export default defineConfig({
 	},
 
 	integrations: [
+		d2({
+			skipGeneration: process.env.SKIP_D2 === 'true',
+			layout: 'dagre',
+			theme: {
+				default: '0',   // Neutral default for light mode
+				dark: '200',    // Dark Mauve for dark mode
+			},
+			pad: 20,
+		}),
 		sitemap(),
 		starlight({
 			plugins: [

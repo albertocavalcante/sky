@@ -67,20 +67,33 @@ Each cell can have its own prelude and configuration.
 
 Buck2's core innovation is **DICE** (Distributed Incremental Computation Engine), a single unified computation graph:
 
+```d2
+direction: right
+
+dice: DICE Graph {
+  style.stroke: "#666"
+  style.fill: "#fafafa"
+
+  parse: Parse BUCK {
+    icon: ../../../assets/icons/file.svg
+  }
+  configure: Configure {
+    icon: ../../../assets/icons/settings.svg
+  }
+  analyze: Analyze {
+    icon: ../../../assets/icons/settings.svg
+  }
+  execute: Execute {
+    icon: ../../../assets/icons/play.svg
+  }
+
+  parse -> configure
+  configure -> analyze
+  analyze -> execute
+}
 ```
-┌────────────────────────────────────────────────────────────────────┐
-│                        DICE Graph                                  │
-│                                                                    │
-│  ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐        │
-│  │ Parse   │───▶│Configure│───▶│ Analyze │───▶│ Execute │        │
-│  │ BUCK    │    │ Target  │    │ Target  │    │ Action  │        │
-│  └─────────┘    └─────────┘    └─────────┘    └─────────┘        │
-│       ▲              ▲              ▲              ▲              │
-│       │              │              │              │              │
-│       └──────────────┴──────────────┴──────────────┘              │
-│                    Incremental invalidation                        │
-└────────────────────────────────────────────────────────────────────┘
-```
+
+Unlike Bazel's phased model, DICE computes everything incrementally in a single graph with fine-grained invalidation.
 
 Unlike Bazel's phased model, DICE:
 - Computes everything incrementally in a single graph

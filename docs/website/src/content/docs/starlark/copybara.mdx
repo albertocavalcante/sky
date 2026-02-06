@@ -17,24 +17,39 @@ Copybara uses [**starlark-java**](https://github.com/bazelbuild/bazel/tree/maste
 
 ## What Copybara Does
 
-Copybara solves the problem of maintaining code in multiple repositories:
+Copybara solves the problem of maintaining code across multiple repositories. It works **bidirectionally**—either repository can be the authoritative source of truth.
 
+```d2
+direction: right
+
+source: Source of Truth {
+  icon: ../../../assets/icons/database.svg
+}
+copybara: Copybara {
+  icon: ../../../assets/icons/refresh.svg
+  shape: hexagon
+}
+dest: Destination {
+  icon: ../../../assets/icons/git-branch.svg
+}
+
+source <-> copybara: transform
+copybara <-> dest: sync
 ```
-┌─────────────────┐                      ┌─────────────────┐
-│  Internal Repo  │                      │  Public Repo    │
-│  (authoritative)│                      │  (GitHub)       │
-│                 │                      │                 │
-│  • Full history │◄────── Copybara ────►│  • Filtered     │
-│  • All files    │      transforms &    │  • Transformed  │
-│  • Internal refs│      syncs code      │  • Public refs  │
-└─────────────────┘                      └─────────────────┘
-```
+
+<Aside type="tip">
+Copybara requires you to choose one repository as **authoritative**. For some projects, the internal repo is authoritative (open-sourcing). For others, the external repo is authoritative (importing upstream).
+</Aside>
+
+**Supported platforms**: Git, GitHub, Gerrit, and any Git-compatible hosting.
 
 Common use cases:
-- **Open sourcing**: Export internal code to public repositories
-- **Importing contributions**: Bring external PRs into internal repos
+- **Open sourcing**: Export internal code to public repositories (GitHub, GitLab, etc.)
+- **Importing contributions**: Bring external PRs/CLs into internal repos
+- **Upstream sync**: Keep forks in sync with upstream with custom patches
 - **Mirroring**: Keep repositories in sync with transformations
 - **Vendoring**: Import third-party code with modifications
+- **Monorepo extraction**: Gradually release parts of a monorepo while preserving history
 
 ## Configuration Basics
 
