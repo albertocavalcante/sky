@@ -530,46 +530,124 @@ data:
 
 ---
 
-## Starlark Fork Customizations
+## Starlark Fork: Why and How
 
-ytt uses a customized starlark-go fork with key modifications:
+ytt uses a customized fork of starlark-go ([carvel-dev/starlark-go](https://github.com/carvel-dev/starlark-go)) rather than upstream. This wasn't a casual decision - it solves a fundamental incompatibility between Starlark and YAML templating.
 
-### Block-Based Syntax
+### The Problem: Whitespace Conflicts
 
-Instead of Python's whitespace-based indentation:
+Standard Starlark uses Python-style significant whitespace:
+
+```python
+# Standard Starlark - whitespace determines block structure
+def greet(name):
+    if name:
+        return "Hello, " + name  # indentation required
+    return "Hello"               # dedent closes block
+```
+
+But YAML **also** uses significant whitespace:
+
+```yaml
+# YAML - indentation determines structure
+spec:
+  containers:    # child of spec
+  - name: app    # list item
+```
+
+**The conflict**: If you embed Starlark in YAML templates, which whitespace rules win? This was raised in [ytt Issue #8](https://github.com/carvel-dev/ytt/issues/8) - developers couldn't indent YAML inside Starlark functions because the indentation would be interpreted as Starlark block structure.
+
+### The Solution: Block Scanner
+
+In July 2019, ytt's creator Dmitriy Kalinin added a `blockScanner` to their vendored starlark-go. This scanner:
+
+1. **Ignores whitespace for block detection** - Doesn't use INDENT/OUTDENT tokens based on spaces
+2. **Uses explicit `end` keyword** - Blocks close with `end`, not dedentation
+3. **Handles `else`/`elif` specially** - These implicitly close prior blocks
+4. **Forbids `pass`** - Only `end` is allowed to close blocks
+
+```go
+// From syntax/block_scanner.go
+// blockScanner changes INDENT/OUTDENT to be
+// based on nesting depth (start->end) instead of whitespace
+type blockScanner struct {
+    scanner     *scanner
+    indentStack []blockScannerToken
+    // ...
+}
+```
+
+### How It Works
+
+The parser can be invoked with a `BlockScanner` mode flag:
+
+```go
+// In parse.go
+const (
+    RetainComments Mode = 1 << iota
+    BlockScanner   Mode = 1 << iota // use if/end syntax instead of indent
+)
+
+func Parse(filename string, src interface{}, mode Mode) (*File, error) {
+    in, _ := newScanner(filename, src, mode&RetainComments != 0)
+    var inScanner scannerInterface = in
+    if (mode & BlockScanner) == BlockScanner {
+        inScanner = newBlockScanner(in)  // Use block-based parsing
+    }
+    // ...
+}
+```
+
+### Block-Based Syntax in Practice
 
 ```yaml
 #@ if condition:
 some_yaml: here
+  nested:
+    data: works
 #@ end
 
 #@ for item in items:
 - name: #@ item
+  value: #@ item.upper()
 #@ end
 
 #@ def my_function():
 key: value
+list:
+- one
+- two
 #@ end
 ```
 
-The `end` keyword explicitly closes blocks, avoiding whitespace sensitivity issues in YAML templates.
+Notice how YAML indentation inside blocks is now **purely YAML** - not Starlark block structure.
 
-### Module Type
+### Other Fork Changes
 
-```yaml
-#@ load("@ytt:struct", "struct")
-#@ load("@ytt:module", "module")
+Beyond the block scanner, the fork:
 
-#@ def _internal():
-#@   return "private"
-#@ end
+1. **Removed unused modules** - Stripped `lib/proto/`, `lib/json/`, `lib/math/`, `lib/time/` (~2000+ lines) since ytt provides its own `@ytt:*` modules
+2. **Simplified Thread model** - Removed step counting, cancellation APIs (ytt doesn't need execution limits)
+3. **Added Module type** - `starlarkstruct/module.go` for creating named module collections
+4. **Enhanced Struct** - Binary operations support for struct merging
 
-#@ def public():
-#@   return _internal()
-#@ end
+### Why Not Upstream?
 
-#@ exports = module.make(public=public)
+The block scanner is ytt-specific. Standard Starlark needs whitespace sensitivity for:
+- Bazel BUILD files (pure Starlark, no YAML embedding)
+- General Python-like behavior expectations
+
+The fork is kept minimal and synced with upstream where possible. The key commits:
+
 ```
+fd88429 - moved over from ytt repo (add blockScanner, improve reserved keyword errors)
+3e0f0a9 - Make ytt flavoured starlark embeddable into starlark applications
+8a7b203 - fix handling of unbalanced end and if/for/...
+```
+
+<Aside type="note">
+The fork decision reflects a pragmatic trade-off: modify Starlark's parser to solve a real problem (YAML+code whitespace conflicts) rather than force awkward workarounds on users. The changes are isolated to parsing, not the language semantics.
+</Aside>
 
 ---
 
