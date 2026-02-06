@@ -9,7 +9,6 @@
         "@astrojs/starlight": "^0.37.6",
         "@tailwindcss/vite": "^4.1.18",
         "astro": "^5.6.1",
-        "@albertocavalcante/starlight-sidebar-orphan-pages": "github:albertocavalcante/starlight-sidebar-orphan-pages",
         "sharp": "^0.34.5",
         "starlight-links-validator": "^0.19.2",
         "tailwindcss": "^4.1.18",
@@ -17,8 +16,6 @@
     },
   },
   "packages": {
-    "@albertocavalcante/starlight-sidebar-orphan-pages": ["@albertocavalcante/starlight-sidebar-orphan-pages@github:albertocavalcante/starlight-sidebar-orphan-pages#fae8b40", { "peerDependencies": { "@astrojs/starlight": ">=0.32.0", "astro": ">=5.0.0" } }, "albertocavalcante-starlight-sidebar-orphan-pages-fae8b40"],
-
     "@astrojs/compiler": ["@astrojs/compiler@2.13.0", "", {}, "sha512-mqVORhUJViA28fwHYaWmsXSzLO9osbdZ5ImUfxBarqsYdMlPbqAqGJCxsNzvppp1BEzc1mJNjOVvQqeDN8Vspw=="],
 
     "@astrojs/internal-helpers": ["@astrojs/internal-helpers@0.7.5", "", {}, "sha512-vreGnYSSKhAjFJCWAwe/CNhONvoc5lokxtRoZims+0wa3KbHBdPHSSthJsKxPd8d/aic6lWKpRTYGY/hsgK6EA=="],

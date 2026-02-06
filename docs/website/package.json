@@ -10,7 +10,6 @@
     "astro": "astro"
   },
   "dependencies": {
-    "@albertocavalcante/starlight-sidebar-orphan-pages": "github:albertocavalcante/starlight-plugins#path:packages/sidebar-orphan-pages",
     "@astrojs/sitemap": "^3.7.0",
     "@astrojs/starlight": "^0.37.6",
     "@tailwindcss/vite": "^4.1.18",

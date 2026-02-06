@@ -1,7 +1,9 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import starlightLinksValidator from 'starlight-links-validator';
-import starlightSidebarOrphanPages from '@albertocavalcante/starlight-sidebar-orphan-pages';
+// TODO: Re-enable once published to npm or GitHub Packages
+// Currently disabled due to gitpkg.vercel.app rate limits (402 error)
+// import starlightSidebarOrphanPages from '@albertocavalcante/starlight-sidebar-orphan-pages';
 import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
 import fs from 'node:fs';
@@ -27,7 +29,8 @@ export default defineConfig({
 		starlight({
 			plugins: [
 				starlightLinksValidator(),
-				starlightSidebarOrphanPages({ failOnOrphans: true }),
+				// TODO: Re-enable once published to npm or GitHub Packages
+				// starlightSidebarOrphanPages({ failOnOrphans: true }),
 			],
 			title: 'Sky',
 			description: 'A comprehensive toolkit for Starlark development',
@@ -69,7 +72,7 @@ export default defineConfig({
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/albertocavalcante/sky' },
 			],
 			editLink: {
-				baseUrl: 'https://github.com/albertocavalcante/sky/edit/main/docs-website/',
+				baseUrl: 'https://github.com/albertocavalcante/sky/edit/main/docs/website/',
 			},
 			customCss: ['./src/styles/global.css'],
 			sidebar: [
