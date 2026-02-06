@@ -137,6 +137,11 @@ Bazel's native implementation. Tightly integrated with the Bazel build system.
 - Primarily designed for Bazel
 - JVM dependency
 - Less portable than Go/Rust versions
+- Not published as a standalone library (lives inside Bazel's monorepo)
+
+<Aside type="caution">
+**Standalone extraction (experimental)**: A Copybara-synced extraction of starlark-java is available at [github.com/albertocavalcante/starlark-java](https://github.com/albertocavalcante/starlark-java) for research and experimentation. **Do not rely on this for production code** - it's an unofficial mirror and may lag behind or diverge from Bazel's internal version.
+</Aside>
 
 ### Type System
 

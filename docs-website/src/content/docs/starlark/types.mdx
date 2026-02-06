@@ -10,7 +10,7 @@ import { Aside } from '@astrojs/starlight/components';
 Starlark supports optional type annotations similar to Python's type hints. Different implementations offer varying levels of type checking.
 
 <Aside type="note">
-Type annotation support varies by implementation. Buck2's starlark-rust has the most advanced type system. The starlark-go implementation (used by Bazel) has more limited support.
+Type annotation support varies by implementation. Buck2's starlark-rust has the most advanced type system. Bazel's native starlark-java implementation has more limited support. Note: starlark-go is a separate Go implementation used by tools like Tilt and Copybara, not by Bazel.
 </Aside>
 
 ## Basic Type Annotations
@@ -220,11 +220,15 @@ def create_user_bad(name, age):
 
 ## Implementation Support
 
-| Feature | starlark-rust (Buck2) | starlark-go (Bazel) |
-|---------|----------------------|---------------------|
-| Basic annotations | ✅ | ✅ |
-| Generic types | ✅ | ⚠️ Limited |
-| Union types | ✅ | ❌ |
-| `record` type | ✅ | ❌ |
-| `enum` type | ✅ | ❌ |
-| Static checking | ✅ | ⚠️ Limited |
+| Feature | starlark-rust (Buck2) | starlark-java (Bazel) | starlark-go |
+|---------|----------------------|----------------------|-------------|
+| Basic annotations | ✅ | ✅ | ✅ |
+| Generic types | ✅ | ⚠️ Limited | ⚠️ Limited |
+| Union types | ✅ | ❌ | ❌ |
+| `record` type | ✅ | ❌ | ❌ |
+| `enum` type | ✅ | ❌ | ❌ |
+| Static checking | ✅ | ⚠️ WIP | ⚠️ Limited |
+
+<Aside type="note">
+starlark-go is used by tools like Tilt, Copybara, and custom Starlark embedders. Bazel uses its own Java implementation (starlark-java).
+</Aside>

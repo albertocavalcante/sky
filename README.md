@@ -97,10 +97,13 @@ skydoc -format json file.star  # Generate JSON docs
 **Neovim (nvim-lspconfig):**
 
 ```lua
-require('lspconfig').starlark_rust.setup{
+-- Custom LSP setup (skyls is not yet in lspconfig defaults)
+vim.lsp.start({
+  name = 'skyls',
   cmd = { 'skyls' },
-  filetypes = { 'star', 'bzl', 'bazel' },
-}
+  filetypes = { 'star', 'bzl', 'starlark' },
+  root_dir = vim.fs.dirname(vim.fs.find({'WORKSPACE', 'MODULE.bazel', '.git'}, { upward = true })[1]),
+})
 ```
 
 ## Plugin System

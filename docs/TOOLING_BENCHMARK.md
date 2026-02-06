@@ -309,8 +309,8 @@ that work for 80% of users. Configuration is for power users.
 | buildtools    | Bazel BUILD files | Bazel-specific |
 | buildifier    | Formatting        | Bazel-specific |
 | starpls       | LSP               | Bazel-focused  |
-| starlark-rust | Runtime           | Not tooling    |
-| go-starlark   | Runtime           | Not tooling    |
+| starlark-rust | Runtime (Buck2)   | Not tooling    |
+| starlark-go   | Runtime           | Not tooling    |
 
 ### Sky's Differentiation
 
@@ -325,5 +325,6 @@ that work for 80% of users. Configuration is for power users.
 - [uv](https://github.com/astral-sh/uv) — Fast Python package manager
 - [pyright](https://github.com/microsoft/pyright) — Python type checker
 - [pylance](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance) — VS Code Python
-- [pyrefly](https://github.com/pyre-check/pyre-check) — Meta's type checker
+- [pyre](https://github.com/facebook/pyre-check) — Meta's type checker
+- [pyrefly](https://github.com/facebook/pyrefly) — Meta's new Rust-based type checker
 - [ty](https://github.com/astral-sh/ty) — New type checker from Astral

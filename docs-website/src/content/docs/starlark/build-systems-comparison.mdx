@@ -18,7 +18,7 @@ Despite both using "Starlark" and `.bzl` files, Bazel and Buck2 are **not compat
 | Aspect | Bazel | Buck2 |
 |--------|-------|-------|
 | **Core Language** | Java (with some C++) | Rust |
-| **Starlark Interpreter** | starlark-go | starlark-rust |
+| **Starlark Interpreter** | starlark-java (native) | starlark-rust |
 | **Rule Location** | Mix of Java built-ins + Starlark | 100% Starlark (prelude) |
 | **Type System** | Basic annotations | Advanced (record, enum, union) |
 | **Extension Mechanism** | Aspects | BXL (Buck Extension Language) |
@@ -32,39 +32,36 @@ Despite both using "Starlark" and `.bzl` files, Bazel and Buck2 are **not compat
 
 ## Part 1: Starlark Implementation Differences
 
-### starlark-go (Bazel) vs starlark-rust (Buck2)
+### starlark-java (Bazel) vs starlark-rust (Buck2)
 
 The most fundamental difference between Bazel and Buck2 lies in their Starlark interpreters. This affects performance, available language features, and extension capabilities.
 
-#### starlark-go Architecture
+<Aside type="caution">
+**Important clarification**: Bazel uses its own **Java implementation** (`net.starlark.java`), NOT starlark-go. The starlark-go project is a separate Go implementation used by other tools (Tilt, Copybara, etc.), but **not by Bazel itself**. This is a common misconception.
+</Aside>
 
-Bazel uses [starlark-go](https://github.com/google/starlark-go), an interpreter implemented in Go:
+#### starlark-java Architecture (Bazel)
 
-```go
-// From starlark-go documentation
-// The evaluator uses a simple recursive tree walk, returning a value
-// or an error for each expression.
+Bazel uses [starlark-java](https://github.com/bazelbuild/bazel/tree/master/src/main/java/net/starlark/java), a native Java implementation within the Bazel codebase:
+
+```java
+// From net.starlark.java - Bazel's native Starlark implementation
+// Located in src/main/java/net/starlark/java/
+package net.starlark.java.eval;
 ```
 
 **Key characteristics:**
 
-- **Tree-walking interpreter**: Uses recursive evaluation rather than bytecode compilation
-- **Go garbage collection**: Benefits from Go's GC but subject to GC pauses
-- **Integer representation**: Uses `big.Int` for arbitrary precision, with small integers (less than 256) preallocated
-- **Parallelism**: Independent Starlark threads can execute in parallel
+- **JVM-based execution**: Runs on the Java Virtual Machine alongside Bazel
+- **JVM garbage collection**: Uses Java's garbage collector
+- **Integer representation**: Uses Java primitives with BigInteger fallback
+- **Thread model**: Integrates with Bazel's Skyframe parallel evaluation
 - **Freezing**: All mutable values created during module initialization are frozen upon completion
+- **Not standalone**: Lives inside Bazel's monorepo, not published as a separate library
 
-<Aside type="note">
-The starlark-go team experimented with JIT compilation of syntax trees to bytecode, but Go compiler limitations (no computed goto for switch statements, escape analysis issues) prevented this from outperforming the tree-walking evaluator.
+<Aside type="tip">
+For research purposes, an unofficial Copybara-synced extraction is available at [albertocavalcante/starlark-java](https://github.com/albertocavalcante/starlark-java). This is experimental and should not be used for production code.
 </Aside>
-
-**Performance limitations from starlark-go:**
-
-```
-// Go issue 5496: Switch statements generate binary tree of ordered
-// comparisons instead of computed goto, affecting bytecode dispatch
-// Go issue 20533: Escape analysis assumes make([]Value, n) always escapes
-```
 
 #### starlark-rust Architecture
 
@@ -85,25 +82,25 @@ Buck2 uses [starlark-rust](https://github.com/facebook/starlark-rust), a Rust im
 
 ### Performance Characteristics
 
-| Aspect | starlark-go | starlark-rust |
-|--------|-------------|---------------|
-| **Evaluation** | Tree-walking | Bytecode + optimizations |
-| **Memory** | Go GC managed | Manual (no GC pauses) |
-| **Integer perf** | Relatively poor (big.Int) | Optimized |
-| **Parallelism** | Thread-safe with freezing | Rust Send/Sync semantics |
+| Aspect | starlark-java (Bazel) | starlark-rust (Buck2) |
+|--------|----------------------|----------------------|
+| **Evaluation** | JVM-optimized | Bytecode + optimizations |
+| **Memory** | JVM GC managed | Manual (no GC pauses) |
+| **Integer perf** | Java primitives + BigInteger | Optimized |
+| **Parallelism** | Skyframe integration | Rust Send/Sync semantics |
 | **Debugging** | Limited | DAP support |
 
 ### Language Extensions Comparison
 
-| Feature | starlark-go | starlark-rust |
-|---------|-------------|---------------|
-| Recursion | Flag-controlled (`-recursion`) | Supported |
-| Top-level `for` | Flag-controlled | Supported |
+| Feature | starlark-java (Bazel) | starlark-rust (Buck2) |
+|---------|----------------------|----------------------|
+| Recursion | Disabled by default | Supported |
+| Top-level `for` | Disabled by default | Supported |
 | Type annotations | Limited checking | Runtime enforcement |
 | `record` type | Not available | Built-in |
 | `enum` type | Not available | Built-in |
 | Union types | Not available | Built-in (`A \| B`) |
-| `struct` type | Via starlarkstruct package | Via record |
+| `struct` type | Via struct() builtin | Via record |
 
 ---
 
@@ -157,7 +154,7 @@ Buck2's prelude is typically included as a git submodule pointing to [github.com
 
 ## Part 3: Type System Deep Dive
 
-Buck2's starlark-rust implementation includes significant type system extensions not available in Bazel's starlark-go.
+Buck2's starlark-rust implementation includes significant type system extensions not available in Bazel's starlark-java.
 
 ### Basic Type Annotations
 
@@ -363,8 +360,8 @@ CGoBuildContext = record(
 
 ### Type System Feature Matrix
 
-| Feature | Bazel (starlark-go) | Buck2 (starlark-rust) |
-|---------|---------------------|----------------------|
+| Feature | Bazel (starlark-java) | Buck2 (starlark-rust) |
+|---------|----------------------|----------------------|
 | Basic annotations | Yes | Yes |
 | Generic types (`list[T]`) | Limited | Full |
 | Union types (`A \| B`) | No | Yes |
@@ -383,6 +380,10 @@ CGoBuildContext = record(
 ### Buck2's Prelude Architecture
 
 Buck2's prelude is a comprehensive standard library of rules, all written in Starlark. It's available at [github.com/facebook/buck2-prelude](https://github.com/facebook/buck2-prelude).
+
+<Aside type="note">
+The prelude is a **separate git repository** typically included as a git submodule in Buck2 projects. This allows atomic updates to all rules while keeping the prelude versionable independently from the Buck2 binary. The prelude contains **50+ directories** covering languages (C++, Rust, Python, Go, Java, Kotlin, Haskell, OCaml, Erlang, and more) and platforms (Apple, Android, Windows, Unix).
+</Aside>
 
 **Structure of the prelude:**
 
@@ -651,6 +652,15 @@ CxxLibraryInfo = provider(
 )
 ```
 
+<Aside type="note">
+**Why `typing.Any`?** The prelude uses `typing.Any` extensively for provider fields because:
+1. **Forward references**: Some types aren't defined yet when the provider is declared
+2. **Complex types**: Types like `cmd_args` or custom records may not have stable type names
+3. **Flexibility**: Allows duck-typing while still providing default values
+
+In practice, Buck2's type system is pragmatic - strict types for records and simple fields, `typing.Any` for complex or forward-referenced types.
+</Aside>
+
 **Buck2 rule returning providers** (`/refs/buck2/prelude/genrule.bzl`):
 
 ```starlark
@@ -846,10 +856,18 @@ def _compile_impl(ctx: AnalysisContext) -> list[Provider]:
 |---------|--------------|---------------------|
 | Deduplication | Yes | Yes |
 | Ordering control | Yes (3 modes) | Via projections |
-| Projections | No | Yes (args_projections) |
+| Projections | No | Yes (args_projections, json_projections) |
 | Reductions | No | Yes (aggregations) |
 | Graph integration | Memory optimization | Wired into dep graph |
 | Lazy expansion | Via args.add_all | Via project_as_args |
+
+<Aside type="note">
+Buck2's `transitive_set()` supports two projection types:
+- **args_projections**: Transform values to `cmd_args` for command-line construction
+- **json_projections**: Transform values to JSON-serializable format for tooling (e.g., IDE integration)
+
+Both receive `list[T]` of collected values and are lazily evaluated.
+</Aside>
 
 ---
 
@@ -1227,6 +1245,13 @@ Bazel Build Phases:
 - **Incremental invalidation**: Precisely invalidates changed nodes
 - **Parallel evaluation**: Functions without dependencies run in parallel
 - **Phase boundaries**: Loading must complete before analysis, etc.
+
+**Starlark-java runtime features** (unique to Bazel):
+
+- **Mutability protocol**: Thread isolation via `try-with-resources` pattern - values created within a `Mutability` scope are automatically frozen when the scope exits, preventing data races without explicit synchronization
+- **Step counting**: Execution can be limited via `setMaxExecutionSteps()` to prevent infinite loops - counts logical operations, not wall-clock time
+- **CPU profiling hooks**: Native integration for performance analysis at function call boundaries
+- **GuardedValues**: Bindings can be conditionally available based on semantic flags and client data
 
 ### Buck2's DICE (Distributed Incremental Computation Engine)
 
@@ -1885,10 +1910,11 @@ def _generate_error_handler(category: str, errorformats: list[str] | None):
 
 - [facebook/buck2 on GitHub](https://github.com/facebook/buck2)
 - [facebook/buck2-prelude on GitHub](https://github.com/facebook/buck2-prelude)
-- [facebook/starlark-rust on GitHub](https://github.com/facebook/starlark-rust)
-- [bazelbuild/bazel on GitHub](https://github.com/bazelbuild/bazel)
-- [google/starlark-go on GitHub](https://github.com/google/starlark-go)
-- [bazelbuild/starlark on GitHub](https://github.com/bazelbuild/starlark)
+- [facebook/starlark-rust on GitHub](https://github.com/facebook/starlark-rust) - Buck2's Starlark implementation
+- [bazelbuild/bazel on GitHub](https://github.com/bazelbuild/bazel) - Bazel (contains starlark-java in `src/main/java/net/starlark/java/`)
+- [albertocavalcante/starlark-java on GitHub](https://github.com/albertocavalcante/starlark-java) - Copybara-synced extraction of starlark-java (**experimental, not for production**)
+- [google/starlark-go on GitHub](https://github.com/google/starlark-go) - Standalone Go implementation (used by Tilt, Copybara, etc. - **not Bazel**)
+- [bazelbuild/starlark on GitHub](https://github.com/bazelbuild/starlark) - Language specification
 - [bazelbuild/remote-apis on GitHub](https://github.com/bazelbuild/remote-apis)
 
 ### Tooling
