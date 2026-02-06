@@ -32,7 +32,7 @@ go_library(
         "//internal/starlark/query/index",
         "//internal/types",
         "@com_github_bazelbuild_buildtools//build",
-        "@dev_lsp_go_protocol//:protocol",
+        "//internal/protocol",
     ],
 )
 
@@ -60,7 +60,7 @@ go_test(
         "//internal/starlark/filekind",
         "//internal/starlark/linter",
         "@com_github_bazelbuild_buildtools//build",
-        "@dev_lsp_go_protocol//:protocol",
+        "//internal/protocol",
         "@net_starlark_go//syntax",
     ],
 )
