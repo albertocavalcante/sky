@@ -1,0 +1,19 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schemas/mcp.schema.json",
+  "_meta": {
+    "description": "MCP server configuration for Claude Code",
+    "playwright": {
+      "package": "@playwright/mcp",
+      "version": "0.0.64",
+      "gitHead": "e39e83bb130069a36b14a1e9274315e724f82ab3",
+      "integrity": "sha512-vH/DYCpBedfU/aBs9+jYyZLRD71ubHQyN/VEcIL1F60skJAJYxlccpvGB7oxN8K0AECl7zcvpZm0lbMSp2MX1A==",
+      "note": "bunx incompatible - Playwright requires Node.js APIs not available in Bun runtime"
+    }
+  },
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@0.0.64"]
+    }
+  }
+}

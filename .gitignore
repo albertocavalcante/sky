@@ -30,6 +30,7 @@ go.work.sum
 # Editors
 .idea/
 .vscode/
+!.vscode/mcp.json
 
 # OS
 .DS_Store
