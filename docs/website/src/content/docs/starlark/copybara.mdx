@@ -1,0 +1,567 @@
+---
+title: Starlark in Copybara
+description: How Starlark powers Google's code transformation and migration tool
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+# Starlark in Copybara
+
+[Copybara](https://github.com/google/copybara) is Google's tool for transforming and moving code between repositories. It uses Starlark configuration files (`.bara.sky`) to define workflows for syncing code between internal and external repositories.
+
+<Aside type="note">
+Copybara uses [**starlark-java**](https://github.com/bazelbuild/bazel/tree/master/src/main/java/net/starlark/java) (`net.starlark.java`), the same Starlark implementation used by Bazel. This ensures compatibility with Bazel's Starlark semantics.
+
+*Source: [RemoteFileModule.java](https://github.com/google/copybara/blob/30246465ec209685ba31ecccfe49c9f1ac3b243f/java/com/google/copybara/remotefile/RemoteFileModule.java#L17)*
+</Aside>
+
+## What Copybara Does
+
+Copybara solves the problem of maintaining code in multiple repositories:
+
+```
+┌─────────────────┐                      ┌─────────────────┐
+│  Internal Repo  │                      │  Public Repo    │
+│  (authoritative)│                      │  (GitHub)       │
+│                 │                      │                 │
+│  • Full history │◄────── Copybara ────►│  • Filtered     │
+│  • All files    │      transforms &    │  • Transformed  │
+│  • Internal refs│      syncs code      │  • Public refs  │
+└─────────────────┘                      └─────────────────┘
+```
+
+Common use cases:
+- **Open sourcing**: Export internal code to public repositories
+- **Importing contributions**: Bring external PRs into internal repos
+- **Mirroring**: Keep repositories in sync with transformations
+- **Vendoring**: Import third-party code with modifications
+
+## Configuration Basics
+
+Copybara configurations use `.bara.sky` files:
+
+```python
+# copy.bara.sky
+
+core.workflow(
+    name = "default",
+    origin = git.origin(
+        url = "https://github.com/example/internal.git",
+        ref = "main",
+    ),
+    destination = git.destination(
+        url = "https://github.com/example/public.git",
+        fetch = "main",
+        push = "main",
+    ),
+    authoring = authoring.pass_thru("Bot <bot@example.com>"),
+    transformations = [
+        core.move("src/public", ""),
+        core.replace("INTERNAL_URL", "PUBLIC_URL"),
+    ],
+)
+```
+
+Run with:
+```bash
+copybara copy.bara.sky
+```
+
+## Core Workflow
+
+The `core.workflow` function is the heart of Copybara:
+
+```python
+core.workflow(
+    name = "export",
+
+    # Where to get code from
+    origin = git.github_origin(
+        url = "https://github.com/org/internal",
+        ref = "main",
+    ),
+
+    # Where to send code to
+    destination = git.github_destination(
+        url = "https://github.com/org/public",
+        push = "main",
+    ),
+
+    # Which files to include from origin
+    origin_files = glob(["src/**", "docs/**"], exclude = ["**/internal/**"]),
+
+    # Which files to manage in destination
+    destination_files = glob(["**"], exclude = ["README_EXTERNAL.md"]),
+
+    # How to handle authorship
+    authoring = authoring.pass_thru("Default <default@example.com>"),
+
+    # Transformations to apply
+    transformations = [
+        core.move("src", ""),
+        core.replace("internal.example.com", "public.example.com"),
+        metadata.squash_notes(),
+    ],
+
+    # Workflow mode
+    mode = "SQUASH",  # or "ITERATIVE", "CHANGE_REQUEST"
+)
+```
+
+### Workflow Modes
+
+| Mode | Description |
+|------|-------------|
+| `SQUASH` | Combine all changes into a single commit |
+| `ITERATIVE` | Preserve individual commits |
+| `CHANGE_REQUEST` | Create a PR/CL for review |
+| `CHANGE_REQUEST_FROM_SOT` | PR from source of truth |
+
+## Origins and Destinations
+
+### Git Origins
+
+```python
+# Basic Git origin
+git.origin(
+    url = "https://github.com/org/repo.git",
+    ref = "main",
+)
+
+# GitHub-specific origin
+git.github_origin(
+    url = "https://github.com/org/repo",
+    ref = "main",
+    review_state = "APPROVED",  # Only approved PRs
+)
+
+# GitHub PR origin (for importing contributions)
+git.github_pr_origin(
+    url = "https://github.com/org/repo",
+    branch = "main",
+)
+
+# Gerrit origin
+git.gerrit_origin(
+    url = "https://gerrit.example.com/repo",
+    ref = "refs/heads/main",
+)
+```
+
+### Git Destinations
+
+```python
+# Basic Git destination
+git.destination(
+    url = "https://github.com/org/repo.git",
+    fetch = "main",
+    push = "main",
+)
+
+# GitHub PR destination (creates PRs)
+git.github_pr_destination(
+    url = "https://github.com/org/repo",
+    destination_ref = "main",
+    title = "Sync from internal",
+)
+
+# Gerrit destination (creates CLs)
+git.gerrit_destination(
+    url = "https://gerrit.example.com/repo",
+    fetch = "main",
+    push_to_refs_for = "main",
+)
+```
+
+### Folder Origin/Destination
+
+For local operations:
+
+```python
+# Read from local folder
+folder.origin()
+
+# Write to local folder
+folder.destination()
+```
+
+## Transformations
+
+### Moving and Copying Files
+
+```python
+# Move files to new location
+core.move("src/lib", "lib")
+
+# Move to root
+core.move("project/src", "")
+
+# Copy (keep original)
+core.copy("LICENSE", "src/LICENSE")
+```
+
+### Removing Files
+
+```python
+# Remove specific files
+core.remove(glob(["**/*.internal", "**/BUILD.internal"]))
+```
+
+### Text Replacement
+
+```python
+# Simple replacement
+core.replace(
+    before = "internal.example.com",
+    after = "public.example.com",
+)
+
+# Regex replacement
+core.replace(
+    before = "Copyright \\d{4} Internal Corp",
+    after = "Copyright 2024 Public Corp",
+    regex_groups = {},
+)
+
+# Replacement with paths filter
+core.replace(
+    before = "PLACEHOLDER",
+    after = "ACTUAL_VALUE",
+    paths = glob(["**/*.py"]),
+)
+
+# Replace with regex groups
+core.replace(
+    before = "version = ${version}",
+    after = "version = ${version}-public",
+    regex_groups = {"version": "[0-9]+\\.[0-9]+\\.[0-9]+"},
+)
+```
+
+### Filter Replace
+
+Advanced replacements with custom logic:
+
+```python
+core.filter_replace(
+    regex = "TODO\\(([a-z]+)\\)",
+    mapping = {
+        "user1": "team-a",
+        "user2": "team-b",
+    },
+)
+```
+
+### Verify Match
+
+Ensure patterns exist (or don't):
+
+```python
+# Fail if pattern found
+core.verify_match(
+    regex = "DO NOT SUBMIT",
+    verify_no_match = True,
+)
+
+# Fail if pattern NOT found
+core.verify_match(
+    regex = "Copyright.*Google",
+    paths = glob(["**/*.java"]),
+)
+```
+
+### Custom Transformations
+
+```python
+core.transform(
+    transformations = [
+        core.replace("foo", "bar"),
+        core.move("a", "b"),
+    ],
+    reversal = [
+        core.move("b", "a"),
+        core.replace("bar", "foo"),
+    ],
+)
+```
+
+## Authoring
+
+Control how commit authors are handled:
+
+```python
+# Pass through original author
+authoring.pass_thru("Default <default@example.com>")
+
+# Overwrite all authors
+authoring.overwrite("Bot <bot@example.com>")
+
+# Allow list of authors, default for others
+authoring.allowed(
+    default = "Bot <bot@example.com>",
+    allowlist = [
+        "alice@example.com",
+        "bob@example.com",
+    ],
+)
+```
+
+## Metadata Transformations
+
+### Squash Notes
+
+Combine commit messages:
+
+```python
+metadata.squash_notes(
+    prefix = "Imported changes:\n\n",
+    show_author = True,
+    show_description = True,
+)
+```
+
+### Add Headers
+
+```python
+metadata.add_header(
+    text = "Imported from internal repository",
+    ignore_label_not_found = True,
+)
+```
+
+### Map Authors
+
+```python
+metadata.map_author({
+    "internal@corp.com": "external@example.com",
+})
+```
+
+### Expose Labels
+
+Make labels from commit messages available:
+
+```python
+metadata.expose_label("TESTED_BY")
+```
+
+## Glob Patterns
+
+Filter files with globs:
+
+```python
+# Include patterns
+glob(["src/**", "docs/**"])
+
+# Include with exclude
+glob(
+    include = ["**"],
+    exclude = [
+        "**/internal/**",
+        "**/*.internal.java",
+        "**/BUILD.bazel",
+    ],
+)
+
+# Origin files (what to read)
+origin_files = glob(["src/**"])
+
+# Destination files (what to manage)
+destination_files = glob(["**"], exclude = ["CUSTOM_README.md"])
+```
+
+## Feedback and Actions
+
+### Feedback Workflows
+
+React to events (e.g., PR merged):
+
+```python
+core.feedback(
+    name = "notify_on_merge",
+    origin = git.github_trigger(
+        url = "https://github.com/org/repo",
+        events = ["pull_request"],
+    ),
+    destination = git.github_api(
+        url = "https://github.com/org/internal",
+    ),
+    actions = [
+        action.notify_internal(),
+    ],
+)
+```
+
+### Custom Actions
+
+```python
+def _my_action(ctx):
+    for change in ctx.origin.get_changes():
+        ctx.console.info("Processing: " + change.ref)
+        # Custom logic here
+    return ctx.success()
+
+core.action(
+    name = "my_action",
+    action = _my_action,
+)
+```
+
+## API Integrations
+
+### GitHub API
+
+```python
+git.github_api(
+    url = "https://github.com/org/repo",
+    checker = checker,  # Optional approval checker
+)
+
+# In an action:
+def _action(ctx):
+    api = ctx.destination
+
+    # Create issue
+    api.create_issue(
+        title = "Sync completed",
+        body = "Changes imported successfully",
+    )
+
+    # Get PR info
+    pr = api.get_pull_request(123)
+
+    return ctx.success()
+```
+
+### Gerrit API
+
+```python
+git.gerrit_api(
+    url = "https://gerrit.example.com",
+    checker = checker,
+)
+
+# In an action:
+def _action(ctx):
+    api = ctx.destination
+
+    # Post review
+    api.post_review(
+        change_id = ctx.ref,
+        review_input = git.review_input(
+            labels = {"Code-Review": 1},
+        ),
+    )
+
+    return ctx.success()
+```
+
+## Example: Open Source Workflow
+
+Complete example for open-sourcing internal code:
+
+```python
+# copy.bara.sky - Export internal code to GitHub
+
+internal_url = "https://internal.git.corp/project"
+github_url = "https://github.com/org/project"
+
+core.workflow(
+    name = "export",
+    origin = git.origin(
+        url = internal_url,
+        ref = "main",
+    ),
+    destination = git.github_destination(
+        url = github_url,
+        push = "main",
+    ),
+
+    # Only export public directories
+    origin_files = glob(
+        ["src/**", "docs/**", "examples/**"],
+        exclude = ["**/internal/**", "**/corp/**"],
+    ),
+
+    # Don't touch external-only files
+    destination_files = glob(
+        ["**"],
+        exclude = ["CONTRIBUTING.md", ".github/**"],
+    ),
+
+    authoring = authoring.allowed(
+        default = "Open Source Bot <oss@example.com>",
+        allowlist = ["oss-team@example.com"],
+    ),
+
+    transformations = [
+        # Flatten src to root
+        core.move("src", ""),
+
+        # Replace internal URLs
+        core.replace(
+            before = "internal.corp/",
+            after = "github.com/org/",
+        ),
+
+        # Remove internal TODOs
+        core.replace(
+            before = "// TODO(corp): ${content}\n",
+            after = "",
+            regex_groups = {"content": ".*"},
+            multiline = True,
+        ),
+
+        # Verify no secrets
+        core.verify_match(
+            regex = "INTERNAL_SECRET|corp-token",
+            verify_no_match = True,
+        ),
+
+        # Add license headers
+        metadata.add_header(
+            text = "Exported from internal repository",
+        ),
+    ],
+
+    mode = "SQUASH",
+)
+
+# Import external contributions back
+core.workflow(
+    name = "import",
+    origin = git.github_pr_origin(
+        url = github_url,
+        branch = "main",
+    ),
+    destination = git.gerrit_destination(
+        url = internal_url,
+        fetch = "main",
+        push_to_refs_for = "main",
+    ),
+
+    authoring = authoring.pass_thru("Import Bot <import@example.com>"),
+
+    transformations = [
+        # Move back to internal structure
+        core.move("", "src"),
+    ],
+
+    mode = "CHANGE_REQUEST",
+)
+```
+
+## Further Reading
+
+- [Copybara GitHub Repository](https://github.com/google/copybara)
+- [Copybara Reference Documentation](https://github.com/google/copybara/blob/master/docs/reference.md)
+- [Copybara Examples](https://github.com/google/copybara/blob/master/docs/examples.md)
+
+## Source References
+
+This documentation is based on Copybara source code at commit [`3024646`](https://github.com/google/copybara/tree/30246465ec209685ba31ecccfe49c9f1ac3b243f):
+
+- [CoreModule.java](https://github.com/google/copybara/blob/30246465ec209685ba31ecccfe49c9f1ac3b243f/java/com/google/copybara/CoreModule.java) - Core workflow and transformations
+- [git/ module](https://github.com/google/copybara/tree/30246465ec209685ba31ecccfe49c9f1ac3b243f/java/com/google/copybara/git) - Git origins and destinations
+- [transform/](https://github.com/google/copybara/tree/30246465ec209685ba31ecccfe49c9f1ac3b243f/java/com/google/copybara/transform) - Transformation implementations
+- [Reference docs](https://github.com/google/copybara/blob/30246465ec209685ba31ecccfe49c9f1ac3b243f/docs/reference.md) - Full API reference

@@ -107,6 +107,7 @@ export default defineConfig({
 						{ label: 'Skycfg', slug: 'starlark/skycfg-deep-dive' },
 						{ label: 'ytt', slug: 'starlark/ytt-deep-dive' },
 						{ label: 'Tilt', slug: 'starlark/tilt' },
+						{ label: 'Copybara', slug: 'starlark/copybara' },
 						{ label: 'Aspect CLI & AXL', slug: 'starlark/aspect-cli-axl' },
 					],
 				},
