@@ -106,6 +106,7 @@ export default defineConfig({
 						{ label: 'Bazel vs Buck2', slug: 'starlark/build-systems-comparison' },
 						{ label: 'Skycfg', slug: 'starlark/skycfg-deep-dive' },
 						{ label: 'ytt', slug: 'starlark/ytt-deep-dive' },
+						{ label: 'Tilt', slug: 'starlark/tilt' },
 						{ label: 'Aspect CLI & AXL', slug: 'starlark/aspect-cli-axl' },
 					],
 				},

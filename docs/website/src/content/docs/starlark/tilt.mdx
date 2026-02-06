@@ -1,0 +1,389 @@
+---
+title: Starlark in Tilt
+description: How Starlark powers Tilt's Kubernetes development workflow
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+# Starlark in Tilt
+
+[Tilt](https://tilt.dev/) is a development tool for Kubernetes that uses Starlark through **Tiltfiles** to define local development workflows. It automates building, pushing, and deploying containers with live updates.
+
+<Aside type="note">
+Tilt uses [**starlark-go**](https://github.com/google/starlark-go) (`go.starlark.net`), the canonical Go implementation of Starlark. This is the same implementation used by Copybara, Skycfg, and other Go-based tools.
+
+*Source: [go.mod](https://github.com/tilt-dev/tilt/blob/cbbb93e4abaf0a3d5e06e6c3c9fc7b74bf1d6ea5/go.mod#L67)*
+</Aside>
+
+## What Tilt Does
+
+Tilt watches your filesystem, rebuilds containers, and updates running services:
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Edit Code     │────▶│   Tilt Detects  │────▶│  Live Update    │
+│                 │     │                 │     │                 │
+│ • Source files  │     │ • File watcher  │     │ • Sync files    │
+│ • Dockerfiles   │     │ • Dependency    │     │ • Run commands  │
+│ • K8s manifests │     │   tracking      │     │ • Restart procs │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+## Tiltfile Basics
+
+A `Tiltfile` defines your development environment:
+
+```python
+# Tiltfile
+
+# Build a Docker image
+docker_build('myapp/backend', './backend')
+
+# Deploy to Kubernetes
+k8s_yaml('kubernetes.yaml')
+
+# Configure the resource
+k8s_resource('backend', port_forwards=8080)
+```
+
+### File Structure
+
+| File | Purpose |
+|------|---------|
+| `Tiltfile` | Main configuration (Starlark) |
+| `tilt_modules/` | Extensions and shared code |
+| `.tiltignore` | Files to ignore (like `.gitignore`) |
+| `tilt-settings.yaml` | User-specific settings |
+
+## Core Functions
+
+### Building Images
+
+#### docker_build
+
+Build Docker images with automatic rebuild on file changes:
+
+```python
+docker_build(
+    'myregistry/myapp',      # Image reference
+    './app',                  # Build context
+    dockerfile='Dockerfile',  # Dockerfile path
+    build_args={'ENV': 'dev'},# Build arguments
+    ignore=['tests/', '*.md'], # Files to ignore
+    only=['src/', 'go.mod'],  # Only include these
+    live_update=[             # Live update steps
+        sync('./src', '/app/src'),
+        run('go build -o /app/main ./...'),
+    ],
+)
+```
+
+#### custom_build
+
+For non-Docker builds (Bazel, ko, buildpacks, etc.):
+
+```python
+custom_build(
+    'myapp/server',
+    'bazel build //cmd/server:image && bazel run //cmd/server:image',
+    deps=['cmd/', 'pkg/', 'BUILD.bazel'],
+    tag='bazel-built',
+)
+```
+
+### Kubernetes Deployment
+
+#### k8s_yaml
+
+Load Kubernetes manifests:
+
+```python
+# From files
+k8s_yaml('deployment.yaml')
+k8s_yaml(['service.yaml', 'ingress.yaml'])
+
+# From Helm
+k8s_yaml(helm('charts/myapp', values='values-dev.yaml'))
+
+# From Kustomize
+k8s_yaml(kustomize('overlays/dev'))
+
+# Inline YAML
+k8s_yaml(blob("""
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-config
+data:
+  key: value
+"""))
+```
+
+#### k8s_resource
+
+Configure how Tilt manages Kubernetes resources:
+
+```python
+k8s_resource(
+    'backend',
+    port_forwards=[
+        8080,                              # Simple forward
+        port_forward(9229, name='Debug'),  # Named forward
+    ],
+    resource_deps=['database'],            # Wait for dependencies
+    labels=['backend'],                    # Group in UI
+    trigger_mode=TRIGGER_MODE_MANUAL,      # Manual rebuild only
+)
+```
+
+### Docker Compose
+
+Tilt also works with Docker Compose:
+
+```python
+docker_compose('docker-compose.yml')
+
+# With overrides
+docker_compose([
+    'docker-compose.yml',
+    'docker-compose.override.yml',
+])
+
+# Configure a compose service
+dc_resource('redis', labels=['infra'])
+```
+
+## Live Update
+
+Live Update syncs changes to running containers without rebuilding:
+
+```python
+docker_build(
+    'myapp/frontend',
+    '.',
+    live_update=[
+        # Trigger full rebuild if these change
+        fall_back_on(['package.json', 'package-lock.json']),
+
+        # Sync source files to container
+        sync('./src', '/app/src'),
+        sync('./public', '/app/public'),
+
+        # Run commands after sync
+        run('npm run build', trigger=['./src']),
+
+        # For Docker Compose: restart the process
+        restart_container(),
+    ],
+)
+```
+
+### Live Update Steps
+
+| Step | Purpose |
+|------|---------|
+| `fall_back_on(files)` | Trigger full rebuild if these files change |
+| `sync(local, remote)` | Copy files to container |
+| `run(cmd, trigger=)` | Execute command in container |
+| `restart_container()` | Restart container process (Compose only) |
+
+## Local Resources
+
+Run local commands as part of your dev environment:
+
+```python
+# Run a local script
+local_resource(
+    'codegen',
+    cmd='./scripts/generate.sh',
+    deps=['schema.graphql'],
+    labels=['codegen'],
+)
+
+# Serve local docs
+local_resource(
+    'docs',
+    serve_cmd='mkdocs serve',
+    deps=['docs/'],
+    links=['http://localhost:8000'],
+)
+```
+
+## Extensions
+
+Tilt has an extension system for reusable Tiltfile code:
+
+```python
+# Load from tilt-extensions repository
+load('ext://restart_process', 'docker_build_with_restart')
+load('ext://helm_resource', 'helm_resource')
+load('ext://secret', 'secret_from_dict')
+
+# Use the extension
+docker_build_with_restart(
+    'myapp',
+    '.',
+    entrypoint='/app/main',
+    live_update=[sync('./src', '/app/src')],
+)
+```
+
+Popular extensions:
+- `restart_process` - Restart process without container rebuild
+- `helm_resource` - Better Helm chart support
+- `secret` - Manage Kubernetes secrets
+- `namespace` - Auto-create namespaces
+- `configmap` - Manage ConfigMaps
+
+## Built-in Modules
+
+Tiltfiles can import standard modules:
+
+```python
+# Operating system info
+load('ext://os', 'os')
+print(os.name)      # 'posix' or 'nt'
+print(os.environ)   # Environment variables
+
+# Configuration from files
+load('ext://config', 'config')
+settings = config.parse()
+
+# Shell-style argument parsing
+load('ext://shlex', 'shlex')
+args = shlex.split('cmd --flag "with spaces"')
+```
+
+## Helper Functions
+
+### local
+
+Execute local commands:
+
+```python
+# Run a command, get output as Blob
+version = local('git describe --tags')
+
+# Use output in your Tiltfile
+if 'dirty' in str(version):
+    print('Warning: uncommitted changes')
+```
+
+### read_file / read_yaml / read_json
+
+Read configuration files:
+
+```python
+# Read raw file
+content = read_file('config.txt')
+
+# Read and parse YAML
+config = read_yaml('settings.yaml')
+print(config['database']['host'])
+
+# Read and parse JSON
+package = read_json('package.json')
+print(package['version'])
+```
+
+### encode_yaml / encode_json
+
+Generate configuration:
+
+```python
+# Create ConfigMap from dict
+config_data = {'LOG_LEVEL': 'debug', 'PORT': '8080'}
+k8s_yaml(blob(encode_yaml({
+    'apiVersion': 'v1',
+    'kind': 'ConfigMap',
+    'metadata': {'name': 'app-config'},
+    'data': config_data,
+})))
+```
+
+## Example: Full Stack App
+
+```python
+# Tiltfile for a typical web application
+
+# === Backend (Go) ===
+docker_build(
+    'myapp/api',
+    './api',
+    live_update=[
+        sync('./api', '/app'),
+        run('go build -o /app/server ./cmd/server'),
+    ],
+)
+
+# === Frontend (React) ===
+docker_build(
+    'myapp/web',
+    './web',
+    live_update=[
+        fall_back_on(['package.json', 'package-lock.json']),
+        sync('./web/src', '/app/src'),
+    ],
+)
+
+# === Deploy ===
+k8s_yaml(kustomize('./k8s/overlays/dev'))
+
+# === Configure Resources ===
+k8s_resource('api', port_forwards=8080, labels=['backend'])
+k8s_resource('web', port_forwards=3000, labels=['frontend'])
+k8s_resource('postgres', labels=['database'])
+
+# === Local Tools ===
+local_resource(
+    'db-migrate',
+    cmd='./scripts/migrate.sh',
+    deps=['./migrations'],
+    resource_deps=['postgres'],
+    labels=['database'],
+)
+```
+
+## Starlark Features in Tilt
+
+Tilt's Starlark supports standard features:
+
+```python
+# Functions
+def my_service(name, port):
+    docker_build('myapp/' + name, './' + name)
+    k8s_yaml(name + '.yaml')
+    k8s_resource(name, port_forwards=port)
+
+my_service('api', 8080)
+my_service('worker', 9090)
+
+# Conditionals
+if os.environ.get('CI'):
+    # CI-specific config
+    config.define_bool('skip-tests')
+else:
+    # Local development
+    local_resource('tests', cmd='go test ./...')
+
+# Loops
+services = ['api', 'worker', 'scheduler']
+for svc in services:
+    docker_build('myapp/' + svc, './' + svc)
+```
+
+## Further Reading
+
+- [Tilt Documentation](https://docs.tilt.dev/)
+- [Tiltfile API Reference](https://docs.tilt.dev/api.html)
+- [Tilt Extensions](https://github.com/tilt-dev/tilt-extensions)
+- [Live Update Reference](https://docs.tilt.dev/live_update_reference.html)
+- [starlark-go](https://github.com/google/starlark-go)
+
+## Source References
+
+This documentation is based on Tilt source code at commit [`cbbb93e`](https://github.com/tilt-dev/tilt/tree/cbbb93e4abaf0a3d5e06e6c3c9fc7b74bf1d6ea5):
+
+- [Tiltfile API stubs](https://github.com/tilt-dev/tilt/tree/cbbb93e4abaf0a3d5e06e6c3c9fc7b74bf1d6ea5/internal/tiltfile/api)
+- [Tiltfile implementation](https://github.com/tilt-dev/tilt/blob/cbbb93e4abaf0a3d5e06e6c3c9fc7b74bf1d6ea5/internal/tiltfile/tiltfile.go)
+- [starkit framework](https://github.com/tilt-dev/tilt/tree/cbbb93e4abaf0a3d5e06e6c3c9fc7b74bf1d6ea5/internal/tiltfile/starkit)

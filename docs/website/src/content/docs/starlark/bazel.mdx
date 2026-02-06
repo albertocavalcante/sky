@@ -10,7 +10,7 @@ import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 [Bazel](https://bazel.build/) is Google's open-source build system, designed for fast, reproducible builds at scale. Starlark is the extension language that makes Bazel customizable.
 
 <Aside type="note">
-Bazel uses **starlark-java** (`net.starlark.java`), its own Java implementation of Starlark. This is *not* the same as starlark-go, which is used by other tools like Tilt and Copybara.
+Bazel uses **starlark-java** ([`net.starlark.java`](https://github.com/bazelbuild/bazel/tree/master/src/main/java/net/starlark/java)), its own Java implementation of Starlark. This is *not* the same as starlark-go, which is used by other tools like Tilt and Copybara.
 </Aside>
 
 ## Key Concepts
@@ -308,3 +308,12 @@ Bazel's Starlark has some restrictions compared to standard Starlark:
 - [Starlark Language](https://bazel.build/rules/language)
 - [Provider Reference](https://bazel.build/extending/rules#providers)
 - [For comparison with Buck2](/sky/starlark/build-systems-comparison/)
+
+## Source References
+
+This documentation is based on Bazel source code at commit [`a147aac`](https://github.com/bazelbuild/bazel/tree/a147aacd390a5550668cfe305c12d33df2e415ff):
+
+- [starlark-java implementation](https://github.com/bazelbuild/bazel/tree/a147aacd390a5550668cfe305c12d33df2e415ff/src/main/java/net/starlark/java)
+- [StarlarkThread.java](https://github.com/bazelbuild/bazel/blob/a147aacd390a5550668cfe305c12d33df2e415ff/src/main/java/net/starlark/java/eval/StarlarkThread.java) - Thread execution context
+- [Starlark.java](https://github.com/bazelbuild/bazel/blob/a147aacd390a5550668cfe305c12d33df2e415ff/src/main/java/net/starlark/java/eval/Starlark.java) - Core evaluation
+- [Extension concepts](https://github.com/bazelbuild/bazel/blob/a147aacd390a5550668cfe305c12d33df2e415ff/site/en/extending/concepts.md)
