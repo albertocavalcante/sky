@@ -1,0 +1,310 @@
+---
+title: Starlark in Bazel
+description: How Starlark powers Google's Bazel build system
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+# Starlark in Bazel
+
+[Bazel](https://bazel.build/) is Google's open-source build system, designed for fast, reproducible builds at scale. Starlark is the extension language that makes Bazel customizable.
+
+<Aside type="note">
+Bazel uses **starlark-java** (`net.starlark.java`), its own Java implementation of Starlark. This is *not* the same as starlark-go, which is used by other tools like Tilt and Copybara.
+</Aside>
+
+## Key Concepts
+
+### File Types
+
+| File | Purpose | Example |
+|------|---------|---------|
+| `BUILD` / `BUILD.bazel` | Defines build targets in a package | `cc_binary(name = "app", srcs = ["main.cc"])` |
+| `*.bzl` | Starlark extension files (macros, rules) | `def my_macro(name): ...` |
+| `WORKSPACE` / `WORKSPACE.bazel` | Declares external dependencies | `http_archive(name = "rules_go", ...)` |
+| `MODULE.bazel` | Bzlmod module definition (Bazel 6+) | `bazel_dep(name = "rules_go", version = "0.41.0")` |
+| `.bazelrc` | Build configuration flags | `build --compilation_mode=opt` |
+
+### Targets and Labels
+
+A **label** uniquely identifies a target:
+
+```
+@repo_name//package/path:target_name
+│         │              │
+│         │              └── Target name
+│         └── Package path (directory with BUILD file)
+└── Repository name (@ for external, omit for current)
+```
+
+Examples:
+```python
+# Same package
+":my_lib"
+
+# Different package, same repo
+"//src/lib:utils"
+
+# External repository
+"@rules_go//go:def.bzl"
+```
+
+## Evaluation Model
+
+Bazel builds happen in three distinct phases:
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Loading Phase  │────▶│ Analysis Phase  │────▶│ Execution Phase │
+│                 │     │                 │     │                 │
+│ • Parse BUILD   │     │ • Run rule impl │     │ • Run actions   │
+│ • Evaluate .bzl │     │ • Create actions│     │ • Produce files │
+│ • Expand macros │     │ • Return provs  │     │ • Cache results │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+     Starlark                Starlark               Sandboxed
+```
+
+### Loading Phase
+
+During loading, Bazel:
+1. Parses `BUILD` and `.bzl` files
+2. Evaluates Starlark code
+3. Expands macros into rule instantiations
+4. Builds the target graph
+
+```python
+# BUILD file - evaluated during loading
+load("//build_defs:macros.bzl", "my_macro")
+
+my_macro(name = "foo")  # Macro expands here
+
+cc_library(
+    name = "bar",
+    srcs = ["bar.cc"],
+    deps = [":foo"],
+)
+```
+
+### Analysis Phase
+
+During analysis, Bazel:
+1. Runs each rule's `implementation` function
+2. Creates **actions** (commands to run later)
+3. Returns **providers** (information for dependents)
+
+```python
+def _my_rule_impl(ctx):
+    # Create an action
+    output = ctx.actions.declare_file(ctx.label.name + ".out")
+    ctx.actions.run(
+        outputs = [output],
+        inputs = ctx.files.srcs,
+        executable = ctx.executable._compiler,
+        arguments = [f.path for f in ctx.files.srcs] + [output.path],
+    )
+
+    # Return providers
+    return [
+        DefaultInfo(files = depset([output])),
+        MyInfo(data = output),
+    ]
+```
+
+<Aside type="caution">
+Rule implementations **cannot** read file contents or run commands. They only *declare* actions to run later. This enables caching and parallelism.
+</Aside>
+
+### Execution Phase
+
+During execution, Bazel:
+1. Determines which actions need to run
+2. Executes actions in parallel (respecting dependencies)
+3. Caches action results for incremental builds
+
+## Macros vs Rules
+
+### Macros
+
+A **macro** is a Starlark function that instantiates rules. Macros are expanded during the loading phase.
+
+```python
+# macros.bzl
+def cc_test_suite(name, srcs, deps = []):
+    """Creates a test target for each source file."""
+    for src in srcs:
+        test_name = src.replace(".cc", "_test")
+        native.cc_test(
+            name = test_name,
+            srcs = [src],
+            deps = deps,
+        )
+```
+
+<Tabs>
+<TabItem label="Symbolic Macros (Bazel 8+)">
+```python
+# Recommended for Bazel 8+
+my_macro = macro(
+    implementation = _my_macro_impl,
+    attrs = {
+        "srcs": attr.label_list(allow_files = True),
+    },
+)
+
+def _my_macro_impl(name, srcs):
+    native.genrule(
+        name = name,
+        srcs = srcs,
+        outs = [name + ".out"],
+        cmd = "cat $(SRCS) > $@",
+    )
+```
+</TabItem>
+<TabItem label="Legacy Macros">
+```python
+# Works in all Bazel versions
+def my_macro(name, srcs):
+    native.genrule(
+        name = name,
+        srcs = srcs,
+        outs = [name + ".out"],
+        cmd = "cat $(SRCS) > $@",
+    )
+```
+</TabItem>
+</Tabs>
+
+### Rules
+
+A **rule** has full control over the analysis phase. Rules can create actions, define providers, and access Bazel internals.
+
+```python
+# rules.bzl
+def _example_rule_impl(ctx):
+    output = ctx.actions.declare_file(ctx.label.name + ".txt")
+    ctx.actions.write(output, "Hello from " + ctx.label.name)
+    return [DefaultInfo(files = depset([output]))]
+
+example_rule = rule(
+    implementation = _example_rule_impl,
+    attrs = {
+        "message": attr.string(default = "Hello"),
+    },
+)
+```
+
+## Core APIs
+
+### Providers
+
+Providers pass information between rules. They're the primary way rules communicate.
+
+```python
+# Define a provider
+MyInfo = provider(
+    doc = "Information from my rule",
+    fields = {
+        "output": "The main output file",
+        "data": "Additional data files",
+    },
+)
+
+def _my_rule_impl(ctx):
+    # Collect from dependencies
+    all_data = []
+    for dep in ctx.attr.deps:
+        if MyInfo in dep:
+            all_data.extend(dep[MyInfo].data)
+
+    # Return for dependents
+    return [
+        DefaultInfo(files = depset([output])),
+        MyInfo(output = output, data = all_data),
+    ]
+```
+
+### Depsets
+
+A **depset** is an efficient collection for accumulating transitive dependencies:
+
+```python
+def _my_rule_impl(ctx):
+    # Collect transitive files efficiently
+    transitive_srcs = depset(
+        direct = ctx.files.srcs,
+        transitive = [dep[MyInfo].srcs for dep in ctx.attr.deps],
+    )
+    return [MyInfo(srcs = transitive_srcs)]
+```
+
+<Aside type="tip">
+Depsets use O(1) merge operations. Never flatten a depset (`.to_list()`) unless absolutely necessary—it defeats the purpose.
+</Aside>
+
+### Actions
+
+Actions are the commands Bazel executes:
+
+```python
+# Run a command
+ctx.actions.run(
+    outputs = [output],
+    inputs = depset([input]),
+    executable = ctx.executable._tool,
+    arguments = ["--input", input.path, "--output", output.path],
+    mnemonic = "MyAction",
+    progress_message = "Processing %s" % input.short_path,
+)
+
+# Run a shell command
+ctx.actions.run_shell(
+    outputs = [output],
+    inputs = [input],
+    command = "cat $1 | tr a-z A-Z > $2",
+    arguments = [input.path, output.path],
+)
+
+# Write a file
+ctx.actions.write(
+    output = output,
+    content = "Generated content",
+)
+```
+
+### Aspects
+
+Aspects traverse the dependency graph, augmenting targets with additional actions:
+
+```python
+def _my_aspect_impl(target, ctx):
+    # Run on every target in the graph
+    if hasattr(ctx.rule.attr, "srcs"):
+        # Do something with srcs
+        pass
+    return []
+
+my_aspect = aspect(
+    implementation = _my_aspect_impl,
+    attr_aspects = ["deps"],  # Propagate along deps
+)
+```
+
+## Starlark Dialect
+
+Bazel's Starlark has some restrictions compared to standard Starlark:
+
+| Feature | Bazel Starlark |
+|---------|----------------|
+| Recursion | Disabled by default |
+| Top-level `for` | Disabled by default |
+| `print()` | Available (outputs to console) |
+| `load()` | Only at top level |
+| Mutable globals | Frozen after load |
+
+## Further Reading
+
+- [Bazel Documentation](https://bazel.build/docs)
+- [Rules Tutorial](https://bazel.build/rules/rules-tutorial)
+- [Starlark Language](https://bazel.build/rules/language)
+- [Provider Reference](https://bazel.build/extending/rules#providers)
+- [For comparison with Buck2](/sky/starlark/build-systems-comparison/)

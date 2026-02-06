@@ -1,0 +1,397 @@
+---
+title: Starlark in Buck2
+description: How Starlark powers Meta's Buck2 build system
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+# Starlark in Buck2
+
+[Buck2](https://buck2.build/) is Meta's next-generation build system, a complete rewrite of Buck1 in Rust. Unlike Bazel, Buck2 implements **100% of its rules in Starlark** through its prelude system.
+
+<Aside type="note">
+Buck2 uses **starlark-rust**, which provides advanced type system features not available in other Starlark implementations: `record`, `enum`, type annotations with runtime checking, and more.
+</Aside>
+
+## Key Concepts
+
+### File Types
+
+| File | Purpose | Example |
+|------|---------|---------|
+| `BUCK` / `TARGETS` | Defines build targets in a package | `cxx_binary(name = "app", srcs = ["main.cpp"])` |
+| `*.bzl` | Starlark extension files | `def my_macro(name): ...` |
+| `*.bxl` | BXL scripts (introspection) | `def _main(ctx): ...` |
+| `.buckconfig` | Project/cell configuration | `[cells]\nprelude = prelude` |
+| `PACKAGE` | Package-level defaults | `package(visibility = ["PUBLIC"])` |
+
+### Targets and Labels
+
+Buck2 labels follow a similar pattern to Bazel:
+
+```
+cell//package/path:target_name
+│    │              │
+│    │              └── Target name
+│    └── Package path (directory with BUCK file)
+└── Cell name
+```
+
+Examples:
+```python
+# Same package
+":my_lib"
+
+# Different package
+"//src/lib:utils"
+
+# Different cell
+"prelude//rust:defs.bzl"
+```
+
+### Cells and Projects
+
+Buck2 organizes code into **cells**:
+
+```ini
+# .buckconfig
+[cells]
+root = .
+prelude = prelude
+toolchains = toolchains
+```
+
+Each cell can have its own prelude and configuration.
+
+## The DICE Model
+
+Buck2's core innovation is **DICE** (Distributed Incremental Computation Engine), a single unified computation graph:
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│                        DICE Graph                                  │
+│                                                                    │
+│  ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐        │
+│  │ Parse   │───▶│Configure│───▶│ Analyze │───▶│ Execute │        │
+│  │ BUCK    │    │ Target  │    │ Target  │    │ Action  │        │
+│  └─────────┘    └─────────┘    └─────────┘    └─────────┘        │
+│       ▲              ▲              ▲              ▲              │
+│       │              │              │              │              │
+│       └──────────────┴──────────────┴──────────────┘              │
+│                    Incremental invalidation                        │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+Unlike Bazel's phased model, DICE:
+- Computes everything incrementally in a single graph
+- Enables fine-grained invalidation
+- Was designed for remote execution from day one
+- Provides better parallelism through Rust's async runtime
+
+## The Prelude System
+
+The **prelude** is Buck2's standard library—all rules are implemented in Starlark:
+
+```
+prelude/
+├── rust/
+│   ├── rust_binary.bzl
+│   ├── rust_library.bzl
+│   └── ...
+├── cxx/
+│   ├── cxx_binary.bzl
+│   ├── cxx_library.bzl
+│   └── ...
+├── python/
+├── go/
+├── java/
+└── ... (50+ directories)
+```
+
+<Aside type="tip">
+You can customize or replace prelude rules entirely. Fork the prelude, modify rules, and point your `.buckconfig` at your version.
+</Aside>
+
+### Prelude Structure
+
+```python
+# prelude/rust/rust_binary.bzl
+
+def rust_binary_impl(ctx: AnalysisContext) -> list[Provider]:
+    # All rule logic is here in Starlark
+    toolchain = ctx.attrs._rust_toolchain[RustToolchainInfo]
+
+    output = ctx.actions.declare_output(ctx.attrs.name)
+
+    ctx.actions.run(
+        cmd_args(
+            toolchain.compiler,
+            ctx.attrs.srcs,
+            "-o", output.as_output(),
+        ),
+        category = "rustc",
+    )
+
+    return [
+        DefaultInfo(default_output = output),
+        RunInfo(args = cmd_args(output)),
+    ]
+
+rust_binary = rule(
+    impl = rust_binary_impl,
+    attrs = {
+        "name": attrs.string(),
+        "srcs": attrs.list(attrs.source()),
+        "deps": attrs.list(attrs.dep()),
+        "_rust_toolchain": attrs.toolchain_dep(
+            default = "toolchains//:rust",
+            providers = [RustToolchainInfo],
+        ),
+    },
+)
+```
+
+## Writing Rules
+
+### Rule Definition
+
+```python
+def _my_rule_impl(ctx: AnalysisContext) -> list[Provider]:
+    output = ctx.actions.declare_output(ctx.attrs.out)
+
+    ctx.actions.run(
+        cmd_args(
+            "my_tool",
+            ctx.attrs.srcs,
+            "-o", output.as_output(),
+        ),
+        category = "my_tool",
+    )
+
+    return [
+        DefaultInfo(default_output = output),
+    ]
+
+my_rule = rule(
+    impl = _my_rule_impl,
+    attrs = {
+        "out": attrs.string(),
+        "srcs": attrs.list(attrs.source()),
+    },
+)
+```
+
+### Type Annotations
+
+Buck2's starlark-rust supports full type annotations:
+
+```python
+def _my_rule_impl(ctx: AnalysisContext) -> list[Provider]:
+    srcs: list[Artifact] = ctx.attrs.srcs
+    output: Artifact = ctx.actions.declare_output("out.txt")
+
+    content: str = "Files: " + ", ".join([s.short_path for s in srcs])
+    ctx.actions.write(output, content)
+
+    return [DefaultInfo(default_output = output)]
+```
+
+### Records and Enums
+
+starlark-rust provides structured types:
+
+```python
+# Define a record (like a struct)
+MyRecord = record(
+    name = str,
+    count = int,
+    optional_field = field(str, default = "default"),
+)
+
+# Use it
+data = MyRecord(name = "example", count = 42)
+print(data.name)  # "example"
+
+# Define an enum
+Status = enum("pending", "running", "complete", "failed")
+
+# Use it
+current = Status("running")
+if current == Status("complete"):
+    print("Done!")
+```
+
+## Core APIs
+
+### Providers
+
+Providers in Buck2 work similarly to Bazel:
+
+```python
+# Define a provider
+MyInfo = provider(fields = {
+    "output": provider_field(Artifact),
+    "data": provider_field(list[Artifact], default = []),
+})
+
+def _my_rule_impl(ctx: AnalysisContext) -> list[Provider]:
+    output = ctx.actions.declare_output("out.txt")
+
+    # Collect from deps
+    all_data = []
+    for dep in ctx.attrs.deps:
+        if MyInfo in dep:
+            all_data.extend(dep[MyInfo].data)
+
+    return [
+        DefaultInfo(default_output = output),
+        MyInfo(output = output, data = all_data),
+    ]
+```
+
+### Transitive Sets
+
+**Transitive sets** are Buck2's equivalent to Bazel's depsets:
+
+```python
+# Define a transitive set type
+MyTSet = transitive_set()
+
+def _my_rule_impl(ctx: AnalysisContext) -> list[Provider]:
+    # Create a transitive set
+    my_files = ctx.actions.tset(
+        MyTSet,
+        value = ctx.attrs.srcs,
+        children = [dep[MyInfo].files for dep in ctx.attrs.deps],
+    )
+
+    return [MyInfo(files = my_files)]
+```
+
+Transitive sets support **projections** for efficient transformations:
+
+```python
+# Define with projections
+MyTSet = transitive_set(args_projections = {
+    "as_args": lambda srcs: cmd_args(srcs),
+})
+
+# Use projection in action
+ctx.actions.run(
+    cmd_args(
+        "process",
+        my_tset.project_as_args("as_args"),
+    ),
+)
+```
+
+### Actions
+
+```python
+# Run a command
+ctx.actions.run(
+    cmd_args(
+        toolchain.compiler,
+        "--input", input,
+        "--output", output.as_output(),
+    ),
+    category = "compile",
+    identifier = input.short_path,
+)
+
+# Write a file
+ctx.actions.write(output, content)
+
+# Copy a file
+ctx.actions.copy_file(output, input)
+
+# Create a symlink
+ctx.actions.symlinked_dir(output, {
+    "lib": lib_dir,
+    "include": include_dir,
+})
+```
+
+## BXL (Buck Extension Language)
+
+BXL scripts provide powerful introspection and custom commands:
+
+```python
+# my_query.bxl
+def _impl(ctx: bxl.Context) -> None:
+    # Query the build graph
+    targets = ctx.uquery().deps("//my:target")
+
+    for target in targets:
+        ctx.output.print(target.label)
+
+        # Access providers
+        analysis = ctx.analysis(target)
+        if DefaultInfo in analysis.providers():
+            info = analysis.providers()[DefaultInfo]
+            ctx.output.print(f"  outputs: {info.default_outputs}")
+
+main = bxl_main(
+    impl = _impl,
+    cli_args = {
+        "target": cli_args.target_expr(),
+    },
+)
+```
+
+Run with:
+```bash
+buck2 bxl //my:my_query.bxl:main -- --target //my:target
+```
+
+### BXL Use Cases
+
+- Custom query commands
+- Build graph analysis
+- Migration scripts
+- CI/CD integrations
+- Code generation pipelines
+
+## Dynamic Dependencies
+
+Buck2 supports dynamic dependencies through anonymous targets:
+
+```python
+def _my_rule_impl(ctx: AnalysisContext) -> list[Provider]:
+    # Create a dynamic action that depends on file contents
+    def dynamic_impl(ctx, artifacts, outputs):
+        content = artifacts[input].read_string()
+        deps = parse_deps(content)
+
+        for dep in deps:
+            # Process each discovered dependency
+            pass
+
+    ctx.actions.dynamic_output(
+        dynamic = [input],
+        inputs = [],
+        outputs = [output.as_output()],
+        f = dynamic_impl,
+    )
+```
+
+## Starlark Dialect
+
+Buck2's starlark-rust has unique features:
+
+| Feature | Buck2 (starlark-rust) |
+|---------|----------------------|
+| Recursion | Supported |
+| Type annotations | Full support with runtime checking |
+| `record` type | Built-in |
+| `enum` type | Built-in |
+| Top-level `for` | Supported |
+| DAP debugging | Supported |
+
+## Further Reading
+
+- [Buck2 Documentation](https://buck2.build/docs/)
+- [Writing Rules](https://buck2.build/docs/rule_authors/writing_rules/)
+- [BXL Guide](https://buck2.build/docs/bxl/bxl/)
+- [starlark-rust](https://github.com/facebook/starlark-rust)
+- [For comparison with Bazel](/sky/starlark/build-systems-comparison/)

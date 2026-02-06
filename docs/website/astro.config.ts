@@ -101,6 +101,8 @@ export default defineConfig({
 					label: 'Starlark in Practice',
 					items: [
 						{ label: 'Use Cases Overview', slug: 'starlark/use-cases' },
+					{ label: 'Bazel', slug: 'starlark/bazel' },
+					{ label: 'Buck2', slug: 'starlark/buck2' },
 						{ label: 'Bazel vs Buck2', slug: 'starlark/build-systems-comparison' },
 						{ label: 'Skycfg', slug: 'starlark/skycfg-deep-dive' },
 						{ label: 'ytt', slug: 'starlark/ytt-deep-dive' },
