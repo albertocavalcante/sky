@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 
-	"go.lsp.dev/protocol"
+	"github.com/albertocavalcante/sky/internal/protocol"
 )
 
 // Starlark keywords that cannot be renamed
@@ -36,7 +36,7 @@ func (s *Server) handlePrepareRename(ctx context.Context, params json.RawMessage
 	}
 
 	s.mu.RLock()
-	doc, ok := s.documents[p.TextDocument.URI]
+	doc, ok := s.documents[p.TextDocument.Uri]
 	s.mu.RUnlock()
 	if !ok {
 		return nil, nil
@@ -73,7 +73,7 @@ func (s *Server) handleRename(ctx context.Context, params json.RawMessage) (any,
 	}
 
 	s.mu.RLock()
-	doc, ok := s.documents[p.TextDocument.URI]
+	doc, ok := s.documents[p.TextDocument.Uri]
 	s.mu.RUnlock()
 	if !ok {
 		return nil, nil
@@ -108,8 +108,8 @@ func (s *Server) handleRename(ctx context.Context, params json.RawMessage) (any,
 	}
 
 	return &protocol.WorkspaceEdit{
-		Changes: map[protocol.DocumentURI][]protocol.TextEdit{
-			p.TextDocument.URI: edits,
+		Changes: map[string][]protocol.TextEdit{
+			p.TextDocument.Uri: edits,
 		},
 	}, nil
 }

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"go.lsp.dev/protocol"
+	"github.com/albertocavalcante/sky/internal/protocol"
 )
 
 func TestRename_Variable(t *testing.T) {
@@ -21,13 +21,11 @@ z = x * 2
 
 	// Rename 'x' to 'value' at line 0, char 0
 	renameParams, _ := json.Marshal(protocol.RenameParams{
-		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{
-				URI: "file:///test.star",
-			},
-			Position: protocol.Position{Line: 0, Character: 0},
-		},
-		NewName: "value",
+
+		TextDocument: protocol.TextDocumentIdentifier{
+			Uri: "file:///test.star"},
+		Position: protocol.Position{Line: 0, Character: 0},
+		NewName:  "value",
 	})
 
 	result, err := server.Handle(context.Background(), &Request{
@@ -77,13 +75,11 @@ y = my_func(3, 4)
 
 	// Rename 'my_func' to 'add_numbers' at function definition line 0
 	renameParams, _ := json.Marshal(protocol.RenameParams{
-		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{
-				URI: "file:///test.star",
-			},
-			Position: protocol.Position{Line: 0, Character: 5}, // on 'my_func'
-		},
-		NewName: "add_numbers",
+
+		TextDocument: protocol.TextDocumentIdentifier{
+			Uri: "file:///test.star"},
+		Position: protocol.Position{Line: 0, Character: 5}, // on 'my_func'
+		NewName:  "add_numbers",
 	})
 
 	result, err := server.Handle(context.Background(), &Request{
@@ -131,13 +127,11 @@ func TestRename_Parameter(t *testing.T) {
 
 	// Rename 'name' parameter to 'person' at line 0
 	renameParams, _ := json.Marshal(protocol.RenameParams{
-		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{
-				URI: "file:///test.star",
-			},
-			Position: protocol.Position{Line: 0, Character: 11}, // on 'name' parameter
-		},
-		NewName: "person",
+
+		TextDocument: protocol.TextDocumentIdentifier{
+			Uri: "file:///test.star"},
+		Position: protocol.Position{Line: 0, Character: 11}, // on 'name' parameter
+		NewName:  "person",
 	})
 
 	result, err := server.Handle(context.Background(), &Request{
@@ -181,14 +175,12 @@ func TestPrepareRename_Valid(t *testing.T) {
 	openDocument(t, server, "file:///test.star", code)
 
 	// Prepare rename on valid identifier
-	prepareParams, _ := json.Marshal(protocol.PrepareRenameParams{
-		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{
-				URI: "file:///test.star",
-			},
-			Position: protocol.Position{Line: 0, Character: 5}, // on 'my_variable'
-		},
-	})
+	prepareParams, _ := json.Marshal(protocol.PrepareRenameParams{TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+
+		TextDocument: protocol.TextDocumentIdentifier{
+			Uri: "file:///test.star"},
+		Position: protocol.Position{Line: 0, Character: 5}, // on 'my_variable'
+	}})
 
 	result, err := server.Handle(context.Background(), &Request{
 		Method: "textDocument/prepareRename",
@@ -228,14 +220,12 @@ func TestPrepareRename_Invalid_Keyword(t *testing.T) {
 	openDocument(t, server, "file:///test.star", code)
 
 	// Prepare rename on 'def' keyword - should return nil
-	prepareParams, _ := json.Marshal(protocol.PrepareRenameParams{
-		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{
-				URI: "file:///test.star",
-			},
-			Position: protocol.Position{Line: 0, Character: 1}, // on 'def'
-		},
-	})
+	prepareParams, _ := json.Marshal(protocol.PrepareRenameParams{TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+
+		TextDocument: protocol.TextDocumentIdentifier{
+			Uri: "file:///test.star"},
+		Position: protocol.Position{Line: 0, Character: 1}, // on 'def'
+	}})
 
 	result, err := server.Handle(context.Background(), &Request{
 		Method: "textDocument/prepareRename",
@@ -262,14 +252,12 @@ func TestPrepareRename_Invalid_Builtin(t *testing.T) {
 	openDocument(t, server, "file:///test.star", code)
 
 	// Prepare rename on 'len' builtin - should return nil
-	prepareParams, _ := json.Marshal(protocol.PrepareRenameParams{
-		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{
-				URI: "file:///test.star",
-			},
-			Position: protocol.Position{Line: 0, Character: 5}, // on 'len'
-		},
-	})
+	prepareParams, _ := json.Marshal(protocol.PrepareRenameParams{TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+
+		TextDocument: protocol.TextDocumentIdentifier{
+			Uri: "file:///test.star"},
+		Position: protocol.Position{Line: 0, Character: 5}, // on 'len'
+	}})
 
 	result, err := server.Handle(context.Background(), &Request{
 		Method: "textDocument/prepareRename",
@@ -291,8 +279,7 @@ func TestRename_InitializeCapability(t *testing.T) {
 	server := NewServer(nil)
 
 	params, _ := json.Marshal(protocol.InitializeParams{
-		ProcessID: 1234,
-		RootURI:   "file:///test",
+		XInitializeParams: protocol.XInitializeParams{ProcessId: ptrInt32(1234), RootUri: ptrString("file:///test")},
 	})
 
 	result, err := server.Handle(context.Background(), &Request{
@@ -342,13 +329,11 @@ func TestRename_NoDocument(t *testing.T) {
 
 	// Rename on non-existent document
 	renameParams, _ := json.Marshal(protocol.RenameParams{
-		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{
-				URI: "file:///nonexistent.star",
-			},
-			Position: protocol.Position{Line: 0, Character: 0},
-		},
-		NewName: "newname",
+
+		TextDocument: protocol.TextDocumentIdentifier{
+			Uri: "file:///nonexistent.star"},
+		Position: protocol.Position{Line: 0, Character: 0},
+		NewName:  "newname",
 	})
 
 	result, err := server.Handle(context.Background(), &Request{
@@ -377,13 +362,11 @@ func TestRename_EmptyPosition(t *testing.T) {
 
 	// Rename at a position with no word (e.g., on '=')
 	renameParams, _ := json.Marshal(protocol.RenameParams{
-		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{
-				URI: "file:///test.star",
-			},
-			Position: protocol.Position{Line: 0, Character: 2}, // on '='
-		},
-		NewName: "newname",
+
+		TextDocument: protocol.TextDocumentIdentifier{
+			Uri: "file:///test.star"},
+		Position: protocol.Position{Line: 0, Character: 2}, // on '='
+		NewName:  "newname",
 	})
 
 	result, err := server.Handle(context.Background(), &Request{
@@ -431,8 +414,8 @@ func openDocument(t *testing.T, server *Server, uri, content string) {
 
 	openParams, _ := json.Marshal(protocol.DidOpenTextDocumentParams{
 		TextDocument: protocol.TextDocumentItem{
-			URI:        protocol.DocumentURI(uri),
-			LanguageID: "starlark",
+			Uri:        string(uri),
+			LanguageId: "starlark",
 			Version:    1,
 			Text:       content,
 		},

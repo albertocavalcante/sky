@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/albertocavalcante/sky/internal/starlark/checker"
 	"github.com/albertocavalcante/sky/internal/starlark/linter"
-	"go.lsp.dev/protocol"
 	"go.starlark.net/syntax"
 )
 
@@ -15,8 +15,7 @@ func TestServerInitialize(t *testing.T) {
 	server := NewServer(nil)
 
 	params, _ := json.Marshal(protocol.InitializeParams{
-		ProcessID: 1234,
-		RootURI:   "file:///test",
+		XInitializeParams: protocol.XInitializeParams{ProcessId: ptrInt32(1234), RootUri: ptrString("file:///test")},
 	})
 
 	result, err := server.Handle(context.Background(), &Request{
@@ -155,8 +154,8 @@ func TestServerDocumentSync(t *testing.T) {
 	// Open document
 	openParams, _ := json.Marshal(protocol.DidOpenTextDocumentParams{
 		TextDocument: protocol.TextDocumentItem{
-			URI:        "file:///test.star",
-			LanguageID: "starlark",
+			Uri:        "file:///test.star",
+			LanguageId: "starlark",
 			Version:    1,
 			Text:       "def hello():\n    pass\n",
 		},
@@ -184,7 +183,7 @@ func TestServerDocumentSync(t *testing.T) {
 	// Close document
 	closeParams, _ := json.Marshal(protocol.DidCloseTextDocumentParams{
 		TextDocument: protocol.TextDocumentIdentifier{
-			URI: "file:///test.star",
+			Uri: "file:///test.star",
 		},
 	})
 	_, err = server.Handle(context.Background(), &Request{
@@ -224,8 +223,8 @@ func TestServerFormatting(t *testing.T) {
 	unformatted := "def   foo(  x,y ):\n  return x+y\n"
 	openParams, _ := json.Marshal(protocol.DidOpenTextDocumentParams{
 		TextDocument: protocol.TextDocumentItem{
-			URI:        "file:///test.star",
-			LanguageID: "starlark",
+			Uri:        "file:///test.star",
+			LanguageId: "starlark",
 			Version:    1,
 			Text:       unformatted,
 		},
@@ -238,7 +237,7 @@ func TestServerFormatting(t *testing.T) {
 	// Request formatting
 	fmtParams, _ := json.Marshal(protocol.DocumentFormattingParams{
 		TextDocument: protocol.TextDocumentIdentifier{
-			URI: "file:///test.star",
+			Uri: "file:///test.star",
 		},
 	})
 	result, err := server.Handle(context.Background(), &Request{
@@ -292,8 +291,8 @@ func TestServerFormattingNoChange(t *testing.T) {
 	formatted := "def foo(x, y):\n    return x + y\n"
 	openParams, _ := json.Marshal(protocol.DidOpenTextDocumentParams{
 		TextDocument: protocol.TextDocumentItem{
-			URI:        "file:///test.star",
-			LanguageID: "starlark",
+			Uri:        "file:///test.star",
+			LanguageId: "starlark",
 			Version:    1,
 			Text:       formatted,
 		},
@@ -306,7 +305,7 @@ func TestServerFormattingNoChange(t *testing.T) {
 	// Request formatting
 	fmtParams, _ := json.Marshal(protocol.DocumentFormattingParams{
 		TextDocument: protocol.TextDocumentIdentifier{
-			URI: "file:///test.star",
+			Uri: "file:///test.star",
 		},
 	})
 	result, err := server.Handle(context.Background(), &Request{
@@ -357,8 +356,8 @@ def main():
 `
 	openParams, _ := json.Marshal(protocol.DidOpenTextDocumentParams{
 		TextDocument: protocol.TextDocumentItem{
-			URI:        "file:///test.star",
-			LanguageID: "starlark",
+			Uri:        "file:///test.star",
+			LanguageId: "starlark",
 			Version:    1,
 			Text:       code,
 		},
@@ -373,7 +372,7 @@ def main():
 	defParams, _ := json.Marshal(protocol.DefinitionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
 			TextDocument: protocol.TextDocumentIdentifier{
-				URI: "file:///test.star",
+				Uri: "file:///test.star",
 			},
 			Position: protocol.Position{Line: 6, Character: 10}, // "helper" in "    x = helper()"
 		},
@@ -435,8 +434,8 @@ def greet(name, greeting="Hello"):
 `
 	openParams, _ := json.Marshal(protocol.DidOpenTextDocumentParams{
 		TextDocument: protocol.TextDocumentItem{
-			URI:        "file:///test.star",
-			LanguageID: "starlark",
+			Uri:        "file:///test.star",
+			LanguageId: "starlark",
 			Version:    1,
 			Text:       code,
 		},
@@ -450,7 +449,7 @@ def greet(name, greeting="Hello"):
 	hoverParams, _ := json.Marshal(protocol.HoverParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
 			TextDocument: protocol.TextDocumentIdentifier{
-				URI: "file:///test.star",
+				Uri: "file:///test.star",
 			},
 			Position: protocol.Position{Line: 2, Character: 5}, // "greet"
 		},
@@ -471,18 +470,18 @@ def greet(name, greeting="Hello"):
 	}
 
 	// Check that we got markdown content
-	if hover.Contents.Kind != protocol.Markdown {
-		t.Errorf("expected Markdown, got %v", hover.Contents.Kind)
+	if hover.Contents.Value.(protocol.MarkupContent).Kind != protocol.MarkupKindMarkdown {
+		t.Errorf("expected Markdown, got %v", hover.Contents.Value.(protocol.MarkupContent).Kind)
 	}
 
 	// Check that the content includes the function signature
-	if !containsSubstring(hover.Contents.Value, "def greet(") {
-		t.Errorf("hover content missing function signature: %s", hover.Contents.Value)
+	if !containsSubstring(hover.Contents.Value.(protocol.MarkupContent).Value, "def greet(") {
+		t.Errorf("hover content missing function signature: %s", hover.Contents.Value.(protocol.MarkupContent).Value)
 	}
 
 	// Check that docstring summary is included
-	if !containsSubstring(hover.Contents.Value, "Greet someone") {
-		t.Errorf("hover content missing docstring: %s", hover.Contents.Value)
+	if !containsSubstring(hover.Contents.Value.(protocol.MarkupContent).Value, "Greet someone") {
+		t.Errorf("hover content missing docstring: %s", hover.Contents.Value.(protocol.MarkupContent).Value)
 	}
 }
 
@@ -517,8 +516,8 @@ CONFIG = {"key": "value"}
 `
 	openParams, _ := json.Marshal(protocol.DidOpenTextDocumentParams{
 		TextDocument: protocol.TextDocumentItem{
-			URI:        "file:///test.star",
-			LanguageID: "starlark",
+			Uri:        "file:///test.star",
+			LanguageId: "starlark",
 			Version:    1,
 			Text:       code,
 		},
@@ -531,7 +530,7 @@ CONFIG = {"key": "value"}
 	// Request document symbols
 	symbolParams, _ := json.Marshal(protocol.DocumentSymbolParams{
 		TextDocument: protocol.TextDocumentIdentifier{
-			URI: "file:///test.star",
+			Uri: "file:///test.star",
 		},
 	})
 	result, err := server.Handle(context.Background(), &Request{

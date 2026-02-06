@@ -8,9 +8,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/albertocavalcante/sky/internal/starlark/filekind"
 	"github.com/albertocavalcante/sky/internal/starlark/query/index"
-	"go.lsp.dev/protocol"
 )
 
 // WorkspaceIndex holds indexed symbols across the workspace for fast lookup.
@@ -74,7 +74,7 @@ func (w *WorkspaceIndex) AddFile(indexedFile *index.File, absPath string) {
 			Name: def.Name,
 			Kind: protocol.SymbolKindFunction,
 			Location: protocol.Location{
-				URI:   protocol.DocumentURI("file://" + absPath),
+				Uri:   string("file://" + absPath),
 				Range: lineToRange(def.Line),
 			},
 			File: absPath,
@@ -89,7 +89,7 @@ func (w *WorkspaceIndex) AddFile(indexedFile *index.File, absPath string) {
 			Name: assign.Name,
 			Kind: protocol.SymbolKindVariable,
 			Location: protocol.Location{
-				URI:   protocol.DocumentURI("file://" + absPath),
+				Uri:   string("file://" + absPath),
 				Range: lineToRange(assign.Line),
 			},
 			File: absPath,
@@ -199,9 +199,9 @@ func (s *Server) handleWorkspaceSymbol(ctx context.Context, params json.RawMessa
 	// Convert to SymbolInformation
 	var symbols []protocol.SymbolInformation
 	for _, match := range matches {
-		symbols = append(symbols, protocol.SymbolInformation{
-			Name:     match.Name,
-			Kind:     match.Kind,
+		symbols = append(symbols, protocol.SymbolInformation{BaseSymbolInformation: protocol.BaseSymbolInformation{
+			Name: match.Name,
+			Kind: match.Kind},
 			Location: match.Location,
 		})
 	}
@@ -267,7 +267,7 @@ func (s *Server) buildWorkspaceIndexSync() {
 
 // resolveLoadedSymbol attempts to resolve a symbol that was loaded from another file.
 // It checks load statements in the current file and looks up the definition in the workspace index.
-func (s *Server) resolveLoadedSymbol(word string, docURI protocol.DocumentURI) *protocol.Location {
+func (s *Server) resolveLoadedSymbol(word string, docURI string) *protocol.Location {
 	s.mu.RLock()
 	doc, ok := s.documents[docURI]
 	wsIndex := s.workspace

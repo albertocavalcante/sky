@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/bazelbuild/buildtools/build"
-	"go.lsp.dev/protocol"
 )
 
 func TestInlayHints_VariableTypes(t *testing.T) {
@@ -46,11 +46,11 @@ data = (1, "a")
 		if got.Position.Line != want.line {
 			t.Errorf("hint[%d] line = %d, want %d", i, got.Position.Line, want.line)
 		}
-		if got.Label != want.label {
-			t.Errorf("hint[%d] label = %q, want %q", i, got.Label, want.label)
+		if got.Label.Value.(string) != want.label {
+			t.Errorf("hint[%d] label = %q, want %q", i, got.Label.Value, want.label)
 		}
-		if got.Kind != InlayHintKindType {
-			t.Errorf("hint[%d] kind = %d, want %d (Type)", i, got.Kind, InlayHintKindType)
+		if got.Kind != protocol.InlayHintKindType {
+			t.Errorf("hint[%d] kind = %d, want %d (Type)", i, got.Kind, protocol.InlayHintKindType)
 		}
 	}
 }
@@ -78,8 +78,8 @@ config = load_config()  # type: dict[str, Any]
 		if got.Position.Line != want.line {
 			t.Errorf("hint[%d] line = %d, want %d", i, got.Position.Line, want.line)
 		}
-		if got.Label != want.label {
-			t.Errorf("hint[%d] label = %q, want %q", i, got.Label, want.label)
+		if got.Label.Value.(string) != want.label {
+			t.Errorf("hint[%d] label = %q, want %q", i, got.Label.Value, want.label)
 		}
 	}
 }
@@ -152,7 +152,7 @@ value = 42
 	if len(hints) != 1 {
 		t.Fatalf("got %d hints, want 1", len(hints))
 	}
-	if hints[0].Label != ": int" {
+	if hints[0].Label.Value.(string) != ": int" {
 		t.Errorf("hint label = %q, want ': int'", hints[0].Label)
 	}
 }
@@ -179,8 +179,8 @@ items = range(10)
 
 	for i, want := range expected {
 		got := hints[i]
-		if got.Label != want.label {
-			t.Errorf("hint[%d] label = %q, want %q", i, got.Label, want.label)
+		if got.Label.Value.(string) != want.label {
+			t.Errorf("hint[%d] label = %q, want %q", i, got.Label.Value, want.label)
 		}
 	}
 }
@@ -210,8 +210,8 @@ func TestInlayHints_FunctionBody(t *testing.T) {
 		if got.Position.Line != want.line {
 			t.Errorf("hint[%d] line = %d, want %d", i, got.Position.Line, want.line)
 		}
-		if got.Label != want.label {
-			t.Errorf("hint[%d] label = %q, want %q", i, got.Label, want.label)
+		if got.Label.Value.(string) != want.label {
+			t.Errorf("hint[%d] label = %q, want %q", i, got.Label.Value, want.label)
 		}
 	}
 }
@@ -233,7 +233,7 @@ func TestInlayHints_ForLoop(t *testing.T) {
 	if len(hints) != 1 {
 		t.Fatalf("got %d hints, want 1", len(hints))
 	}
-	if hints[0].Label != ": int" {
+	if hints[0].Label.Value.(string) != ": int" {
 		t.Errorf("hint label = %q, want ': int'", hints[0].Label)
 	}
 }
@@ -283,11 +283,11 @@ func TestInlayHints_TruncateLongTypes(t *testing.T) {
 	}
 
 	// Should be truncated
-	if len(hints[0].Label) > 22 { // ": " + 20 chars
-		t.Errorf("hint label too long: %q", hints[0].Label)
+	if len(hints[0].Label.Value.(string)) > 22 { // ": " + 20 chars
+		t.Errorf("hint label too long: %q", hints[0].Label.Value)
 	}
-	if !strings.HasSuffix(hints[0].Label, "...") {
-		t.Errorf("truncated label should end with ...: %q", hints[0].Label)
+	if !strings.HasSuffix(hints[0].Label.Value.(string), "...") {
+		t.Errorf("truncated label should end with ...: %q", hints[0].Label.Value)
 	}
 }
 
@@ -410,12 +410,12 @@ func TestParseParamLine(t *testing.T) {
 
 // Helper functions
 
-func getInlayHints(t *testing.T, content string) []InlayHint {
+func getInlayHints(t *testing.T, content string) []protocol.InlayHint {
 	t.Helper()
 	return getInlayHintsWithConfig(t, content, DefaultInlayHintConfig)
 }
 
-func getInlayHintsWithConfig(t *testing.T, content string, config InlayHintConfig) []InlayHint {
+func getInlayHintsWithConfig(t *testing.T, content string, config InlayHintConfig) []protocol.InlayHint {
 	t.Helper()
 
 	file, err := build.ParseDefault("test.star", []byte(content))

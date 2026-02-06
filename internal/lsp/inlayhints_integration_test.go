@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"go.lsp.dev/protocol"
+	"github.com/albertocavalcante/sky/internal/protocol"
 )
 
 // TestInlayHints_InitializeCapability tests that InlayHintProvider is advertised.
@@ -13,8 +13,7 @@ func TestInlayHints_InitializeCapability(t *testing.T) {
 	server := NewServer(nil)
 
 	params, _ := json.Marshal(protocol.InitializeParams{
-		ProcessID: 1234,
-		RootURI:   "file:///test",
+		XInitializeParams: protocol.XInitializeParams{ProcessId: ptrInt32(1234), RootUri: ptrString("file:///test")},
 	})
 
 	result, err := server.Handle(context.Background(), &Request{
@@ -51,8 +50,7 @@ func TestInlayHints_Request(t *testing.T) {
 
 	// Initialize
 	initParams, _ := json.Marshal(protocol.InitializeParams{
-		ProcessID: 1234,
-		RootURI:   "file:///test",
+		XInitializeParams: protocol.XInitializeParams{ProcessId: ptrInt32(1234), RootUri: ptrString("file:///test")},
 	})
 	_, err := server.Handle(context.Background(), &Request{
 		JSONRPC: "2.0",
@@ -81,8 +79,8 @@ items = [1, 2, 3]
 `
 	openParams, _ := json.Marshal(protocol.DidOpenTextDocumentParams{
 		TextDocument: protocol.TextDocumentItem{
-			URI:        "file:///test.star",
-			LanguageID: "starlark",
+			Uri:        "file:///test.star",
+			LanguageId: "starlark",
 			Version:    1,
 			Text:       content,
 		},
@@ -97,9 +95,9 @@ items = [1, 2, 3]
 	}
 
 	// Request inlay hints
-	hintParams, _ := json.Marshal(InlayHintParams{
+	hintParams, _ := json.Marshal(protocol.InlayHintParams{
 		TextDocument: protocol.TextDocumentIdentifier{
-			URI: "file:///test.star",
+			Uri: "file:///test.star",
 		},
 		Range: protocol.Range{
 			Start: protocol.Position{Line: 0, Character: 0},
@@ -117,9 +115,9 @@ items = [1, 2, 3]
 		t.Fatalf("inlayHint failed: %v", err)
 	}
 
-	hints, ok := result.([]InlayHint)
+	hints, ok := result.([]protocol.InlayHint)
 	if !ok {
-		t.Fatalf("expected []InlayHint, got %T", result)
+		t.Fatalf("expected []protocol.InlayHint, got %T", result)
 	}
 
 	// Should have 3 hints for count, name, items
@@ -141,8 +139,8 @@ items = [1, 2, 3]
 		if hints[i].Position.Line != want.line {
 			t.Errorf("hint[%d] line = %d, want %d", i, hints[i].Position.Line, want.line)
 		}
-		if hints[i].Label != want.label {
-			t.Errorf("hint[%d] label = %q, want %q", i, hints[i].Label, want.label)
+		if hints[i].Label.Value.(string) != want.label {
+			t.Errorf("hint[%d] label = %q, want %q", i, hints[i].Label.Value, want.label)
 		}
 	}
 }

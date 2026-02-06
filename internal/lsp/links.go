@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/bazelbuild/buildtools/build"
-	"go.lsp.dev/protocol"
 )
 
 // handleDocumentLink returns document links for load() statements.
@@ -18,13 +18,13 @@ func (s *Server) handleDocumentLink(ctx context.Context, params json.RawMessage)
 	}
 
 	s.mu.RLock()
-	doc, ok := s.documents[p.TextDocument.URI]
+	doc, ok := s.documents[p.TextDocument.Uri]
 	s.mu.RUnlock()
 	if !ok {
 		return []protocol.DocumentLink{}, nil
 	}
 
-	path := uriToPath(p.TextDocument.URI)
+	path := uriToPath(p.TextDocument.Uri)
 	file, err := build.ParseDefault(path, []byte(doc.Content))
 	if err != nil {
 		return []protocol.DocumentLink{}, nil
@@ -45,7 +45,7 @@ func (s *Server) handleDocumentLink(ctx context.Context, params json.RawMessage)
 
 		// Get the range of the module string
 		start, end := load.Module.Span()
-		targetURI := protocol.DocumentURI("file://" + targetPath)
+		targetURI := string("file://" + targetPath)
 
 		links = append(links, protocol.DocumentLink{
 			Range: protocol.Range{

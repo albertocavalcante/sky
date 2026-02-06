@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/albertocavalcante/sky/internal/starlark/linter"
-	"go.lsp.dev/protocol"
 )
 
 // TestCodeAction_NoFixes tests that no code actions are returned when there are no fixable issues.
@@ -67,10 +67,10 @@ func TestCodeAction_SingleFix(t *testing.T) {
 	if action.Title != "Fix: test-rule" {
 		t.Errorf("Title = %q, want %q", action.Title, "Fix: test-rule")
 	}
-	if action.Kind != protocol.QuickFix {
+	if action.Kind != protocol.CodeActionKindQuickFix {
 		t.Errorf("Kind = %v, want QuickFix", action.Kind)
 	}
-	if action.Edit == nil {
+	if action.Edit.Changes == nil && action.Edit.DocumentChanges == nil {
 		t.Fatal("Edit should not be nil")
 	}
 
@@ -165,8 +165,7 @@ func TestCodeAction_InitializeCapability(t *testing.T) {
 	server := NewServer(nil)
 
 	params, _ := json.Marshal(protocol.InitializeParams{
-		ProcessID: 1234,
-		RootURI:   "file:///test",
+		XInitializeParams: protocol.XInitializeParams{ProcessId: ptrInt32(1234), RootUri: ptrString("file:///test")},
 	})
 
 	result, err := server.Handle(context.Background(), &Request{
@@ -320,7 +319,7 @@ func requestCodeActions(t *testing.T, server *Server, uri string, rng protocol.R
 	t.Helper()
 
 	params, _ := json.Marshal(protocol.CodeActionParams{
-		TextDocument: protocol.TextDocumentIdentifier{URI: protocol.DocumentURI(uri)},
+		TextDocument: protocol.TextDocumentIdentifier{Uri: string(uri)},
 		Range:        rng,
 		Context:      protocol.CodeActionContext{},
 	})

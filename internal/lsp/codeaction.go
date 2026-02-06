@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"log"
 
+	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/albertocavalcante/sky/internal/starlark/linter"
-	"go.lsp.dev/protocol"
 )
 
 // handleCodeAction returns code actions (quick fixes) for diagnostics in the given range.
@@ -17,14 +17,14 @@ func (s *Server) handleCodeAction(ctx context.Context, params json.RawMessage) (
 	}
 
 	s.mu.RLock()
-	doc, ok := s.documents[p.TextDocument.URI]
+	doc, ok := s.documents[p.TextDocument.Uri]
 	s.mu.RUnlock()
 
 	if !ok {
 		return []protocol.CodeAction{}, nil
 	}
 
-	path := uriToPath(p.TextDocument.URI)
+	path := uriToPath(p.TextDocument.Uri)
 	log.Printf("codeAction: %s range=%v", path, p.Range)
 
 	// Run linter to get findings with replacements
@@ -35,7 +35,7 @@ func (s *Server) handleCodeAction(ctx context.Context, params json.RawMessage) (
 	}
 
 	// Convert findings to code actions
-	actions := findingsToCodeActions(string(p.TextDocument.URI), findings, doc.Content)
+	actions := findingsToCodeActions(string(p.TextDocument.Uri), findings, doc.Content)
 
 	// Filter by requested range
 	actions = filterCodeActionsByRange(actions, p.Range)
@@ -73,13 +73,13 @@ func findingsToCodeActions(uri string, findings []linter.Finding, content string
 		// Create the code action
 		action := protocol.CodeAction{
 			Title: "Fix: " + f.Rule,
-			Kind:  protocol.QuickFix,
+			Kind:  protocol.CodeActionKindQuickFix,
 			Diagnostics: []protocol.Diagnostic{
 				diag,
 			},
-			Edit: &protocol.WorkspaceEdit{
-				Changes: map[protocol.DocumentURI][]protocol.TextEdit{
-					protocol.DocumentURI(uri): {edit},
+			Edit: protocol.WorkspaceEdit{
+				Changes: map[string][]protocol.TextEdit{
+					string(uri): {edit},
 				},
 			},
 		}

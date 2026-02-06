@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"go.lsp.dev/protocol"
+	"github.com/albertocavalcante/sky/internal/protocol"
 )
 
 // TestWorkspaceSymbol_FindFunction tests searching for a function by exact name.
@@ -32,7 +32,7 @@ def my_rule(name, srcs):
 
 	// Initialize with workspace root
 	initParams, _ := json.Marshal(protocol.InitializeParams{
-		RootURI: protocol.DocumentURI("file://" + tmpDir),
+		XInitializeParams: protocol.XInitializeParams{RootUri: ptrString("file://" + tmpDir)},
 	})
 	_, _ = server.Handle(context.Background(), &Request{
 		Method: "initialize",
@@ -95,7 +95,7 @@ def test_helper():
 	server := NewServer(nil)
 
 	initParams, _ := json.Marshal(protocol.InitializeParams{
-		RootURI: protocol.DocumentURI("file://" + tmpDir),
+		XInitializeParams: protocol.XInitializeParams{RootUri: ptrString("file://" + tmpDir)},
 	})
 	_, _ = server.Handle(context.Background(), &Request{
 		Method: "initialize",
@@ -154,7 +154,7 @@ def some_function():
 	server := NewServer(nil)
 
 	initParams, _ := json.Marshal(protocol.InitializeParams{
-		RootURI: protocol.DocumentURI("file://" + tmpDir),
+		XInitializeParams: protocol.XInitializeParams{RootUri: ptrString("file://" + tmpDir)},
 	})
 	_, _ = server.Handle(context.Background(), &Request{
 		Method: "initialize",
@@ -210,7 +210,7 @@ CONFIG = "value"
 	server := NewServer(nil)
 
 	initParams, _ := json.Marshal(protocol.InitializeParams{
-		RootURI: protocol.DocumentURI("file://" + tmpDir),
+		XInitializeParams: protocol.XInitializeParams{RootUri: ptrString("file://" + tmpDir)},
 	})
 	_, _ = server.Handle(context.Background(), &Request{
 		Method: "initialize",
@@ -266,7 +266,7 @@ CONFIG_MAP = {"key": "value"}
 	server := NewServer(nil)
 
 	initParams, _ := json.Marshal(protocol.InitializeParams{
-		RootURI: protocol.DocumentURI("file://" + tmpDir),
+		XInitializeParams: protocol.XInitializeParams{RootUri: ptrString("file://" + tmpDir)},
 	})
 	_, _ = server.Handle(context.Background(), &Request{
 		Method: "initialize",
@@ -328,7 +328,7 @@ MYFUNCTION = "value"
 	server := NewServer(nil)
 
 	initParams, _ := json.Marshal(protocol.InitializeParams{
-		RootURI: protocol.DocumentURI("file://" + tmpDir),
+		XInitializeParams: protocol.XInitializeParams{RootUri: ptrString("file://" + tmpDir)},
 	})
 	_, _ = server.Handle(context.Background(), &Request{
 		Method: "initialize",
@@ -390,7 +390,7 @@ def main():
 
 	// Initialize with workspace root
 	initParams, _ := json.Marshal(protocol.InitializeParams{
-		RootURI: protocol.DocumentURI("file://" + tmpDir),
+		XInitializeParams: protocol.XInitializeParams{RootUri: ptrString("file://" + tmpDir)},
 	})
 	_, _ = server.Handle(context.Background(), &Request{
 		Method: "initialize",
@@ -409,8 +409,8 @@ def main():
 	mainContent, _ := os.ReadFile(filepath.Join(tmpDir, "main.bzl"))
 	openParams, _ := json.Marshal(protocol.DidOpenTextDocumentParams{
 		TextDocument: protocol.TextDocumentItem{
-			URI:        protocol.DocumentURI("file://" + filepath.Join(tmpDir, "main.bzl")),
-			LanguageID: "starlark",
+			Uri:        string("file://" + filepath.Join(tmpDir, "main.bzl")),
+			LanguageId: "starlark",
 			Version:    1,
 			Text:       string(mainContent),
 		},
@@ -430,7 +430,7 @@ def main():
 	defParams, _ := json.Marshal(protocol.DefinitionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
 			TextDocument: protocol.TextDocumentIdentifier{
-				URI: protocol.DocumentURI("file://" + filepath.Join(tmpDir, "main.bzl")),
+				Uri: string("file://" + filepath.Join(tmpDir, "main.bzl")),
 			},
 			Position: protocol.Position{Line: 4, Character: 15}, // on "exported_helper"
 		},
@@ -456,8 +456,8 @@ def main():
 
 	// Should point to lib/utils.bzl where exported_helper is defined
 	expectedURI := "file://" + filepath.Join(tmpDir, "lib/utils.bzl")
-	if string(locations[0].URI) != expectedURI {
-		t.Errorf("expected URI %q, got %q", expectedURI, locations[0].URI)
+	if string(locations[0].Uri) != expectedURI {
+		t.Errorf("expected URI %q, got %q", expectedURI, locations[0].Uri)
 	}
 
 	// Should point to line 1 (0-indexed) where "def exported_helper" is

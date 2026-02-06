@@ -7,9 +7,9 @@ import (
 
 	"github.com/bazelbuild/buildtools/build"
 
+	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/albertocavalcante/sky/internal/starlark/classifier"
 	"github.com/albertocavalcante/sky/internal/starlark/filekind"
-	"go.lsp.dev/protocol"
 )
 
 // handleReferences returns all references to the symbol at the given position.
@@ -20,14 +20,14 @@ func (s *Server) handleReferences(ctx context.Context, params json.RawMessage) (
 	}
 
 	s.mu.RLock()
-	doc, ok := s.documents[p.TextDocument.URI]
+	doc, ok := s.documents[p.TextDocument.Uri]
 	s.mu.RUnlock()
 
 	if !ok {
 		return nil, nil
 	}
 
-	path := uriToPath(p.TextDocument.URI)
+	path := uriToPath(p.TextDocument.Uri)
 
 	// Find the word at the cursor position
 	word := getWordAtPosition(doc.Content, int(p.Position.Line), int(p.Position.Character))
@@ -56,7 +56,7 @@ func (s *Server) handleReferences(ctx context.Context, params json.RawMessage) (
 	}
 
 	// Find all references to the symbol
-	refs := findReferences(file, word, p.TextDocument.URI, p.Context.IncludeDeclaration)
+	refs := findReferences(file, word, p.TextDocument.Uri, p.Context.IncludeDeclaration)
 
 	log.Printf("references: found %d references to %q", len(refs), word)
 
@@ -75,7 +75,7 @@ func isStarlarkKeyword(word string) bool {
 
 // findReferences finds all references to a symbol name in a file.
 // If includeDeclaration is true, includes the definition site as well.
-func findReferences(file *build.File, targetName string, uri protocol.DocumentURI, includeDeclaration bool) []protocol.Location {
+func findReferences(file *build.File, targetName string, uri string, includeDeclaration bool) []protocol.Location {
 	var refs []protocol.Location
 
 	// Track declaration positions to optionally exclude them
@@ -93,7 +93,7 @@ func findReferences(file *build.File, targetName string, uri protocol.DocumentUR
 				nameStart := start.LineRune + 3 // "def" is 3 chars, plus 1 for space = position after space
 				nameEnd := nameStart + len(targetName)
 				refs = append(refs, protocol.Location{
-					URI: uri,
+					Uri: uri,
 					Range: protocol.Range{
 						Start: protocol.Position{
 							Line:      uint32(start.Line - 1),
@@ -161,7 +161,7 @@ func findReferences(file *build.File, targetName string, uri protocol.DocumentUR
 				}
 
 				refs = append(refs, protocol.Location{
-					URI: uri,
+					Uri: uri,
 					Range: protocol.Range{
 						Start: protocol.Position{
 							Line:      uint32(start.Line - 1),

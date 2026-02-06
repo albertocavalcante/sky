@@ -1,6 +1,6 @@
 package lsp
 
-import "go.lsp.dev/protocol"
+import "github.com/albertocavalcante/sky/internal/protocol"
 
 // Semantic token types - indices into the legend.
 // Order matters! These are encoded as integers in LSP responses.
@@ -24,21 +24,21 @@ const (
 )
 
 // TokenTypeNames maps token types to their LSP legend names (protocol types).
-var TokenTypeNames = []protocol.SemanticTokenTypes{
-	protocol.SemanticTokenNamespace,
-	protocol.SemanticTokenType,
-	protocol.SemanticTokenClass,
-	protocol.SemanticTokenFunction,
-	protocol.SemanticTokenMethod,
-	protocol.SemanticTokenProperty,
-	protocol.SemanticTokenVariable,
-	protocol.SemanticTokenParameter,
-	protocol.SemanticTokenKeyword,
-	protocol.SemanticTokenString,
-	protocol.SemanticTokenNumber,
-	protocol.SemanticTokenOperator,
-	protocol.SemanticTokenComment,
-	protocol.SemanticTokenMacro,
+var TokenTypeNames = []string{
+	string(protocol.SemanticTokenTypesNamespace),
+	string(protocol.SemanticTokenTypesType),
+	string(protocol.SemanticTokenTypesClass),
+	string(protocol.SemanticTokenTypesFunction),
+	string(protocol.SemanticTokenTypesMethod),
+	string(protocol.SemanticTokenTypesProperty),
+	string(protocol.SemanticTokenTypesVariable),
+	string(protocol.SemanticTokenTypesParameter),
+	string(protocol.SemanticTokenTypesKeyword),
+	string(protocol.SemanticTokenTypesString),
+	string(protocol.SemanticTokenTypesNumber),
+	string(protocol.SemanticTokenTypesOperator),
+	string(protocol.SemanticTokenTypesComment),
+	string(protocol.SemanticTokenTypesMacro),
 	"decorator", // Custom - not in protocol
 	"label",     // Custom type for Bazel labels
 }
@@ -56,15 +56,15 @@ const (
 )
 
 // TokenModifierNames maps modifier bits to their LSP legend names (protocol types).
-var TokenModifierNames = []protocol.SemanticTokenModifiers{
-	protocol.SemanticTokenModifierDeclaration,
-	protocol.SemanticTokenModifierDefinition,
-	protocol.SemanticTokenModifierReadonly,
-	protocol.SemanticTokenModifierStatic,
-	protocol.SemanticTokenModifierDeprecated,
-	protocol.SemanticTokenModifierModification,
-	protocol.SemanticTokenModifierDocumentation,
-	protocol.SemanticTokenModifierDefaultLibrary,
+var TokenModifierNames = []string{
+	string(protocol.SemanticTokenModifiersDeclaration),
+	string(protocol.SemanticTokenModifiersDefinition),
+	string(protocol.SemanticTokenModifiersReadonly),
+	string(protocol.SemanticTokenModifiersStatic),
+	string(protocol.SemanticTokenModifiersDeprecated),
+	string(protocol.SemanticTokenModifiersModification),
+	string(protocol.SemanticTokenModifiersDocumentation),
+	string(protocol.SemanticTokenModifiersDefaultLibrary),
 }
 
 // SemanticToken represents a single semantic token before encoding.

@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/albertocavalcante/sky/internal/starlark/filekind"
-	"go.lsp.dev/protocol"
 )
 
 func TestGetDialectAndKind_Star(t *testing.T) {
@@ -22,8 +21,8 @@ func TestGetDialectAndKind_Star(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.uri, func(t *testing.T) {
-			dialect, kind := server.getDialectAndKind(protocol.DocumentURI(tt.uri))
-			t.Logf("URI: %s -> dialect=%s, kind=%s", tt.uri, dialect, kind)
+			dialect, kind := server.getDialectAndKind(string(tt.uri))
+			t.Logf("Uri: %s -> dialect=%s, kind=%s", tt.uri, dialect, kind)
 			if dialect != tt.wantDial {
 				t.Errorf("dialect = %q, want %q", dialect, tt.wantDial)
 			}

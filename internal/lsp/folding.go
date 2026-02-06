@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/bazelbuild/buildtools/build"
-	"go.lsp.dev/protocol"
 )
 
 // handleFoldingRange returns folding ranges for the document.
@@ -16,13 +16,13 @@ func (s *Server) handleFoldingRange(ctx context.Context, params json.RawMessage)
 	}
 
 	s.mu.RLock()
-	doc, ok := s.documents[p.TextDocument.URI]
+	doc, ok := s.documents[p.TextDocument.Uri]
 	s.mu.RUnlock()
 	if !ok {
 		return []protocol.FoldingRange{}, nil
 	}
 
-	path := uriToPath(p.TextDocument.URI)
+	path := uriToPath(p.TextDocument.Uri)
 	file, err := build.ParseDefault(path, []byte(doc.Content))
 	if err != nil {
 		return []protocol.FoldingRange{}, nil

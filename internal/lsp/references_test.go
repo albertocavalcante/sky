@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"testing"
 
-	"go.lsp.dev/protocol"
+	"github.com/albertocavalcante/sky/internal/protocol"
 )
 
 // TestReferences_LocalVariable tests finding references to a local variable.
 func TestReferences_LocalVariable(t *testing.T) {
 	server := NewServer(nil)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	// Code with a variable used multiple times
 	code := `def main():
     result = 42
@@ -31,7 +31,7 @@ func TestReferences_LocalVariable(t *testing.T) {
 	// Request references for "result" at line 1 (the assignment)
 	params := protocol.ReferenceParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 1, Character: 4}, // "result" in "result = 42"
 		},
 		Context: protocol.ReferenceContext{
@@ -66,8 +66,8 @@ func TestReferences_LocalVariable(t *testing.T) {
 
 	// Verify all locations are in the same file
 	for _, loc := range locations {
-		if loc.URI != uri {
-			t.Errorf("reference URI = %v, want %v", loc.URI, uri)
+		if loc.Uri != uri {
+			t.Errorf("reference URI = %v, want %v", loc.Uri, uri)
 		}
 	}
 }
@@ -76,7 +76,7 @@ func TestReferences_LocalVariable(t *testing.T) {
 func TestReferences_FunctionCalls(t *testing.T) {
 	server := NewServer(nil)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	// Code with a function defined and called multiple times
 	code := `def helper(x):
     return x + 1
@@ -98,7 +98,7 @@ def main():
 	// Request references for "helper" at line 0 (the function definition)
 	params := protocol.ReferenceParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 4}, // "helper" in "def helper(x):"
 		},
 		Context: protocol.ReferenceContext{
@@ -136,7 +136,7 @@ def main():
 func TestReferences_Parameter(t *testing.T) {
 	server := NewServer(nil)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	// Code with a parameter used in the function body
 	code := `def process(data):
     print(data)
@@ -155,7 +155,7 @@ func TestReferences_Parameter(t *testing.T) {
 	// Request references for "data" at line 0 (the parameter)
 	params := protocol.ReferenceParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 12}, // "data" in "def process(data):"
 		},
 		Context: protocol.ReferenceContext{
@@ -193,7 +193,7 @@ func TestReferences_Parameter(t *testing.T) {
 func TestReferences_NoReferences(t *testing.T) {
 	server := NewServer(nil)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	// Code with a variable that's only defined but never used
 	code := `def main():
     unused = 42
@@ -211,7 +211,7 @@ func TestReferences_NoReferences(t *testing.T) {
 	// Request references for "unused" at line 1
 	params := protocol.ReferenceParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 1, Character: 4}, // "unused" in "unused = 42"
 		},
 		Context: protocol.ReferenceContext{
@@ -246,7 +246,7 @@ func TestReferences_NoReferences(t *testing.T) {
 func TestReferences_ExcludeDeclaration(t *testing.T) {
 	server := NewServer(nil)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	code := `def helper():
     return 1
 
@@ -265,7 +265,7 @@ def main():
 	// Request references for "helper" with IncludeDeclaration=false
 	params := protocol.ReferenceParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 4}, // "helper" in "def helper():"
 		},
 		Context: protocol.ReferenceContext{
@@ -306,8 +306,7 @@ func TestReferences_InitializeCapability(t *testing.T) {
 	server := NewServer(nil)
 
 	params, _ := json.Marshal(protocol.InitializeParams{
-		ProcessID: 1234,
-		RootURI:   "file:///test",
+		XInitializeParams: protocol.XInitializeParams{ProcessId: ptrInt32(1234), RootUri: ptrString("file:///test")},
 	})
 
 	result, err := server.Handle(context.Background(), &Request{
@@ -342,7 +341,7 @@ func TestReferences_InitializeCapability(t *testing.T) {
 func TestReferences_UnknownSymbol(t *testing.T) {
 	server := NewServer(nil)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	code := `def main():
     return 42
 `
@@ -358,7 +357,7 @@ func TestReferences_UnknownSymbol(t *testing.T) {
 	// Request references at a position with no identifier (whitespace)
 	params := protocol.ReferenceParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 0}, // at "def" keyword
 		},
 		Context: protocol.ReferenceContext{
@@ -391,7 +390,7 @@ func TestReferences_UnknownSymbol(t *testing.T) {
 func TestReferences_MultipleAssignments(t *testing.T) {
 	server := NewServer(nil)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	// Code where a variable is reassigned
 	code := `def main():
     x = 1
@@ -412,7 +411,7 @@ func TestReferences_MultipleAssignments(t *testing.T) {
 	// Request references for "x"
 	params := protocol.ReferenceParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 1, Character: 4}, // first "x"
 		},
 		Context: protocol.ReferenceContext{

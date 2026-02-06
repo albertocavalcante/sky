@@ -3,6 +3,7 @@
 # gazelle:build_file_name BUILD.bazel
 # gazelle:go_naming_convention import
 load("@gazelle//:def.bzl", "gazelle")
+load("@rules_copybara//:copybara.bzl", "copybara_validate")
 
 # Run gazelle for the entire workspace:
 #   bazel run //:gazelle
@@ -21,4 +22,16 @@ alias(
     name = "format.check",
     actual = "//tools/format:format.check",
     visibility = ["//visibility:public"],
+)
+
+# Validate Copybara config (dogfooding rules_copybara)
+# Run: bazel build //:copybara_validate
+copybara_validate(
+    name = "copybara_validate",
+    config = "copy.bara.sky",
+    tags = [
+        "manual",            # Exclude from //... wildcards
+        "requires-network",  # Needs network for git origin resolution
+        "no-sandbox",        # Disable sandbox for git access
+    ],
 )

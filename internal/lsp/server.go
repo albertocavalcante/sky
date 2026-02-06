@@ -11,6 +11,7 @@ import (
 
 	"github.com/bazelbuild/buildtools/build"
 
+	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/albertocavalcante/sky/internal/starlark/builtins"
 	"github.com/albertocavalcante/sky/internal/starlark/checker"
 	"github.com/albertocavalcante/sky/internal/starlark/classifier"
@@ -20,7 +21,6 @@ import (
 	"github.com/albertocavalcante/sky/internal/starlark/linter"
 	"github.com/albertocavalcante/sky/internal/starlark/linter/buildtools"
 	"github.com/albertocavalcante/sky/internal/starlark/query/index"
-	"go.lsp.dev/protocol"
 )
 
 // Server handles LSP requests for Starlark files.
@@ -31,8 +31,8 @@ type Server struct {
 	mu          sync.RWMutex
 	initialized bool
 	shutdown    bool
-	documents   map[protocol.DocumentURI]*Document
-	rootURI     protocol.DocumentURI
+	documents   map[string]*Document
+	rootURI     string
 
 	// Diagnostics
 	lintDriver *linter.Driver
@@ -50,7 +50,7 @@ type Server struct {
 
 // Document represents an open text document.
 type Document struct {
-	URI     protocol.DocumentURI
+	URI     string
 	Version int32
 	Content string
 }
@@ -74,7 +74,7 @@ func NewServerWithProvider(onExit func(), provider builtins.Provider) *Server {
 	chk := checker.New(checker.DefaultOptions())
 
 	return &Server{
-		documents:  make(map[protocol.DocumentURI]*Document),
+		documents:  make(map[string]*Document),
 		lintDriver: lintDriver,
 		checker:    chk,
 		builtins:   provider,
@@ -192,10 +192,10 @@ func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (
 	}
 
 	s.mu.Lock()
-	if len(p.WorkspaceFolders) > 0 {
-		s.rootURI = protocol.DocumentURI(p.WorkspaceFolders[0].URI)
-	} else if p.RootURI != "" {
-		s.rootURI = p.RootURI
+	if p.WorkspaceFolders != nil && len(*p.WorkspaceFolders) > 0 {
+		s.rootURI = string((*p.WorkspaceFolders)[0].Uri)
+	} else if p.RootUri != nil && *p.RootUri != "" {
+		s.rootURI = *p.RootUri
 	}
 	s.mu.Unlock()
 
@@ -206,9 +206,8 @@ func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (
 		"textDocumentSync": protocol.TextDocumentSyncOptions{
 			OpenClose: true,
 			Change:    protocol.TextDocumentSyncKindFull,
-			Save: &protocol.SaveOptions{
-				IncludeText: true,
-			},
+			Save: protocol.Or_SaveOptions_bool{Value: protocol.SaveOptions{
+				IncludeText: true}},
 		},
 		"hoverProvider":              true,
 		"definitionProvider":         true,
@@ -226,7 +225,7 @@ func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (
 		},
 		"documentLinkProvider": &protocol.DocumentLinkOptions{},
 		"codeActionProvider": &protocol.CodeActionOptions{
-			CodeActionKinds: []protocol.CodeActionKind{protocol.QuickFix},
+			CodeActionKinds: []protocol.CodeActionKind{protocol.CodeActionKindQuickFix},
 		},
 		"renameProvider": &protocol.RenameOptions{
 			PrepareProvider: true,
@@ -291,17 +290,17 @@ func (s *Server) handleDidOpen(ctx context.Context, params json.RawMessage) (any
 	}
 
 	s.mu.Lock()
-	s.documents[p.TextDocument.URI] = &Document{
-		URI:     p.TextDocument.URI,
+	s.documents[p.TextDocument.Uri] = &Document{
+		URI:     p.TextDocument.Uri,
 		Version: p.TextDocument.Version,
 		Content: p.TextDocument.Text,
 	}
 	s.mu.Unlock()
 
-	log.Printf("didOpen: %s", p.TextDocument.URI)
+	log.Printf("didOpen: %s", p.TextDocument.Uri)
 
 	// Publish initial diagnostics
-	s.publishDiagnostics(ctx, p.TextDocument.URI, p.TextDocument.Text)
+	s.publishDiagnostics(ctx, p.TextDocument.Uri, p.TextDocument.Text)
 
 	return nil, nil
 }
@@ -313,16 +312,16 @@ func (s *Server) handleDidChange(ctx context.Context, params json.RawMessage) (a
 	}
 
 	s.mu.Lock()
-	if doc, ok := s.documents[p.TextDocument.URI]; ok {
+	if doc, ok := s.documents[p.TextDocument.Uri]; ok {
 		doc.Version = p.TextDocument.Version
 		// Full sync - take the last change
 		if len(p.ContentChanges) > 0 {
-			doc.Content = p.ContentChanges[len(p.ContentChanges)-1].Text
+			doc.Content = p.ContentChanges[len(p.ContentChanges)-1].Value.(protocol.TextDocumentContentChangeWholeDocument).Text
 		}
 	}
 	s.mu.Unlock()
 
-	log.Printf("didChange: %s v%d", p.TextDocument.URI, p.TextDocument.Version)
+	log.Printf("didChange: %s v%d", p.TextDocument.Uri, p.TextDocument.Version)
 	return nil, nil
 }
 
@@ -333,15 +332,15 @@ func (s *Server) handleDidClose(ctx context.Context, params json.RawMessage) (an
 	}
 
 	s.mu.Lock()
-	delete(s.documents, p.TextDocument.URI)
+	delete(s.documents, p.TextDocument.Uri)
 	s.mu.Unlock()
 
-	log.Printf("didClose: %s", p.TextDocument.URI)
+	log.Printf("didClose: %s", p.TextDocument.Uri)
 
 	// Clear diagnostics for closed document
 	if s.conn != nil {
 		if err := s.conn.Notify(ctx, "textDocument/publishDiagnostics", protocol.PublishDiagnosticsParams{
-			URI:         p.TextDocument.URI,
+			Uri:         p.TextDocument.Uri,
 			Diagnostics: []protocol.Diagnostic{},
 		}); err != nil {
 			log.Printf("failed to clear diagnostics: %v", err)
@@ -357,7 +356,7 @@ func (s *Server) handleDidSave(ctx context.Context, params json.RawMessage) (any
 		return nil, err
 	}
 
-	log.Printf("didSave: %s", p.TextDocument.URI)
+	log.Printf("didSave: %s", p.TextDocument.Uri)
 
 	// Get document content (either from save params or our cache)
 	var content string
@@ -365,7 +364,7 @@ func (s *Server) handleDidSave(ctx context.Context, params json.RawMessage) (any
 		content = p.Text
 	} else {
 		s.mu.RLock()
-		if doc, ok := s.documents[p.TextDocument.URI]; ok {
+		if doc, ok := s.documents[p.TextDocument.Uri]; ok {
 			content = doc.Content
 		}
 		s.mu.RUnlock()
@@ -373,7 +372,7 @@ func (s *Server) handleDidSave(ctx context.Context, params json.RawMessage) (any
 
 	// Run diagnostics
 	if content != "" {
-		s.publishDiagnostics(ctx, p.TextDocument.URI, content)
+		s.publishDiagnostics(ctx, p.TextDocument.Uri, content)
 	}
 
 	return nil, nil
@@ -388,14 +387,14 @@ func (s *Server) handleHover(ctx context.Context, params json.RawMessage) (any, 
 	}
 
 	s.mu.RLock()
-	doc, ok := s.documents[p.TextDocument.URI]
+	doc, ok := s.documents[p.TextDocument.Uri]
 	s.mu.RUnlock()
 
 	if !ok {
 		return nil, nil
 	}
 
-	path := uriToPath(p.TextDocument.URI)
+	path := uriToPath(p.TextDocument.Uri)
 
 	// Find the word at the cursor position
 	word := getWordAtPosition(doc.Content, int(p.Position.Line), int(p.Position.Character))
@@ -409,7 +408,7 @@ func (s *Server) handleHover(ctx context.Context, params json.RawMessage) (any, 
 
 	// First, check builtins from provider
 	if s.builtins != nil {
-		markdown = s.getBuiltinHover(word, p.TextDocument.URI)
+		markdown = s.getBuiltinHover(word, p.TextDocument.Uri)
 	}
 
 	// Fall back to document-defined symbols if not a builtin
@@ -445,9 +444,9 @@ func (s *Server) handleHover(ctx context.Context, params json.RawMessage) (any, 
 	}
 
 	return &protocol.Hover{
-		Contents: protocol.MarkupContent{
-			Kind:  protocol.Markdown,
-			Value: markdown,
+		Contents: protocol.Or_ArrMarkedString_MarkedString_MarkupContent{Value: protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: markdown},
 		},
 	}, nil
 }
@@ -459,14 +458,14 @@ func (s *Server) handleDefinition(ctx context.Context, params json.RawMessage) (
 	}
 
 	s.mu.RLock()
-	doc, ok := s.documents[p.TextDocument.URI]
+	doc, ok := s.documents[p.TextDocument.Uri]
 	s.mu.RUnlock()
 
 	if !ok {
 		return nil, nil
 	}
 
-	path := uriToPath(p.TextDocument.URI)
+	path := uriToPath(p.TextDocument.Uri)
 
 	// Find the word at the cursor position
 	word := getWordAtPosition(doc.Content, int(p.Position.Line), int(p.Position.Character))
@@ -519,7 +518,7 @@ func (s *Server) handleDefinition(ctx context.Context, params json.RawMessage) (
 			for localName, exportedName := range load.Symbols {
 				if localName == word {
 					// Try to resolve to actual definition via workspace index
-					if loc := s.resolveLoadedSymbol(word, p.TextDocument.URI); loc != nil {
+					if loc := s.resolveLoadedSymbol(word, p.TextDocument.Uri); loc != nil {
 						return []protocol.Location{*loc}, nil
 					}
 					// Fall back to the load statement line if we can't resolve
@@ -553,7 +552,7 @@ func (s *Server) handleDefinition(ctx context.Context, params json.RawMessage) (
 	// Return location (same file for now)
 	return []protocol.Location{
 		{
-			URI:   p.TextDocument.URI,
+			Uri:   p.TextDocument.Uri,
 			Range: lineToRange(defLine),
 		},
 	}, nil
@@ -567,9 +566,9 @@ func (s *Server) handleCompletion(ctx context.Context, params json.RawMessage) (
 
 	// Copy document content while holding lock to avoid race conditions
 	s.mu.RLock()
-	doc, ok := s.documents[p.TextDocument.URI]
+	doc, ok := s.documents[p.TextDocument.Uri]
 	var content string
-	var docURI protocol.DocumentURI
+	var docURI string
 	if ok {
 		content = doc.Content
 		docURI = doc.URI
@@ -598,7 +597,7 @@ func (s *Server) handleCompletion(ctx context.Context, params json.RawMessage) (
 		// Use provider-aware keyword completions to avoid duplicates
 		items = slices.Concat(
 			s.getKeywordCompletionsFiltered(prefix),
-			s.getProviderBuiltinCompletions(prefix, p.TextDocument.URI),
+			s.getProviderBuiltinCompletions(prefix, p.TextDocument.Uri),
 			getModuleCompletions(prefix),
 			s.getDocumentSymbolCompletions(docSnapshot, prefix, int(p.Position.Line)),
 		)
@@ -729,7 +728,7 @@ func (s *Server) getKeywordCompletionsFiltered(prefix string) []protocol.Complet
 // getProviderBuiltinCompletions returns completions from the builtins provider.
 // Falls back to hardcoded builtins if no provider is configured.
 // Uses dialect/kind detection based on the document URI to return appropriate builtins.
-func (s *Server) getProviderBuiltinCompletions(prefix string, uri protocol.DocumentURI) []protocol.CompletionItem {
+func (s *Server) getProviderBuiltinCompletions(prefix string, uri string) []protocol.CompletionItem {
 	// Fall back to hardcoded builtins if no provider
 	if s.builtins == nil {
 		return getBuiltinCompletions(prefix)
@@ -901,7 +900,7 @@ func (s *Server) handleFormatting(ctx context.Context, params json.RawMessage) (
 	}
 
 	s.mu.RLock()
-	doc, ok := s.documents[p.TextDocument.URI]
+	doc, ok := s.documents[p.TextDocument.Uri]
 	s.mu.RUnlock()
 
 	if !ok {
@@ -909,7 +908,7 @@ func (s *Server) handleFormatting(ctx context.Context, params json.RawMessage) (
 	}
 
 	// Extract filename from URI for kind detection
-	path := uriToPath(p.TextDocument.URI)
+	path := uriToPath(p.TextDocument.Uri)
 	log.Printf("formatting: %s", path)
 
 	// Format the document content
@@ -951,14 +950,14 @@ func (s *Server) handleDocumentSymbol(ctx context.Context, params json.RawMessag
 	}
 
 	s.mu.RLock()
-	doc, ok := s.documents[p.TextDocument.URI]
+	doc, ok := s.documents[p.TextDocument.Uri]
 	s.mu.RUnlock()
 
 	if !ok {
 		return []protocol.DocumentSymbol{}, nil
 	}
 
-	path := uriToPath(p.TextDocument.URI)
+	path := uriToPath(p.TextDocument.Uri)
 	log.Printf("documentSymbol: %s", path)
 
 	// Classify the file to determine its kind
@@ -1035,7 +1034,7 @@ func lineToRange(line int) protocol.Range {
 
 // uriToPath converts a document URI to a file path.
 // Handles file:// URIs and returns just the path component.
-func uriToPath(uri protocol.DocumentURI) string {
+func uriToPath(uri string) string {
 	s := string(uri)
 	if strings.HasPrefix(s, "file://") {
 		return s[7:] // Remove "file://"
@@ -1046,7 +1045,7 @@ func uriToPath(uri protocol.DocumentURI) string {
 // --- Diagnostics ---
 
 // publishDiagnostics runs linter and checker on a document and publishes results.
-func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentURI, content string) {
+func (s *Server) publishDiagnostics(ctx context.Context, uri string, content string) {
 	// Guard against nil connection (e.g., in tests)
 	if s.conn == nil {
 		return
@@ -1075,7 +1074,7 @@ func (s *Server) publishDiagnostics(ctx context.Context, uri protocol.DocumentUR
 
 	// Publish diagnostics to client
 	if err := s.conn.Notify(ctx, "textDocument/publishDiagnostics", protocol.PublishDiagnosticsParams{
-		URI:         uri,
+		Uri:         uri,
 		Diagnostics: diagnostics,
 	}); err != nil {
 		log.Printf("failed to publish diagnostics: %v", err)
@@ -1110,7 +1109,7 @@ func lintFindingToDiagnostic(f linter.Finding) protocol.Diagnostic {
 			End:   protocol.Position{Line: endLine, Character: endChar},
 		},
 		Severity: lintSeverityToLSP(f.Severity),
-		Code:     f.Rule,
+		Code:     protocol.Or_int32_string{Value: f.Rule},
 		Source:   "skylint",
 		Message:  f.Message,
 	}
@@ -1142,7 +1141,7 @@ func checkerDiagnosticToLSP(d checker.Diagnostic) protocol.Diagnostic {
 			End:   protocol.Position{Line: endLine, Character: endChar},
 		},
 		Severity: checkerSeverityToLSP(d.Severity),
-		Code:     d.Code,
+		Code:     protocol.Or_int32_string{Value: d.Code},
 		Source:   "skycheck",
 		Message:  d.Message,
 	}
@@ -1292,7 +1291,7 @@ func formatGlobalHover(g docgen.GlobalDoc) string {
 
 // getBuiltinHover returns hover markdown for a builtin symbol from the provider.
 // Uses dialect/kind detection based on the document URI to return appropriate builtins.
-func (s *Server) getBuiltinHover(word string, uri protocol.DocumentURI) string {
+func (s *Server) getBuiltinHover(word string, uri string) string {
 	if s.builtins == nil {
 		return ""
 	}
@@ -1446,4 +1445,14 @@ func formatBuiltinGlobalHover(g builtins.Field) string {
 	}
 
 	return b.String()
+}
+
+// ptrInt32 returns a pointer to the given int32 value.
+func ptrInt32(v int32) *int32 {
+	return &v
+}
+
+// ptrString returns a pointer to the given string value.
+func ptrString(v string) *string {
+	return &v
 }

@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"go.lsp.dev/protocol"
+	"github.com/albertocavalcante/sky/internal/protocol"
 )
 
 // =============================================================================
@@ -412,7 +412,7 @@ func initializeServerWithResult(t *testing.T, server *Server, rootURI string) ma
 	t.Helper()
 
 	initParams, _ := json.Marshal(protocol.InitializeParams{
-		RootURI: protocol.DocumentURI(rootURI),
+		XInitializeParams: protocol.XInitializeParams{RootUri: ptrString(string(rootURI))},
 	})
 	result, err := server.Handle(context.Background(), &Request{
 		Method: "initialize",
@@ -445,8 +445,8 @@ func openDocumentForSemantic(t *testing.T, server *Server, uri, content string) 
 
 	openParams, _ := json.Marshal(protocol.DidOpenTextDocumentParams{
 		TextDocument: protocol.TextDocumentItem{
-			URI:        protocol.DocumentURI(uri),
-			LanguageID: "starlark",
+			Uri:        string(uri),
+			LanguageId: "starlark",
 			Version:    1,
 			Text:       content,
 		},
@@ -466,7 +466,7 @@ func requestSemanticTokensFull(t *testing.T, server *Server, uri string) *protoc
 
 	params, _ := json.Marshal(protocol.SemanticTokensParams{
 		TextDocument: protocol.TextDocumentIdentifier{
-			URI: protocol.DocumentURI(uri),
+			Uri: string(uri),
 		},
 	})
 	result, err := server.Handle(context.Background(), &Request{

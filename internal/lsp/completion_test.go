@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"go.lsp.dev/protocol"
+	"github.com/albertocavalcante/sky/internal/protocol"
 )
 
 // These tests document expected LSP completion behavior.
@@ -15,7 +15,7 @@ func TestCompletion_BuiltinFunctions(t *testing.T) {
 	s := NewServer(nil)
 
 	// Add a document to the server
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	s.mu.Lock()
 	s.initialized = true
 	s.documents[uri] = &Document{
@@ -27,7 +27,7 @@ func TestCompletion_BuiltinFunctions(t *testing.T) {
 
 	params := protocol.CompletionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 3},
 		},
 	}
@@ -64,7 +64,7 @@ func TestCompletion_BuiltinFunctions(t *testing.T) {
 func TestCompletion_BuiltinModules(t *testing.T) {
 	s := NewServer(nil)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	s.mu.Lock()
 	s.initialized = true
 	s.documents[uri] = &Document{
@@ -76,7 +76,7 @@ func TestCompletion_BuiltinModules(t *testing.T) {
 
 	params := protocol.CompletionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 2},
 		},
 	}
@@ -105,7 +105,7 @@ func TestCompletion_BuiltinModules(t *testing.T) {
 func TestCompletion_ModuleMembers(t *testing.T) {
 	s := NewServer(nil)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	s.mu.Lock()
 	s.initialized = true
 	s.documents[uri] = &Document{
@@ -117,7 +117,7 @@ func TestCompletion_ModuleMembers(t *testing.T) {
 
 	params := protocol.CompletionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 8},
 		},
 	}
@@ -146,7 +146,7 @@ func TestCompletion_ModuleMembers(t *testing.T) {
 func TestCompletion_LocalVariables(t *testing.T) {
 	s := NewServer(nil)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	s.mu.Lock()
 	s.initialized = true
 	s.documents[uri] = &Document{
@@ -158,7 +158,7 @@ func TestCompletion_LocalVariables(t *testing.T) {
 
 	params := protocol.CompletionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 1, Character: 3},
 		},
 	}
@@ -187,7 +187,7 @@ func TestCompletion_LocalVariables(t *testing.T) {
 func TestCompletion_FunctionParameters(t *testing.T) {
 	s := NewServer(nil)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	s.mu.Lock()
 	s.initialized = true
 	s.documents[uri] = &Document{
@@ -199,7 +199,7 @@ func TestCompletion_FunctionParameters(t *testing.T) {
 
 	params := protocol.CompletionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 1, Character: 6},
 		},
 	}
@@ -234,7 +234,7 @@ func TestCompletion_FunctionParameters(t *testing.T) {
 func TestCompletion_Keywords(t *testing.T) {
 	s := NewServer(nil)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	s.mu.Lock()
 	s.initialized = true
 	s.documents[uri] = &Document{
@@ -246,7 +246,7 @@ func TestCompletion_Keywords(t *testing.T) {
 
 	params := protocol.CompletionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 2},
 		},
 	}
@@ -275,7 +275,7 @@ func TestCompletion_Keywords(t *testing.T) {
 func TestCompletion_EmptyFile(t *testing.T) {
 	s := NewServer(nil)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	s.mu.Lock()
 	s.initialized = true
 	s.documents[uri] = &Document{
@@ -287,7 +287,7 @@ func TestCompletion_EmptyFile(t *testing.T) {
 
 	params := protocol.CompletionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 0},
 		},
 	}

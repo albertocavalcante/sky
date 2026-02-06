@@ -6,7 +6,6 @@ import (
 	"github.com/albertocavalcante/sky/internal/starlark/builtins/loader"
 	"github.com/albertocavalcante/sky/internal/starlark/classifier"
 	"github.com/albertocavalcante/sky/internal/starlark/filekind"
-	"go.lsp.dev/protocol"
 )
 
 // NewDefaultProvider creates a default builtins provider that chains
@@ -25,7 +24,7 @@ func NewDefaultProvider() builtins.Provider {
 
 // getDialectAndKind determines the dialect and file kind based on the document URI.
 // Uses the classifier to determine file type from the path.
-func (s *Server) getDialectAndKind(uri protocol.DocumentURI) (string, filekind.Kind) {
+func (s *Server) getDialectAndKind(uri string) (string, filekind.Kind) {
 	path := uriToPath(uri)
 
 	// Use the default classifier to determine dialect and kind from path

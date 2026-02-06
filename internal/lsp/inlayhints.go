@@ -6,37 +6,11 @@ import (
 	"log"
 	"strings"
 
+	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/bazelbuild/buildtools/build"
-	"go.lsp.dev/protocol"
 
 	"github.com/albertocavalcante/sky/internal/types"
 )
-
-// InlayHint represents an inlay hint for display in the editor.
-// Defined locally since go.lsp.dev/protocol v0.12.0 doesn't include InlayHint types.
-type InlayHint struct {
-	Position     protocol.Position `json:"position"`
-	Label        string            `json:"label"`
-	Kind         InlayHintKind     `json:"kind,omitempty"`
-	PaddingLeft  bool              `json:"paddingLeft,omitempty"`
-	PaddingRight bool              `json:"paddingRight,omitempty"`
-}
-
-// InlayHintKind represents the kind of inlay hint.
-type InlayHintKind int
-
-const (
-	// InlayHintKindType represents a type hint.
-	InlayHintKindType InlayHintKind = 1
-	// InlayHintKindParameter represents a parameter hint.
-	InlayHintKindParameter InlayHintKind = 2
-)
-
-// InlayHintParams are the parameters for the textDocument/inlayHint request.
-type InlayHintParams struct {
-	TextDocument protocol.TextDocumentIdentifier `json:"textDocument"`
-	Range        protocol.Range                  `json:"range"`
-}
 
 // InlayHintConfig controls which inlay hints are displayed.
 type InlayHintConfig struct {
@@ -56,14 +30,14 @@ var DefaultInlayHintConfig = InlayHintConfig{
 
 // handleInlayHint handles textDocument/inlayHint requests.
 func (s *Server) handleInlayHint(ctx context.Context, params json.RawMessage) (any, error) {
-	var p InlayHintParams
+	var p protocol.InlayHintParams
 	if err := json.Unmarshal(params, &p); err != nil {
 		return nil, err
 	}
 
 	// Copy document content while holding lock
 	s.mu.RLock()
-	doc, ok := s.documents[p.TextDocument.URI]
+	doc, ok := s.documents[p.TextDocument.Uri]
 	var content string
 	if ok {
 		content = doc.Content
@@ -71,11 +45,11 @@ func (s *Server) handleInlayHint(ctx context.Context, params json.RawMessage) (a
 	s.mu.RUnlock()
 
 	if !ok {
-		return []InlayHint{}, nil
+		return []protocol.InlayHint{}, nil
 	}
 
 	log.Printf("inlayHint: %s [%d:%d - %d:%d]",
-		p.TextDocument.URI,
+		p.TextDocument.Uri,
 		p.Range.Start.Line, p.Range.Start.Character,
 		p.Range.End.Line, p.Range.End.Character)
 
@@ -83,7 +57,7 @@ func (s *Server) handleInlayHint(ctx context.Context, params json.RawMessage) (a
 	file, err := build.ParseDefault("", []byte(content))
 	if err != nil {
 		log.Printf("inlayHint parse error: %v", err)
-		return []InlayHint{}, nil
+		return []protocol.InlayHint{}, nil
 	}
 
 	// Collect inlay hints
@@ -100,7 +74,7 @@ type inlayHintCollector struct {
 	lines   []string
 	rng     protocol.Range
 	config  InlayHintConfig
-	hints   []InlayHint
+	hints   []protocol.InlayHint
 
 	// Track defined variables to avoid duplicate hints
 	defined map[string]bool
@@ -112,12 +86,12 @@ func newInlayHintCollector(content string, rng protocol.Range, config InlayHintC
 		lines:   strings.Split(content, "\n"),
 		rng:     rng,
 		config:  config,
-		hints:   []InlayHint{},
+		hints:   []protocol.InlayHint{},
 		defined: make(map[string]bool),
 	}
 }
 
-func (c *inlayHintCollector) collect(file *build.File) []InlayHint {
+func (c *inlayHintCollector) collect(file *build.File) []protocol.InlayHint {
 	// Process all statements
 	for _, stmt := range file.Stmt {
 		c.collectStmt(stmt)
@@ -291,13 +265,13 @@ func (c *inlayHintCollector) collectLoopVarsHint(vars build.Expr, elemType types
 func (c *inlayHintCollector) addTypeHint(pos build.Position, typeRef types.TypeRef) {
 	label := ": " + c.formatType(typeRef)
 
-	c.hints = append(c.hints, InlayHint{
+	c.hints = append(c.hints, protocol.InlayHint{
 		Position: protocol.Position{
 			Line:      uint32(pos.Line - 1),
 			Character: uint32(pos.LineRune - 1),
 		},
-		Label:        label,
-		Kind:         InlayHintKindType,
+		Label:        protocol.Or_ArrInlayHintLabelPart_string{Value: label},
+		Kind:         protocol.InlayHintKindType,
 		PaddingLeft:  false,
 		PaddingRight: true,
 	})

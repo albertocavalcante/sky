@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/albertocavalcante/sky/internal/starlark/builtins"
 	"github.com/albertocavalcante/sky/internal/starlark/filekind"
-	"go.lsp.dev/protocol"
 )
 
 // mockProvider is a test provider that returns predefined builtins.
@@ -143,7 +143,7 @@ func TestCompletion_IncludesBuiltinFunctions(t *testing.T) {
 	}
 	server := NewServerWithProvider(nil, provider)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	server.mu.Lock()
 	server.initialized = true
 	server.documents[uri] = &Document{
@@ -155,7 +155,7 @@ func TestCompletion_IncludesBuiltinFunctions(t *testing.T) {
 
 	params := protocol.CompletionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 3},
 		},
 	}
@@ -194,7 +194,7 @@ func TestCompletion_IncludesBuiltinTypes(t *testing.T) {
 	}
 	server := NewServerWithProvider(nil, provider)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	server.mu.Lock()
 	server.initialized = true
 	server.documents[uri] = &Document{
@@ -206,7 +206,7 @@ func TestCompletion_IncludesBuiltinTypes(t *testing.T) {
 
 	params := protocol.CompletionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 3},
 		},
 	}
@@ -243,7 +243,7 @@ func TestCompletion_BuiltinDocumentation(t *testing.T) {
 	}
 	server := NewServerWithProvider(nil, provider)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	server.mu.Lock()
 	server.initialized = true
 	server.documents[uri] = &Document{
@@ -255,7 +255,7 @@ func TestCompletion_BuiltinDocumentation(t *testing.T) {
 
 	params := protocol.CompletionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 2},
 		},
 	}
@@ -292,7 +292,7 @@ func TestCompletion_BuiltinGlobals(t *testing.T) {
 	}
 	server := NewServerWithProvider(nil, provider)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	server.mu.Lock()
 	server.initialized = true
 	server.documents[uri] = &Document{
@@ -304,7 +304,7 @@ func TestCompletion_BuiltinGlobals(t *testing.T) {
 
 	params := protocol.CompletionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 2},
 		},
 	}
@@ -343,7 +343,7 @@ func TestHover_BuiltinFunction(t *testing.T) {
 	}
 	server := NewServerWithProvider(nil, provider)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	server.mu.Lock()
 	server.initialized = true
 	server.documents[uri] = &Document{
@@ -355,7 +355,7 @@ func TestHover_BuiltinFunction(t *testing.T) {
 
 	params := protocol.HoverParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 2}, // hovering over "print"
 		},
 	}
@@ -376,7 +376,7 @@ func TestHover_BuiltinFunction(t *testing.T) {
 	}
 
 	// Check content contains function signature
-	content := hover.Contents.Value
+	content := hover.Contents.Value.(protocol.MarkupContent).Value
 	if !strings.Contains(content, "print") {
 		t.Errorf("hover content should contain 'print', got: %s", content)
 	}
@@ -394,7 +394,7 @@ func TestHover_BuiltinType(t *testing.T) {
 	}
 	server := NewServerWithProvider(nil, provider)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	server.mu.Lock()
 	server.initialized = true
 	server.documents[uri] = &Document{
@@ -406,7 +406,7 @@ func TestHover_BuiltinType(t *testing.T) {
 
 	params := protocol.HoverParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 5}, // hovering over "dict"
 		},
 	}
@@ -427,7 +427,7 @@ func TestHover_BuiltinType(t *testing.T) {
 	}
 
 	// Check content contains type name
-	content := hover.Contents.Value
+	content := hover.Contents.Value.(protocol.MarkupContent).Value
 	if !strings.Contains(content, "dict") {
 		t.Errorf("hover content should contain 'dict', got: %s", content)
 	}
@@ -445,7 +445,7 @@ func TestHover_BuiltinGlobal(t *testing.T) {
 	}
 	server := NewServerWithProvider(nil, provider)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	server.mu.Lock()
 	server.initialized = true
 	server.documents[uri] = &Document{
@@ -457,7 +457,7 @@ func TestHover_BuiltinGlobal(t *testing.T) {
 
 	params := protocol.HoverParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 5}, // hovering over "True"
 		},
 	}
@@ -478,7 +478,7 @@ func TestHover_BuiltinGlobal(t *testing.T) {
 	}
 
 	// Check content contains global name
-	content := hover.Contents.Value
+	content := hover.Contents.Value.(protocol.MarkupContent).Value
 	if !strings.Contains(content, "True") {
 		t.Errorf("hover content should contain 'True', got: %s", content)
 	}
@@ -498,7 +498,7 @@ func TestHover_FallbackToDocumentSymbols(t *testing.T) {
 	}
 	server := NewServerWithProvider(nil, provider)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	code := `def my_func():
     """My custom function."""
     pass
@@ -514,7 +514,7 @@ func TestHover_FallbackToDocumentSymbols(t *testing.T) {
 
 	params := protocol.HoverParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 5}, // hovering over "my_func"
 		},
 	}
@@ -531,8 +531,8 @@ func TestHover_FallbackToDocumentSymbols(t *testing.T) {
 	}
 
 	hover := result.(*protocol.Hover)
-	if !strings.Contains(hover.Contents.Value, "my_func") {
-		t.Errorf("hover should contain 'my_func', got: %s", hover.Contents.Value)
+	if !strings.Contains(hover.Contents.Value.(protocol.MarkupContent).Value, "my_func") {
+		t.Errorf("hover should contain 'my_func', got: %s", hover.Contents.Value.(protocol.MarkupContent).Value)
 	}
 }
 
@@ -546,7 +546,7 @@ func TestCompletion_WithEmptyProvider(t *testing.T) {
 	}
 	server := NewServerWithProvider(nil, provider)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	server.mu.Lock()
 	server.initialized = true
 	server.documents[uri] = &Document{
@@ -558,7 +558,7 @@ func TestCompletion_WithEmptyProvider(t *testing.T) {
 
 	params := protocol.CompletionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 2},
 		},
 	}

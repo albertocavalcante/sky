@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/albertocavalcante/sky/internal/starlark/builtins"
-	"go.lsp.dev/protocol"
 )
 
 // TestSignatureHelp_BuiltinFunction tests signature help for builtin functions.
@@ -18,7 +18,7 @@ func TestSignatureHelp_BuiltinFunction(t *testing.T) {
 	}
 	server := NewServerWithProvider(nil, provider)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	server.mu.Lock()
 	server.initialized = true
 	server.documents[uri] = &Document{
@@ -30,7 +30,7 @@ func TestSignatureHelp_BuiltinFunction(t *testing.T) {
 
 	params := protocol.SignatureHelpParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 6}, // cursor after "("
 		},
 	}
@@ -74,7 +74,7 @@ func TestSignatureHelp_ActiveParameter(t *testing.T) {
 	}
 	server := NewServerWithProvider(nil, provider)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	server.mu.Lock()
 	server.initialized = true
 	server.documents[uri] = &Document{
@@ -86,7 +86,7 @@ func TestSignatureHelp_ActiveParameter(t *testing.T) {
 
 	params := protocol.SignatureHelpParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 9}, // cursor after ", "
 		},
 	}
@@ -102,7 +102,7 @@ func TestSignatureHelp_ActiveParameter(t *testing.T) {
 	}
 
 	sigHelp := result.(*protocol.SignatureHelp)
-	if sigHelp.ActiveParameter != 1 {
+	if *sigHelp.ActiveParameter != 1 {
 		t.Errorf("ActiveParameter = %d, want 1 (second param)", sigHelp.ActiveParameter)
 	}
 }
@@ -115,7 +115,7 @@ func TestSignatureHelp_NestedCalls(t *testing.T) {
 	}
 	server := NewServerWithProvider(nil, provider)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	server.mu.Lock()
 	server.initialized = true
 	server.documents[uri] = &Document{
@@ -127,7 +127,7 @@ func TestSignatureHelp_NestedCalls(t *testing.T) {
 
 	params := protocol.SignatureHelpParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 10}, // cursor after "len("
 		},
 	}
@@ -161,7 +161,7 @@ func TestSignatureHelp_NestedCalls(t *testing.T) {
 func TestSignatureHelp_UserDefinedFunction(t *testing.T) {
 	server := NewServer(nil) // Use real server with default provider
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	code := `def my_func(name, value=None):
     """Do something useful.
 
@@ -183,7 +183,7 @@ my_func(`
 
 	params := protocol.SignatureHelpParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 9, Character: 8}, // cursor after "my_func("
 		},
 	}
@@ -214,8 +214,8 @@ my_func(`
 	}
 
 	// Check documentation is present
-	if sig.Documentation != nil {
-		docStr, ok := sig.Documentation.(string)
+	if sig.Documentation.Value != nil {
+		docStr, ok := sig.Documentation.Value.(string)
 		if ok && !strings.Contains(docStr, "useful") {
 			t.Logf("Documentation: %v", sig.Documentation)
 		}
@@ -230,7 +230,7 @@ func TestSignatureHelp_OutsideCall(t *testing.T) {
 	}
 	server := NewServerWithProvider(nil, provider)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	server.mu.Lock()
 	server.initialized = true
 	server.documents[uri] = &Document{
@@ -242,7 +242,7 @@ func TestSignatureHelp_OutsideCall(t *testing.T) {
 
 	params := protocol.SignatureHelpParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 5}, // cursor at end of "x = 1"
 		},
 	}
@@ -270,7 +270,7 @@ func TestSignatureHelp_ClosedParen(t *testing.T) {
 	}
 	server := NewServerWithProvider(nil, provider)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	server.mu.Lock()
 	server.initialized = true
 	server.documents[uri] = &Document{
@@ -282,7 +282,7 @@ func TestSignatureHelp_ClosedParen(t *testing.T) {
 
 	params := protocol.SignatureHelpParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 8}, // cursor after ")"
 		},
 	}
@@ -338,7 +338,7 @@ func TestSignatureHelp_MultipleParameters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			uri := protocol.DocumentURI("file:///test.star")
+			uri := string("file:///test.star")
 			server.mu.Lock()
 			server.documents[uri] = &Document{
 				URI:     uri,
@@ -349,7 +349,7 @@ func TestSignatureHelp_MultipleParameters(t *testing.T) {
 
 			params := protocol.SignatureHelpParams{
 				TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-					TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+					TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 					Position:     protocol.Position{Line: 0, Character: tt.cursorCol},
 				},
 			}
@@ -365,7 +365,7 @@ func TestSignatureHelp_MultipleParameters(t *testing.T) {
 			}
 
 			sigHelp := result.(*protocol.SignatureHelp)
-			if sigHelp.ActiveParameter != tt.wantActive {
+			if *sigHelp.ActiveParameter != tt.wantActive {
 				t.Errorf("ActiveParameter = %d, want %d", sigHelp.ActiveParameter, tt.wantActive)
 			}
 		})
@@ -398,7 +398,7 @@ func TestSignatureHelp_BuiltinType(t *testing.T) {
 	}
 	server := NewServerWithProvider(nil, provider)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	server.mu.Lock()
 	server.initialized = true
 	server.documents[uri] = &Document{
@@ -410,7 +410,7 @@ func TestSignatureHelp_BuiltinType(t *testing.T) {
 
 	params := protocol.SignatureHelpParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 9}, // cursor after "dict("
 		},
 	}
@@ -444,7 +444,7 @@ func TestSignatureHelp_MultilineCall(t *testing.T) {
 	}
 	server := NewServerWithProvider(nil, provider)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	code := `print(
     "hello",
     `
@@ -459,7 +459,7 @@ func TestSignatureHelp_MultilineCall(t *testing.T) {
 
 	params := protocol.SignatureHelpParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 2, Character: 4}, // cursor on line 3
 		},
 	}
@@ -485,7 +485,7 @@ func TestSignatureHelp_MultilineCall(t *testing.T) {
 	}
 
 	// Should be on second parameter (after the comma)
-	if sigHelp.ActiveParameter != 1 {
+	if *sigHelp.ActiveParameter != 1 {
 		t.Errorf("ActiveParameter = %d, want 1 (second param after comma)", sigHelp.ActiveParameter)
 	}
 }
@@ -498,7 +498,7 @@ func TestSignatureHelp_StringWithComma(t *testing.T) {
 	}
 	server := NewServerWithProvider(nil, provider)
 
-	uri := protocol.DocumentURI("file:///test.star")
+	uri := string("file:///test.star")
 	server.mu.Lock()
 	server.initialized = true
 	server.documents[uri] = &Document{
@@ -510,7 +510,7 @@ func TestSignatureHelp_StringWithComma(t *testing.T) {
 
 	params := protocol.SignatureHelpParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			TextDocument: protocol.TextDocumentIdentifier{Uri: uri},
 			Position:     protocol.Position{Line: 0, Character: 17}, // cursor after the real comma
 		},
 	}
@@ -527,7 +527,7 @@ func TestSignatureHelp_StringWithComma(t *testing.T) {
 
 	sigHelp := result.(*protocol.SignatureHelp)
 	// Should be on second parameter (only one real comma)
-	if sigHelp.ActiveParameter != 1 {
+	if *sigHelp.ActiveParameter != 1 {
 		t.Errorf("ActiveParameter = %d, want 1 (commas in string should not count)", sigHelp.ActiveParameter)
 	}
 }
@@ -537,8 +537,7 @@ func TestSignatureHelp_InitializeCapability(t *testing.T) {
 	server := NewServer(nil)
 
 	params, _ := json.Marshal(protocol.InitializeParams{
-		ProcessID: 1234,
-		RootURI:   "file:///test",
+		XInitializeParams: protocol.XInitializeParams{ProcessId: ptrInt32(1234), RootUri: ptrString("file:///test")},
 	})
 
 	result, err := server.Handle(context.Background(), &Request{

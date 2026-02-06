@@ -9,10 +9,10 @@ import (
 
 	"github.com/bazelbuild/buildtools/build"
 
+	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/albertocavalcante/sky/internal/starlark/builtins"
 	"github.com/albertocavalcante/sky/internal/starlark/classifier"
 	"github.com/albertocavalcante/sky/internal/starlark/filekind"
-	"go.lsp.dev/protocol"
 )
 
 // handleSignatureHelp returns signature information for the function call at the cursor position.
@@ -23,7 +23,7 @@ func (s *Server) handleSignatureHelp(ctx context.Context, params json.RawMessage
 	}
 
 	s.mu.RLock()
-	doc, ok := s.documents[p.TextDocument.URI]
+	doc, ok := s.documents[p.TextDocument.Uri]
 	s.mu.RUnlock()
 
 	if !ok {
@@ -39,13 +39,13 @@ func (s *Server) handleSignatureHelp(ctx context.Context, params json.RawMessage
 	log.Printf("signatureHelp: function=%s, argIndex=%d", callCtx.FunctionName, callCtx.ArgumentIndex)
 
 	// Try to find signature from builtins first
-	sig := s.getBuiltinSignature(callCtx.FunctionName, p.TextDocument.URI)
+	sig := s.getBuiltinSignature(callCtx.FunctionName, p.TextDocument.Uri)
 	if sig != nil {
 		return buildSignatureHelp(sig, callCtx.ArgumentIndex), nil
 	}
 
 	// Fall back to user-defined functions in the document
-	sig = s.getDocumentFunctionSignature(doc.Content, callCtx.FunctionName, p.TextDocument.URI)
+	sig = s.getDocumentFunctionSignature(doc.Content, callCtx.FunctionName, p.TextDocument.Uri)
 	if sig != nil {
 		return buildSignatureHelp(sig, callCtx.ArgumentIndex), nil
 	}
@@ -213,7 +213,7 @@ func lineCharToOffset(content string, line, char int) int {
 }
 
 // getBuiltinSignature returns the signature for a builtin function.
-func (s *Server) getBuiltinSignature(name string, uri protocol.DocumentURI) *builtins.Signature {
+func (s *Server) getBuiltinSignature(name string, uri string) *builtins.Signature {
 	if s.builtins == nil {
 		return nil
 	}
@@ -244,7 +244,7 @@ func (s *Server) getBuiltinSignature(name string, uri protocol.DocumentURI) *bui
 }
 
 // getDocumentFunctionSignature extracts signature for a function defined in the document.
-func (s *Server) getDocumentFunctionSignature(content, name string, uri protocol.DocumentURI) *builtins.Signature {
+func (s *Server) getDocumentFunctionSignature(content, name string, uri string) *builtins.Signature {
 	path := uriToPath(uri)
 
 	// Classify the file
@@ -379,7 +379,7 @@ func buildSignatureHelp(sig *builtins.Signature, activeParam int) *protocol.Sign
 
 		// Create parameter info
 		paramInfo := protocol.ParameterInformation{
-			Label: label.String()[paramStart:],
+			Label: protocol.Or_Tuple_string{Value: label.String()[paramStart:]},
 		}
 		params = append(params, paramInfo)
 	}
@@ -391,12 +391,11 @@ func buildSignatureHelp(sig *builtins.Signature, activeParam int) *protocol.Sign
 	}
 
 	// Build documentation
-	var doc interface{}
+	var doc protocol.Or_MarkupContent_string
 	if sig.Doc != "" {
-		doc = protocol.MarkupContent{
-			Kind:  protocol.Markdown,
-			Value: sig.Doc,
-		}
+		doc = protocol.Or_MarkupContent_string{Value: protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: sig.Doc}}
 	}
 
 	// Ensure activeParam is in bounds
@@ -426,6 +425,11 @@ func buildSignatureHelp(sig *builtins.Signature, activeParam int) *protocol.Sign
 			},
 		},
 		ActiveSignature: 0,
-		ActiveParameter: uint32(activeParam),
+		ActiveParameter: ptrUint32(uint32(activeParam)),
 	}
+}
+
+// ptrUint32 returns a pointer to the given uint32 value.
+func ptrUint32(v uint32) *uint32 {
+	return &v
 }

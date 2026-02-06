@@ -8,8 +8,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/bazelbuild/buildtools/build"
-	"go.lsp.dev/protocol"
 )
 
 // handleSemanticTokensFull handles textDocument/semanticTokens/full requests.
@@ -21,7 +21,7 @@ func (s *Server) handleSemanticTokensFull(ctx context.Context, params json.RawMe
 
 	// Copy content while holding lock to avoid data race
 	s.mu.RLock()
-	doc, ok := s.documents[p.TextDocument.URI]
+	doc, ok := s.documents[p.TextDocument.Uri]
 	var content string
 	if ok {
 		content = doc.Content
@@ -32,7 +32,7 @@ func (s *Server) handleSemanticTokensFull(ctx context.Context, params json.RawMe
 		return &protocol.SemanticTokens{Data: []uint32{}}, nil
 	}
 
-	log.Printf("semanticTokens/full: %s", p.TextDocument.URI)
+	log.Printf("semanticTokens/full: %s", p.TextDocument.Uri)
 
 	// Tokenize the content
 	tokens := tokenizeContent(content)
@@ -54,7 +54,7 @@ func (s *Server) handleSemanticTokensRange(ctx context.Context, params json.RawM
 
 	// Copy content while holding lock to avoid data race
 	s.mu.RLock()
-	doc, ok := s.documents[p.TextDocument.URI]
+	doc, ok := s.documents[p.TextDocument.Uri]
 	var content string
 	if ok {
 		content = doc.Content
@@ -66,7 +66,7 @@ func (s *Server) handleSemanticTokensRange(ctx context.Context, params json.RawM
 	}
 
 	log.Printf("semanticTokens/range: %s [%d:%d - %d:%d]",
-		p.TextDocument.URI,
+		p.TextDocument.Uri,
 		p.Range.Start.Line, p.Range.Start.Character,
 		p.Range.End.Line, p.Range.End.Character)
 
