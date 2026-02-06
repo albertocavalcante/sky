@@ -3,6 +3,7 @@ module github.com/albertocavalcante/sky
 go 1.24.6
 
 require (
+	github.com/BurntSushi/toml v1.3.2
 	github.com/bazelbuild/buildtools v0.0.0-20251231073631-eb7356da6895
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gofrs/flock v0.13.0
@@ -19,17 +20,7 @@ require (
 	google.golang.org/protobuf v1.36.11
 )
 
-// EXPERIMENTAL: Coverage instrumentation via starlark-go-x hooks.
-// This replaces upstream starlark-go with our fork that has coverage hooks:
-// - OnExec: line coverage
-// - OnBranch: branch coverage
-// - OnFunctionEnter/Exit: function coverage
-// - OnIteration: loop coverage
-// TODO(upstream): Remove once hooks are merged to go.starlark.net
-replace go.starlark.net => github.com/albertocavalcante/starlark-go-x v0.0.0-20260203191202-da5a35fe16a6
-
 require (
-	github.com/BurntSushi/toml v1.3.2 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/golang/protobuf v1.5.0 // indirect
 	github.com/gostaticanalysis/analysisutil v0.7.1 // indirect
@@ -47,3 +38,12 @@ require (
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/tools/go/packages/packagestest v0.1.1-deprecated // indirect
 )
+
+// EXPERIMENTAL: Coverage instrumentation via starlark-go-x hooks.
+// This replaces upstream starlark-go with our fork that has coverage hooks:
+// - OnExec: line coverage
+// - OnBranch: branch coverage
+// - OnFunctionEnter/Exit: function coverage
+// - OnIteration: loop coverage
+// TODO(upstream): Remove once hooks are merged to go.starlark.net
+replace go.starlark.net => github.com/albertocavalcante/starlark-go-x v0.0.0-20260203191202-da5a35fe16a6

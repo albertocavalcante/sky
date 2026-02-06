@@ -51,7 +51,13 @@ gazelle:
 
 # Tidy go modules
 tidy:
-    bazel run @rules_go//go -- mod tidy
+    go mod tidy
+    @command -v gomodfmt >/dev/null 2>&1 && gomodfmt -w go.mod || true
+
+# Format go.mod file (install: go install github.com/albertocavalcante/gomodfmt/cmd/gomodfmt@latest)
+format-mod:
+    @command -v gomodfmt >/dev/null 2>&1 || { echo "Installing gomodfmt..."; go install github.com/albertocavalcante/gomodfmt/cmd/gomodfmt@latest; }
+    gomodfmt -w go.mod
 
 # Run format + lint + test (CI check)
 check: format format-sh lint lint-sh test
