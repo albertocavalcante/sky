@@ -93,18 +93,18 @@ export default defineConfig({
 						{ label: 'Type System Roadmap', slug: 'starlark/types-roadmap' },
 						{ label: 'Implementations', slug: 'starlark/implementations' },
 						{ label: 'Best Practices', slug: 'starlark/best-practices' },
+						{ label: 'Tooling & IDE Support', slug: 'starlark/tooling' },
 						{ label: 'Resources', slug: 'starlark/resources' },
 					],
 				},
 				{
-					label: 'Ecosystem Deep Dives',
+					label: 'Starlark in Practice',
 					items: [
 						{ label: 'Use Cases Overview', slug: 'starlark/use-cases' },
 						{ label: 'Bazel vs Buck2', slug: 'starlark/build-systems-comparison' },
-						{ label: 'Skycfg (Stripe)', slug: 'starlark/skycfg-deep-dive' },
-						{ label: 'ytt (Carvel)', slug: 'starlark/ytt-deep-dive' },
+						{ label: 'Skycfg', slug: 'starlark/skycfg-deep-dive' },
+						{ label: 'ytt', slug: 'starlark/ytt-deep-dive' },
 						{ label: 'Aspect CLI & AXL', slug: 'starlark/aspect-cli-axl' },
-						{ label: 'Tooling & IDE Support', slug: 'starlark/tooling' },
 					],
 				},
 				{
