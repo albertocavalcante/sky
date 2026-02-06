@@ -1,0 +1,705 @@
+---
+title: "ytt: YAML Templating with Starlark"
+description: Deep dive into Carvel's ytt - structural YAML templating powered by Starlark
+---
+
+import { Aside, Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+# ytt Deep Dive
+
+[ytt](https://carvel.dev/ytt/) (pronounced "why-tee-tee") is a YAML-aware templating tool from the [Carvel](https://carvel.dev/) project (VMware Tanzu). Unlike text-based templaters, ytt understands YAML structure, enabling safer and more powerful configuration management.
+
+<Aside type="note">
+ytt uses a **customized fork of starlark-go** ([carvel-dev/starlark-go](https://github.com/carvel-dev/starlark-go)) with block-based syntax support. This enables clean YAML-embedded templates without Python-style whitespace sensitivity.
+</Aside>
+
+## The Problem with Text Templating
+
+Traditional templating (like Helm's Go templates) treats YAML as plain text:
+
+```yaml
+# Helm-style text templating - fragile!
+args:
+- "-listen=:{{ .Values.port }}"     # Manual quoting
+- {{ if .Values.debug }}-debug{{ end }}  # Indentation issues
+env:
+{{- range $k, $v := .Values.env }}  # Complex syntax
+  - name: {{ $k }}
+    value: {{ $v | quote }}
+{{- end }}
+```
+
+**Common issues:**
+- Manual quoting and escaping
+- Indentation errors break YAML structure
+- Template errors caught only at render time
+- Hard to compose and test
+
+## ytt's Structural Approach
+
+ytt understands YAML structure natively:
+
+```yaml
+#@ load("@ytt:data", "data")
+
+args:
+- #@ "-listen=:" + str(data.values.port)
+- #@ "-debug" if data.values.debug else None
+env:
+#@ for k, v in data.values.env.items():
+- name: #@ k
+  value: #@ v
+#@ end
+```
+
+**Benefits:**
+- YAML structure preserved automatically
+- No quoting/escaping needed
+- Type-safe values
+- Errors caught at template evaluation time
+
+---
+
+## Core Concepts
+
+### Annotations (`#@` Directives)
+
+ytt uses comment annotations to embed Starlark:
+
+| Annotation | Purpose |
+|------------|---------|
+| `#@ expr` | Inline Starlark expression |
+| `#@ load(...)` | Import modules |
+| `#@ def fn(): ... #@ end` | Define functions |
+| `#@ if cond: ... #@ end` | Conditionals |
+| `#@ for x in items: ... #@ end` | Loops |
+| `#@data/values-schema` | Mark as schema file |
+| `#@overlay/...` | Overlay operations |
+| `#! comment` | Preserved comment |
+
+### The `@ytt:` Module Namespace
+
+ytt provides domain-specific modules:
+
+```yaml
+#@ load("@ytt:data", "data")        # Data values
+#@ load("@ytt:overlay", "overlay")  # Patching
+#@ load("@ytt:template", "template") # Template utils
+#@ load("@ytt:library", "library")  # Library loading
+#@ load("@ytt:assert", "assert")    # Validation
+#@ load("@ytt:struct", "struct")    # Typed structs
+#@ load("@ytt:yaml", "yaml")        # YAML encoding
+#@ load("@ytt:json", "json")        # JSON encoding
+#@ load("@ytt:base64", "base64")    # Base64 encoding
+#@ load("@ytt:md5", "md5")          # MD5 hashing
+#@ load("@ytt:sha256", "sha256")    # SHA256 hashing
+#@ load("@ytt:url", "url")          # URL handling
+#@ load("@ytt:regexp", "regexp")    # Regular expressions
+#@ load("@ytt:ip", "ip")            # IP address parsing
+#@ load("@ytt:math", "math")        # Math functions
+```
+
+---
+
+## Data Values System
+
+### Schema Definition
+
+Define your configuration schema:
+
+```yaml
+#@data/values-schema
+---
+#@schema/title "Application Configuration"
+app:
+  name: ""
+  #@schema/desc "Number of replicas"
+  replicas: 1
+  #@schema/nullable
+  image: ""
+
+  resources:
+    cpu: "100m"
+    memory: "128Mi"
+
+  #@schema/type any=True
+  extra_config: {}
+
+debug: false
+```
+
+### Using Data Values
+
+```yaml
+#@ load("@ytt:data", "data")
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: #@ data.values.app.name
+spec:
+  replicas: #@ data.values.app.replicas
+  template:
+    spec:
+      containers:
+      - name: app
+        image: #@ data.values.app.image
+        resources:
+          requests:
+            cpu: #@ data.values.app.resources.cpu
+            memory: #@ data.values.app.resources.memory
+```
+
+### Overriding Values
+
+```bash
+# Via CLI flags
+ytt -f config/ -v app.name=myapp -v app.replicas=3
+
+# Via values file
+ytt -f config/ -f values-prod.yml
+
+# Via environment
+ytt -f config/ --data-values-env APP_
+
+# Multiple sources (later overrides earlier)
+ytt -f config/ -f base.yml -f prod.yml -v debug=true
+```
+
+---
+
+## Overlays: Surgical YAML Patching
+
+Overlays modify existing YAML without changing the original files.
+
+### Basic Overlay Pattern
+
+```yaml
+#@ load("@ytt:overlay", "overlay")
+
+#! Match all documents
+#@overlay/match by=overlay.all
+---
+metadata:
+  #@overlay/match missing_ok=True
+  annotations:
+    managed-by: ytt
+```
+
+### Overlay Annotations
+
+| Annotation | Purpose |
+|------------|---------|
+| `#@overlay/match` | Select nodes to modify |
+| `#@overlay/replace` | Replace node value |
+| `#@overlay/insert` | Insert new items |
+| `#@overlay/remove` | Delete nodes |
+| `#@overlay/assert` | Validate matches |
+| `#@overlay/match-child-defaults` | Set defaults for children |
+
+### Matching Strategies
+
+```yaml
+#@ load("@ytt:overlay", "overlay")
+
+#! Match by document subset
+#@overlay/match by=overlay.subset({"kind": "Deployment"})
+---
+spec:
+  template:
+    spec:
+      #@overlay/match missing_ok=True
+      nodeSelector:
+        env: production
+
+#! Match by custom function
+#@overlay/match by=lambda i,l,r: l["metadata"]["name"].endswith("-api")
+---
+metadata:
+  labels:
+    tier: api
+
+#! Match with expectations
+#@overlay/match by=overlay.subset({"kind": "Service"}), expects="1+"
+---
+spec:
+  type: LoadBalancer
+```
+
+### Array Operations
+
+```yaml
+#@ load("@ytt:overlay", "overlay")
+
+#@overlay/match by=overlay.subset({"kind": "Deployment"})
+---
+spec:
+  template:
+    spec:
+      containers:
+      #! Match container by name
+      #@overlay/match by="name"
+      - name: app
+        #@overlay/match missing_ok=True
+        env:
+        #@overlay/append
+        - name: NEW_VAR
+          value: "added"
+
+      #! Insert new container
+      #@overlay/append
+      - name: sidecar
+        image: sidecar:latest
+```
+
+### Remove Resources
+
+```yaml
+#@ load("@ytt:overlay", "overlay")
+
+#! Remove all ServiceAccounts
+#@overlay/match by=overlay.subset({"kind": "ServiceAccount"}), expects="0+"
+#@overlay/remove
+---
+```
+
+---
+
+## Functions and Modules
+
+### Defining Functions
+
+```yaml
+#@ def labels(name, component="app"):
+app.kubernetes.io/name: #@ name
+app.kubernetes.io/component: #@ component
+app.kubernetes.io/managed-by: ytt
+#@ end
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  labels: #@ labels("api", "backend")
+```
+
+### Multi-Document Functions
+
+```yaml
+#@ def namespace(name):
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: #@ name
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: default
+  namespace: #@ name
+spec:
+  hard:
+    pods: "10"
+#@ end
+
+--- #@ template.replace(namespace("prod"))
+--- #@ template.replace(namespace("staging"))
+```
+
+### Library Modules
+
+Create reusable libraries in `_ytt_lib/`:
+
+```
+config/
+├── config.yml
+└── _ytt_lib/
+    └── @k8s/
+        ├── deployment.lib.yml
+        └── service.lib.yml
+```
+
+```yaml
+#! _ytt_lib/@k8s/deployment.lib.yml
+#@ load("@ytt:struct", "struct")
+
+#@ def deployment(name, image, replicas=1):
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: #@ name
+spec:
+  replicas: #@ replicas
+  selector:
+    matchLabels:
+      app: #@ name
+  template:
+    metadata:
+      labels:
+        app: #@ name
+    spec:
+      containers:
+      - name: main
+        image: #@ image
+#@ end
+
+#@ k8s = struct.make(deployment=deployment)
+```
+
+```yaml
+#! config.yml
+#@ load("@k8s:deployment.lib.yml", "k8s")
+
+--- #@ k8s.deployment("api", "myapp/api:v1", replicas=3)
+--- #@ k8s.deployment("worker", "myapp/worker:v1")
+```
+
+---
+
+## Assertions and Validation
+
+### Basic Assertions
+
+```yaml
+#@ load("@ytt:assert", "assert")
+#@ load("@ytt:data", "data")
+
+#! Validate data values
+#@ assert.equals(data.values.env, "prod", "staging", "dev")
+#@ assert.min(data.values.replicas, 1)
+#@ assert.max(data.values.replicas, 100)
+
+#! Inline assertions
+replicas: #@ assert.min(data.values.replicas, 1)
+name: #@ data.values.name or assert.fail("name is required")
+```
+
+### Schema Validation
+
+```yaml
+#@data/values-schema
+---
+#@schema/validation min=1, max=100
+replicas: 1
+
+#@schema/validation one_of=["debug", "info", "warn", "error"]
+log_level: "info"
+
+#@schema/validation format="ip"
+bind_address: "0.0.0.0"
+```
+
+### Custom Validation Functions
+
+```yaml
+#@ load("@ytt:assert", "assert")
+
+#@ def validate_port(val):
+#@   if val < 1 or val > 65535:
+#@     assert.fail("port must be 1-65535")
+#@   end
+#@   return val
+#@ end
+
+port: #@ validate_port(data.values.port)
+```
+
+---
+
+## Real-World Examples
+
+### Multi-Environment Kubernetes
+
+```
+config/
+├── schema.yml
+├── base/
+│   ├── deployment.yml
+│   └── service.yml
+├── overlays/
+│   ├── prod.yml
+│   └── dev.yml
+└── values/
+    ├── prod.yml
+    └── dev.yml
+```
+
+```yaml
+#! schema.yml
+#@data/values-schema
+---
+env: ""
+app:
+  name: myapp
+  replicas: 1
+  image: ""
+  resources:
+    cpu: "100m"
+    memory: "128Mi"
+```
+
+```yaml
+#! values/prod.yml
+#@data/values
+---
+env: prod
+app:
+  replicas: 3
+  image: registry.prod/myapp:v1.2.3
+  resources:
+    cpu: "500m"
+    memory: "512Mi"
+```
+
+```yaml
+#! overlays/prod.yml
+#@ load("@ytt:overlay", "overlay")
+
+#@overlay/match by=overlay.subset({"kind": "Deployment"})
+---
+spec:
+  template:
+    spec:
+      #@overlay/match missing_ok=True
+      nodeSelector:
+        env: production
+      #@overlay/match missing_ok=True
+      tolerations:
+      - key: "production"
+        operator: "Exists"
+```
+
+```bash
+# Deploy to production
+ytt -f config/schema.yml \
+    -f config/base/ \
+    -f config/values/prod.yml \
+    -f config/overlays/prod.yml | kubectl apply -f -
+```
+
+### Helm Post-Rendering
+
+ytt can post-process Helm output:
+
+```bash
+#!/bin/bash
+# ytt-post-renderer
+ytt -f - -f overlays/
+```
+
+```bash
+helm template myrelease mychart/ --post-renderer ./ytt-post-renderer
+```
+
+### ConfigMap from Files
+
+```yaml
+#@ load("@ytt:data", "data")
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  #@ for path in data.list("configs/"):
+  #@ filename = path.split("/")[-1]
+  #@ content = data.read(path)
+  _: #@ { filename: content }
+  #@ end
+```
+
+### Secret Generation
+
+```yaml
+#@ load("@ytt:data", "data")
+#@ load("@ytt:base64", "base64")
+#@ load("@ytt:sha256", "sha256")
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+  annotations:
+    #! Hash for change detection
+    checksum: #@ sha256.sum(data.read("secrets.json"))
+type: Opaque
+data:
+  config.json: #@ base64.encode(data.read("secrets.json"))
+```
+
+---
+
+## Starlark Fork Customizations
+
+ytt uses a customized starlark-go fork with key modifications:
+
+### Block-Based Syntax
+
+Instead of Python's whitespace-based indentation:
+
+```yaml
+#@ if condition:
+some_yaml: here
+#@ end
+
+#@ for item in items:
+- name: #@ item
+#@ end
+
+#@ def my_function():
+key: value
+#@ end
+```
+
+The `end` keyword explicitly closes blocks, avoiding whitespace sensitivity issues in YAML templates.
+
+### Module Type
+
+```yaml
+#@ load("@ytt:struct", "struct")
+#@ load("@ytt:module", "module")
+
+#@ def _internal():
+#@   return "private"
+#@ end
+
+#@ def public():
+#@   return _internal()
+#@ end
+
+#@ exports = module.make(public=public)
+```
+
+---
+
+## Comparison with Alternatives
+
+### vs. Helm
+
+| Aspect | ytt | Helm |
+|--------|-----|------|
+| Templating | YAML-aware (structural) | Text-based (Go templates) |
+| Package Management | None (use with imgpkg) | Built-in charts |
+| Composition | Overlays + libraries | Values + subcharts |
+| Type Safety | Schema validation | Limited |
+| Learning Curve | Medium (Starlark) | Low-Medium |
+
+**When to use ytt over Helm:**
+- Need structural YAML manipulation
+- Want type-safe configuration
+- Complex multi-environment setups
+- Post-processing Helm output
+
+### vs. Kustomize
+
+| Aspect | ytt | Kustomize |
+|--------|-----|-----------|
+| Language | Starlark (full language) | YAML patches only |
+| Complexity | Can be complex | Simpler, limited |
+| Flexibility | Very high | Medium |
+| Kubectl Integration | Separate | Built-in |
+
+**When to use ytt over Kustomize:**
+- Need conditional logic
+- Complex transformations
+- Reusable functions
+- Cross-cutting concerns
+
+### vs. Jsonnet
+
+| Aspect | ytt | Jsonnet |
+|--------|-----|---------|
+| Target Format | YAML-first | JSON-first |
+| Syntax | Python-like | Unique JSON-like |
+| Learning Curve | Lower | Higher |
+| Kubernetes Focus | Primary | General |
+
+---
+
+## Best Practices
+
+### 1. Use Schemas
+
+Always define data value schemas:
+
+```yaml
+#@data/values-schema
+---
+#@schema/desc "Application name (required)"
+name: ""
+
+#@schema/desc "Deployment replicas"
+#@schema/validation min=1
+replicas: 1
+```
+
+### 2. Separate Concerns
+
+```
+config/
+├── schema.yml          # Data value schema
+├── base/               # Base configurations
+├── overlays/           # Environment-specific patches
+├── values/             # Environment values
+└── _ytt_lib/           # Reusable libraries
+```
+
+### 3. Validate Early
+
+```yaml
+#@ load("@ytt:assert", "assert")
+#@ load("@ytt:data", "data")
+
+#@ if not data.values.name:
+#@   assert.fail("name is required")
+#@ end
+```
+
+### 4. Use Libraries for Reuse
+
+```yaml
+#@ load("@lib:k8s.lib.yml", "k8s")
+
+--- #@ k8s.deployment(data.values)
+--- #@ k8s.service(data.values)
+```
+
+### 5. Document with Comments
+
+```yaml
+#! This overlay adds production-specific settings
+#@ load("@ytt:overlay", "overlay")
+
+#@overlay/match by=overlay.all, expects="1+"
+---
+#! Add resource limits for production
+spec:
+  #@overlay/match missing_ok=True
+  resources:
+    limits:
+      memory: "1Gi"
+```
+
+---
+
+## Resources
+
+### Official
+
+- [Carvel ytt Documentation](https://carvel.dev/ytt/docs/latest/)
+- [GitHub Repository](https://github.com/carvel-dev/ytt)
+- [Starlark Fork](https://github.com/carvel-dev/starlark-go)
+- [Carvel Project](https://carvel.dev/)
+
+### Examples
+
+- [ytt Examples](https://github.com/carvel-dev/ytt/tree/develop/examples)
+- [Carvel Examples](https://github.com/carvel-dev/carvel-examples)
+
+### Related Tools
+
+- [kapp](https://carvel.dev/kapp/) - Kubernetes application deployment
+- [kbld](https://carvel.dev/kbld/) - Image building and resolution
+- [imgpkg](https://carvel.dev/imgpkg/) - Bundle packaging
+- [vendir](https://carvel.dev/vendir/) - Dependency vendoring

@@ -1,13 +1,56 @@
 ---
-title: Use Cases
-description: Real-world Starlark applications in Tilt, Kurtosis, and Buck2 BXL
+title: Use Cases Overview
+description: Real-world Starlark applications beyond build systems
 ---
 
-import { Aside, Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 # Starlark Use Cases
 
-Beyond build systems, Starlark powers infrastructure tools, development environments, and CI/CD pipelines. This guide explores three compelling use cases.
+Beyond build systems, Starlark powers infrastructure tools, development environments, configuration management, and CI/CD pipelines.
+
+## Deep Dives
+
+For comprehensive coverage of major Starlark-powered tools, see our deep dive guides:
+
+<CardGrid>
+  <LinkCard
+    title="Bazel vs Buck2"
+    href="/starlark/build-systems-comparison/"
+    description="In-depth comparison of the two major Starlark build systems"
+  />
+  <LinkCard
+    title="Skycfg (Stripe)"
+    href="/starlark/skycfg-deep-dive/"
+    description="Type-safe Protobuf configuration with Starlark"
+  />
+  <LinkCard
+    title="ytt (Carvel)"
+    href="/starlark/ytt-deep-dive/"
+    description="Structural YAML templating for Kubernetes"
+  />
+  <LinkCard
+    title="Aspect CLI & AXL"
+    href="/starlark/aspect-cli-axl/"
+    description="Extending Bazel with custom Starlark commands"
+  />
+</CardGrid>
+
+---
+
+## Quick Reference: Tools by Category
+
+| Category | Tool | Use Case |
+|----------|------|----------|
+| **Build Systems** | [Bazel](/starlark/build-systems-comparison/), [Buck2](/starlark/build-systems-comparison/) | Monorepo builds, hermetic compilation |
+| **Config Generation** | [Skycfg](/starlark/skycfg-deep-dive/), [ytt](/starlark/ytt-deep-dive/) | Kubernetes, Envoy, Terraform configs |
+| **Dev Environments** | Tilt, Kurtosis | Local K8s dev, test environments |
+| **CI/CD** | Drone CI | Pipeline definitions |
+| **Code Transform** | Copybara | Repository migration, sync |
+
+---
+
+This guide explores Tilt, Kurtosis, and Buck2 BXL in more detail.
 
 ## Tilt: Kubernetes Development
 
