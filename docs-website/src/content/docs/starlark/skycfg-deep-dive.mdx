@@ -1,0 +1,604 @@
+---
+title: "Skycfg: Starlark + Protobuf Configuration"
+description: Deep dive into Stripe's Skycfg - type-safe configuration with Starlark and Protocol Buffers
+---
+
+import { Aside, Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+# Skycfg Deep Dive
+
+[Skycfg](https://github.com/stripe/skycfg) is an extension library for Starlark that adds support for constructing Protocol Buffer messages. Developed by Stripe, it brings type safety, modularity, and code reuse to configuration of Kubernetes services, Envoy routes, Terraform resources, and other complex systems.
+
+<Aside type="note">
+Skycfg was announced in 2018 and is actively maintained. It's used in production at Stripe for infrastructure configuration. See the [Hacker News discussion](https://news.ycombinator.com/item?id=18589329) for context on its design philosophy.
+</Aside>
+
+## Why Skycfg?
+
+### The Problem with YAML
+
+Complex infrastructure configurations in YAML suffer from:
+
+- **No type checking** - Mistakes caught only at deploy time
+- **No code reuse** - Copy-paste leads to drift and errors
+- **No modularity** - Large files become unmaintainable
+- **Ambiguous syntax** - `yes`/`no`, `on`/`off` parsing surprises
+
+### Skycfg's Solution
+
+| Feature | YAML | Skycfg |
+|---------|------|--------|
+| Type Safety | None | Protobuf schema validation |
+| Functions | None | Full Python-like functions |
+| Modules | None | `load()` with custom resolvers |
+| IDE Support | Basic | Python syntax + Buildifier |
+| Runtime Errors | Deploy time | Configuration load time |
+
+---
+
+## Architecture Overview
+
+```plaintext
+┌─────────────────────────────────────────────────────────────┐
+│                     Your Application                         │
+├─────────────────────────────────────────────────────────────┤
+│                       skycfg.Load()                          │
+│  ┌─────────────┐  ┌──────────────┐  ┌────────────────────┐  │
+│  │  Starlark   │  │   Protobuf   │  │  Built-in Modules  │  │
+│  │  Evaluator  │  │   Registry   │  │  (hash/yaml/url)   │  │
+│  └─────────────┘  └──────────────┘  └────────────────────┘  │
+├─────────────────────────────────────────────────────────────┤
+│                    go.starlark.net                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+Skycfg is designed as a **library**, not a standalone CLI. This allows embedding into:
+- Kubernetes controllers
+- Envoy xDS servers
+- CI/CD pipelines
+- Custom deployment tools
+
+---
+
+## Quick Start
+
+### Go Host Application
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "github.com/stripe/skycfg"
+    _ "github.com/golang/protobuf/ptypes/wrappers"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Load and parse the Skycfg file
+    config, err := skycfg.Load(ctx, "hello.sky")
+    if err != nil { panic(err) }
+
+    // Execute the main() function
+    messages, err := config.Main(ctx)
+    if err != nil { panic(err) }
+
+    // Process returned protobuf messages
+    for _, msg := range messages {
+        fmt.Printf("%s\n", msg.String())
+    }
+}
+```
+
+### Skycfg Configuration File
+
+```python
+# hello.sky
+pb = proto.package("google.protobuf")
+
+def main(ctx):
+    return [pb.StringValue(value = "Hello, world!")]
+```
+
+### Output
+
+```
+$ ./test-skycfg
+value:"Hello, world!"
+```
+
+---
+
+## Core Concepts
+
+### The `proto` Module
+
+The `proto` module is Skycfg's primary interface to Protocol Buffers:
+
+```python
+# Get a package reference
+pb = proto.package("google.protobuf")
+k8s = proto.package("k8s.io.api.core.v1")
+envoy = proto.package("envoy.api.v2")
+
+# Construct messages
+msg = pb.StringValue(value = "hello")
+pod = k8s.Pod()
+cluster = envoy.Cluster()
+
+# Access nested types
+optimize_mode = pb.FileOptions.OptimizeMode.SPEED
+```
+
+### Proto Functions
+
+| Function | Description |
+|----------|-------------|
+| `proto.package(name)` | Get package reference |
+| `proto.clone(msg)` | Deep copy a message |
+| `proto.merge(dst, src)` | Merge messages (concat repeated, union maps) |
+| `proto.clear(msg)` | Clear all fields |
+| `proto.set_defaults(msg)` | Set fields to default values |
+| `proto.encode_json(msg)` | Serialize to JSON |
+| `proto.decode_json(type, str)` | Parse JSON to message |
+| `proto.encode_text(msg)` | Serialize to text format |
+| `proto.decode_text(type, str)` | Parse text format |
+| `proto.encode_any(msg)` | Wrap in `google.protobuf.Any` |
+| `proto.decode_any(any)` | Unwrap `google.protobuf.Any` |
+
+### Type Safety in Action
+
+Skycfg catches type errors at configuration load time:
+
+```python
+pb = proto.package("google.protobuf")
+
+def main(ctx):
+    # This will fail with a clear error message
+    return [pb.StringValue(value = 123)]
+```
+
+```
+$ ./test-skycfg
+panic: TypeError: value 123 (type `int') can't be assigned to type `string'.
+```
+
+---
+
+## Real-World Examples
+
+### Kubernetes Deployment
+
+```python
+# kubernetes.sky
+appsv1 = proto.package("k8s.io.api.apps.v1")
+corev1 = proto.package("k8s.io.api.core.v1")
+metav1 = proto.package("k8s.io.apimachinery.pkg.apis.meta.v1")
+
+def container(name, image, port = 8080, cpu = "100m", memory = "128Mi"):
+    """Create a container with sensible defaults."""
+    return corev1.Container(
+        name = name,
+        image = image,
+        ports = [corev1.ContainerPort(containerPort = port)],
+        resources = corev1.ResourceRequirements(
+            requests = {"cpu": cpu, "memory": memory},
+            limits = {"cpu": cpu, "memory": memory},
+        ),
+    )
+
+def deployment(name, image, replicas = 1):
+    """Create a Kubernetes Deployment."""
+    labels = {"app": name}
+
+    d = appsv1.Deployment()
+    d.metadata = metav1.ObjectMeta(name = name, labels = labels)
+
+    spec = d.spec
+    spec.replicas = replicas
+    spec.selector = metav1.LabelSelector(matchLabels = labels)
+
+    tmpl = spec.template
+    tmpl.metadata = metav1.ObjectMeta(labels = labels)
+    tmpl.spec = corev1.PodSpec(
+        containers = [container(name, image)],
+    )
+
+    return d
+
+def main(ctx):
+    return [
+        deployment("api-server", "mycompany/api:v1.2.3", replicas = 3),
+        deployment("worker", "mycompany/worker:v1.2.3", replicas = 5),
+    ]
+```
+
+### Envoy Proxy Configuration
+
+```python
+# envoy.sky
+corev2 = proto.package("envoy.api.v2.core")
+v2 = proto.package("envoy.api.v2")
+route = proto.package("envoy.api.v2.route")
+
+def address(addr, port):
+    """Create a socket address."""
+    return corev2.Address(
+        socket_address = corev2.SocketAddress(
+            address = addr,
+            port_value = port,
+        ),
+    )
+
+def cluster(name, endpoints):
+    """Create an Envoy cluster with endpoints."""
+    return v2.Cluster(
+        name = name,
+        connect_timeout = {"seconds": 1},
+        type = v2.Cluster.STRICT_DNS,
+        lb_policy = v2.Cluster.ROUND_ROBIN,
+        load_assignment = v2.ClusterLoadAssignment(
+            cluster_name = name,
+            endpoints = [
+                v2.endpoint.LocalityLbEndpoints(
+                    lb_endpoints = [
+                        v2.endpoint.LbEndpoint(
+                            endpoint = v2.endpoint.Endpoint(
+                                address = address(ep["host"], ep["port"]),
+                            ),
+                        )
+                        for ep in endpoints
+                    ],
+                ),
+            ],
+        ),
+    )
+
+def main(ctx):
+    return [
+        cluster("backend", [
+            {"host": "backend-1.internal", "port": 8080},
+            {"host": "backend-2.internal", "port": 8080},
+        ]),
+    ]
+```
+
+### Module Composition
+
+```python
+# config/common/kubernetes.sky
+# Shared Kubernetes helpers - owned by platform team
+
+def pod(name, containers, namespace = "default"):
+    # ... implementation
+    pass
+
+def service(name, port, target_port):
+    # ... implementation
+    pass
+```
+
+```python
+# config/services/api/main.sky
+# Service-specific config - owned by service team
+
+load("//config/common/kubernetes.sky", "kubernetes")
+
+def main(ctx):
+    return [
+        kubernetes.pod(
+            name = "api-server",
+            containers = [
+                kubernetes.container(
+                    name = "main",
+                    image = "index.docker.io/mycompany/api:" + ctx.vars["version"],
+                ),
+            ],
+        ),
+        kubernetes.service("api-server", port = 80, target_port = 8080),
+    ]
+```
+
+---
+
+## Built-in Modules
+
+### hash
+
+Cryptographic hash functions for generating deterministic identifiers:
+
+```python
+# Generate ConfigMap name from contents
+config_data = yaml.encode({"key": "value"})
+config_name = "myconfig-" + hash.sha256(config_data)[:8]
+```
+
+| Function | Description |
+|----------|-------------|
+| `hash.md5(s)` | MD5 hash (32 hex chars) |
+| `hash.sha1(s)` | SHA-1 hash (40 hex chars) |
+| `hash.sha256(s)` | SHA-256 hash (64 hex chars) |
+
+### yaml
+
+YAML encoding/decoding for migration and interop:
+
+```python
+# Migrate from existing YAML
+existing = yaml.decode(read_file("legacy.yaml"))
+
+# Generate YAML output
+output = yaml.encode({"apiVersion": "v1", "kind": "ConfigMap"})
+```
+
+### url
+
+URL query string construction:
+
+```python
+# Build query strings
+params = url.encode_query({"foo": "bar", "baz": "qux"})
+# Result: "foo=bar&baz=qux"
+```
+
+### json
+
+JSON encoding/decoding:
+
+```python
+data = json.decode('{"key": "value"}')
+output = json.encode({"nested": {"data": [1, 2, 3]}})
+```
+
+### parallel (opt-in)
+
+Parallel execution for performance:
+
+```python
+def process(item):
+    return expensive_operation(item)
+
+# Run in parallel (must be explicitly enabled by host)
+results = parallel.map(process, items)
+```
+
+<Aside type="caution">
+`parallel.map` freezes all values before execution and forbids recursion to guarantee thread safety.
+</Aside>
+
+---
+
+## Context Variables
+
+Pass runtime values from Go to Starlark:
+
+### Go Side
+
+```go
+messages, err := config.Main(ctx, skycfg.WithVars(starlark.StringDict{
+    "environment": starlark.String("production"),
+    "version":     starlark.String("v1.2.3"),
+    "replicas":    starlark.MakeInt(5),
+}))
+```
+
+### Starlark Side
+
+```python
+def main(ctx):
+    print("Environment:", ctx.vars["environment"])
+    print("Version:", ctx.vars["version"])
+
+    replicas = 1
+    if ctx.vars["environment"] == "production":
+        replicas = int(ctx.vars["replicas"])
+
+    return [deployment("api", replicas = replicas)]
+```
+
+---
+
+## Testing Support
+
+Skycfg includes built-in testing capabilities:
+
+```python
+# test_kubernetes.sky
+
+def test_deployment_has_labels(ctx):
+    d = deployment("test-app", "image:latest")
+    ctx.assert(d.metadata.labels["app"] == "test-app")
+
+def test_container_resources(ctx):
+    c = container("main", "image:latest", cpu = "200m")
+    ctx.assert.equal(c.resources.requests["cpu"], "200m")
+    ctx.assert.equal(c.resources.limits["cpu"], "200m")
+
+def test_invalid_replicas_fails(ctx):
+    def create_invalid():
+        return deployment("test", "image", replicas = -1)
+    ctx.assert.fails(create_invalid)
+```
+
+### Assertion Functions
+
+| Function | Description |
+|----------|-------------|
+| `ctx.assert(cond)` | Assert condition is true |
+| `ctx.assert.equal(a, b)` | Assert equality |
+| `ctx.assert.not_equal(a, b)` | Assert inequality |
+| `ctx.assert.lesser(a, b)` | Assert a < b |
+| `ctx.assert.greater(a, b)` | Assert a > b |
+| `ctx.assert.fails(fn)` | Assert function raises error |
+
+---
+
+## Advanced Usage
+
+### Custom File Readers
+
+Support Bazel-style labels or other path syntaxes:
+
+```go
+type BazelFileReader struct {
+    workspace string
+}
+
+func (r *BazelFileReader) Resolve(ctx context.Context, name, from string) (string, error) {
+    if strings.HasPrefix(name, "//") {
+        return filepath.Join(r.workspace, name[2:]), nil
+    }
+    return filepath.Join(filepath.Dir(from), name), nil
+}
+
+config, err := skycfg.Load(ctx, "//config/main.sky",
+    skycfg.WithFileReader(&BazelFileReader{workspace: "/repo"}),
+)
+```
+
+### Load Caching
+
+Reuse parsed modules across multiple configurations:
+
+```go
+cache := &skycfg.LoadCache{}
+
+// First load parses and caches
+config1, _ := skycfg.Load(ctx, "config1.sky", skycfg.WithLoadCache(cache))
+
+// Second load reuses cached modules
+config2, _ := skycfg.Load(ctx, "config2.sky", skycfg.WithLoadCache(cache))
+```
+
+### Custom Entry Points
+
+Execute functions other than `main()`:
+
+```go
+// Execute a specific function
+messages, err := config.Main(ctx, skycfg.WithEntryPoint("generate_staging"))
+```
+
+### Non-Protobuf Output
+
+Return strings instead of protobuf messages:
+
+```go
+// For YAML/JSON output
+strings, err := config.MainNonProtobuf(ctx)
+```
+
+---
+
+## Comparison with Alternatives
+
+### vs. Jsonnet
+
+| Aspect | Skycfg | Jsonnet |
+|--------|--------|---------|
+| Language | Python-like (Starlark) | JSON superset |
+| Type System | Protobuf schemas | None (JSON types) |
+| Primary Use | Infrastructure config | General templating |
+| IDE Support | Python tools + Buildifier | Dedicated tooling |
+| Testing | Built-in assertions | External tools |
+
+### vs. CUE
+
+| Aspect | Skycfg | CUE |
+|--------|--------|-----|
+| Paradigm | Procedural | Declarative/constraint |
+| Type System | Protobuf | Structural typing |
+| Learning Curve | Low (Python-like) | Higher (new concepts) |
+| Validation | Schema-based | Constraint-based |
+
+### vs. Helm
+
+| Aspect | Skycfg | Helm |
+|--------|--------|------|
+| Templating | Code generation | Text templating |
+| Type Safety | Full | None |
+| Composability | Functions + modules | Charts + values |
+| Debugging | Starlark errors | Template errors |
+
+### vs. Pulumi/CDK
+
+| Aspect | Skycfg | Pulumi |
+|--------|--------|--------|
+| Runtime | Embedded evaluator | Full language runtime |
+| Side Effects | Hermetic (none) | Can call APIs |
+| Weight | Lightweight library | Full framework |
+| Scope | Config generation | Full IaC |
+
+---
+
+## Design Philosophy
+
+<Card title="Hermetic Evaluation" icon="shield">
+Skycfg configurations cannot execute processes, access the network, or read system state. They are pure data transformations, making them safe to evaluate in any environment.
+</Card>
+
+<Card title="Library, Not Framework" icon="puzzle">
+Skycfg is designed to be embedded in your tools, not to be a tool itself. This allows integration with existing deployment pipelines, controllers, and CI/CD systems.
+</Card>
+
+<Card title="Type Safety First" icon="check-circle">
+By leveraging Protocol Buffer schemas, Skycfg catches configuration errors at evaluation time rather than deploy time. The schema is the contract.
+</Card>
+
+<Card title="Progressive Complexity" icon="trending-up">
+Simple configurations are simple. Complex configurations are possible through functions, modules, and composition. You pay for complexity only when you need it.
+</Card>
+
+---
+
+## Production Considerations
+
+### Security
+
+- **Hermetic execution** - No network, filesystem, or process access
+- **Sandboxed evaluation** - Starlark has no escape hatches
+- **Deterministic** - Same inputs always produce same outputs
+
+### Performance
+
+- **Load caching** - Parse once, execute many times
+- **Parallel evaluation** - `parallel.map` for CPU-bound work
+- **Incremental loading** - Only reload changed files
+
+### Integration Patterns
+
+```plaintext
+┌──────────────────────────────────────────────────────────┐
+│                    GitOps Pipeline                        │
+├──────────────────────────────────────────────────────────┤
+│  1. Developer pushes .sky files                          │
+│  2. CI runs skycfg tests (assert functions)              │
+│  3. CI evaluates main() → protobuf messages              │
+│  4. Messages serialized to YAML/JSON                      │
+│  5. GitOps controller applies to cluster                  │
+└──────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Resources
+
+### Official
+
+- [GitHub Repository](https://github.com/stripe/skycfg)
+- [Go Package Documentation](https://pkg.go.dev/github.com/stripe/skycfg)
+- [Module API Reference](https://github.com/stripe/skycfg/blob/trunk/docs/modules.asciidoc)
+
+### Examples
+
+- [Kubernetes Example](https://github.com/stripe/skycfg/tree/master/_examples/k8s)
+- [Envoy Example](https://github.com/stripe/skycfg/tree/master/_examples/envoy)
+- [REPL Example](https://github.com/stripe/skycfg/tree/master/_examples/repl)
+- [WebAssembly Example](https://github.com/stripe/skycfg/tree/master/_examples/wasm)
+
+### Community
+
+- [Hacker News Launch Discussion](https://news.ycombinator.com/item?id=18589329)
+- [Starlark Language Spec](https://github.com/bazelbuild/starlark/blob/master/spec.md)
