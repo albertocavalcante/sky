@@ -24,9 +24,25 @@ setup:
 build:
     bazel build //cmd/...
 
-# Run all tests
+# Run all tests (Bazel)
 test:
     bazel test //...
+
+# Run all tests with Go (faster iteration)
+test-go:
+    go test ./...
+
+# Run tests with gotestsum (better output)
+test-sum:
+    go tool -modfile=tools/testsum/go.mod gotestsum --format pkgname-and-test-fails -- ./...
+
+# Run tests with gotestsum and race detector
+test-sum-race:
+    go tool -modfile=tools/testsum/go.mod gotestsum --format pkgname-and-test-fails -- -race ./...
+
+# Run tests with gotestsum verbose output
+test-sum-v:
+    go tool -modfile=tools/testsum/go.mod gotestsum --format standard-verbose -- ./...
 
 # Run linter (nogo via bazel build)
 lint:
@@ -52,6 +68,7 @@ gazelle:
 # Tidy go modules
 tidy:
     go mod tidy
+    cd tools/testsum && go mod tidy
     @command -v gomodfmt >/dev/null 2>&1 && gomodfmt -w go.mod || true
 
 # Format go.mod file (install: go install github.com/albertocavalcante/gomodfmt/cmd/gomodfmt@latest)

@@ -18,18 +18,11 @@ bazel_dep(name = "aspect_rules_lint", version = "2.0.0-beta.1")
 bazel_dep(name = "buildifier_prebuilt", version = "8.0.3", dev_dependency = True)
 
 # Copybara rules (dogfooding)
-# TODO: Replace local_path_override with git_override once rules_copybara is published:
-#   git_override(
-#       module_name = "rules_copybara",
-#       remote = "https://github.com/albertocavalcante/rules_copybara.git",
-#       commit = "<commit-sha>",
-#   )
-# Or use BCR once published:
-#   bazel_dep(name = "rules_copybara", version = "0.1.0", dev_dependency = True)
 bazel_dep(name = "rules_copybara", version = "0.0.0", dev_dependency = True)
-local_path_override(
+git_override(
     module_name = "rules_copybara",
-    path = "/Volumes/T9/dev/ws/rules_copybara",
+    remote = "https://github.com/albertocavalcante/rules_copybara.git",
+    commit = "9bb866b94fbe2dbc1b69a937b1e0af5e70f2d386",
 )
 
 go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
