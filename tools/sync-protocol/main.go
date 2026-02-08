@@ -128,7 +128,7 @@ func getGoplsSource() (string, func(), error) {
 	}
 
 	cleanup := func() {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 	}
 
 	fmt.Printf("Cloning %s...\n", goplsRepo)
