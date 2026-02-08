@@ -33,6 +33,7 @@ go.work.sum
 .idea/
 .vscode/
 !.vscode/mcp.json
+!editors/code/.vscode/
 
 # OS
 .DS_Store

@@ -1,0 +1,112 @@
+{
+  "name": "sky-starlark",
+  "displayName": "Sky - Starlark",
+  "description": "Starlark language support with formatting, linting, and analysis",
+  "version": "0.1.0",
+  "publisher": "sky-tools",
+  "license": "MIT",
+  "keywords": [],
+  "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sky-tools/sky-starlark.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onLanguage:starlark"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "starlark",
+        "aliases": [
+          "Sky - Starlark"
+        ],
+        "extensions": [
+          ".star",
+          ".sky"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "starlark",
+        "scopeName": "source.starlark",
+        "path": "./syntaxes/starlark.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "sky-starlark.restartServer",
+        "title": "Sky - Starlark: Restart Language Server"
+      }
+    ],
+    "configuration": {
+      "title": "Sky - Starlark",
+      "properties": {
+        "sky-starlark.server.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to skyls binary. Leave empty to use bundled or PATH."
+        },
+        "sky-starlark.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace communication with the language server."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap",
+    "build:prod": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --target=node20 --minify",
+    "watch": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --max-warnings 0",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "vsce package",
+    "vscode:prepublish": "pnpm run build:prod"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@tsconfig/strictest": "^2.0.0",
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.4.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.0.0",
+    "jiti": "^2.6.1",
+    "prettier": "^3.0.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

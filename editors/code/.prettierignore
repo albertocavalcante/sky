@@ -1,0 +1,11 @@
+# Build outputs
+out/
+dist/
+node_modules/
+
+# Bazel/Buck
+bazel-*
+buck-out/
+
+# Docs website (managed by Astro)
+docs-website/

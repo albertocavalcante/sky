@@ -1,0 +1,171 @@
+# VS Code Extension - Unified Build Interface
+# Supports: pnpm, bun, bazel, buck2
+
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+# Default recipe
+default:
+    @just --list
+
+# =============================================================================
+# Node.js Build (Primary)
+# =============================================================================
+
+# Install dependencies
+setup:
+    pnpm install
+    pnpm exec lefthook install
+
+# Build extension
+build:
+    pnpm run build
+
+# Build for production (minified)
+build-prod:
+    pnpm run build:prod
+
+# Build in watch mode
+watch:
+    pnpm run watch
+
+# Run TypeScript type checker
+typecheck:
+    pnpm run typecheck
+
+# Run linter
+lint:
+    pnpm run lint
+
+# Run linter with auto-fix
+lint-fix:
+    pnpm run lint:fix
+
+# Format code
+format:
+    pnpm run format
+
+# Check formatting
+format-check:
+    pnpm run format:check
+
+# Run all checks (CI)
+check: typecheck lint format-check
+
+# Run tests
+test:
+    pnpm run test
+
+# Create .vsix package
+package:
+    pnpm run package
+
+# Clean build artifacts
+clean:
+    rm -rf out node_modules .vscode-test *.vsix
+
+# =============================================================================
+# Bun Build (Alternative)
+# =============================================================================
+
+# Build with Bun
+bun-build:
+    bun build ./src/extension.ts --outfile=out/extension.js --external=vscode --target=node --format=cjs --sourcemap=inline
+
+# Build with Bun (production)
+bun-build-prod:
+    bun build ./src/extension.ts --outfile=out/extension.js --external=vscode --target=node --format=cjs --minify --sourcemap=external
+
+# Watch with Bun
+bun-watch:
+    bun build ./src/extension.ts --outfile=out/extension.js --external=vscode --target=node --format=cjs --sourcemap=inline --watch
+
+# Clean Bun build artifacts
+bun-clean:
+    rm -rf out *.vsix
+
+# =============================================================================
+# =============================================================================
+
+# Build with Bazel
+bazel-build:
+    bazel build //:extension
+
+# Build with Bazel (release)
+bazel-build-release:
+    bazel build -c opt //:extension
+
+# Test with Bazel
+bazel-test:
+    bazel test //...
+
+# Clean Bazel outputs
+bazel-clean:
+    bazel clean --expunge
+
+# =============================================================================
+# =============================================================================
+
+# Build with Buck2
+buck2-build:
+    buck2 build //:extension
+
+# Test with Buck2
+buck2-test:
+    buck2 test //...
+
+# Clean Buck2 outputs
+buck2-clean:
+    buck2 clean
+
+# =============================================================================
+# Editor Installation
+# =============================================================================
+
+# Install to VS Code
+install-vscode: package
+    #!/usr/bin/env bash
+    vsix=$(ls -t *.vsix 2>/dev/null | head -1)
+    if [[ -z "$vsix" ]]; then echo "No .vsix found"; exit 1; fi
+    code --install-extension "$vsix" --force
+    echo "Installed to VS Code"
+
+# Install to Cursor
+install-cursor: package
+    #!/usr/bin/env bash
+    vsix=$(ls -t *.vsix 2>/dev/null | head -1)
+    if [[ -z "$vsix" ]]; then echo "No .vsix found"; exit 1; fi
+    cursor --install-extension "$vsix" --force
+    echo "Installed to Cursor"
+
+# Install to Windsurf
+install-windsurf: package
+    #!/usr/bin/env bash
+    vsix=$(ls -t *.vsix 2>/dev/null | head -1)
+    if [[ -z "$vsix" ]]; then echo "No .vsix found"; exit 1; fi
+    if command -v windsurf &>/dev/null; then
+        windsurf --install-extension "$vsix" --force
+    elif command -v surf &>/dev/null; then
+        surf --install-extension "$vsix" --force
+    else
+        echo "windsurf/surf not found"; exit 1
+    fi
+    echo "Installed to Windsurf"
+
+# Install to all available editors
+install-all: package
+    #!/usr/bin/env bash
+    vsix=$(ls -t *.vsix 2>/dev/null | head -1)
+    if [[ -z "$vsix" ]]; then echo "No .vsix found"; exit 1; fi
+    command -v code &>/dev/null && code --install-extension "$vsix" --force && echo "Installed to VS Code" || true
+    command -v cursor &>/dev/null && cursor --install-extension "$vsix" --force && echo "Installed to Cursor" || true
+    command -v windsurf &>/dev/null && windsurf --install-extension "$vsix" --force && echo "Installed to Windsurf" || true
+    command -v surf &>/dev/null && surf --install-extension "$vsix" --force && echo "Installed to Windsurf (surf)" || true
+
+# =============================================================================
+# =============================================================================
+
+# Start docs dev server
+
+# Build docs
+
+# Preview docs build

@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -34,12 +33,12 @@ const (
 )
 
 // Files to vendor from vscode-bazel/syntaxes/
+// Note: We only vendor Starlark files. Bazelrc grammar is available upstream
+// but not needed for Sky's Starlark-focused extension.
 var vendorFiles = []string{
 	"starlark.tmLanguage.json",
 	"starlark.tmLanguage.license",
 	"starlark.configuration.json",
-	"bazelrc.tmLanguage.yaml",
-	"bazelrc.configuration.json",
 }
 
 type options struct {
@@ -87,11 +86,6 @@ func run(opts options) error {
 
 		content, err := fetchFile(opts.source, opts.ref, filename)
 		if err != nil {
-			// bazelrc files might not exist, skip gracefully
-			if strings.Contains(filename, "bazelrc") {
-				fmt.Printf("    Skipped (not found)\n")
-				continue
-			}
 			return fmt.Errorf("fetch %s: %w", filename, err)
 		}
 
@@ -176,8 +170,6 @@ This directory contains TextMate grammar files vendored from the
 | starlark.tmLanguage.json | MIT (MagicPython) | TextMate grammar for Starlark |
 | starlark.tmLanguage.license | - | License for the grammar file |
 | starlark.configuration.json | Apache 2.0 | Language configuration (brackets, comments) |
-| bazelrc.tmLanguage.yaml | Apache 2.0 | TextMate grammar for .bazelrc files |
-| bazelrc.configuration.json | Apache 2.0 | Language configuration for .bazelrc |
 
 ## Licenses
 

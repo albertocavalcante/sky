@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Lockfiles (uncomment if not using that package manager)
+# bun.lockb
+# package-lock.json
+# yarn.lock
+
+# Build output
+out/
+dist/
+*.vsix
+
+# VS Code test
+.vscode-test/
+
+# Bazel
+bazel-*/
+
+# Buck2
+buck-out/
+prelude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
