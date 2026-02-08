@@ -8,6 +8,8 @@
 /skyquery
 /skyrepl
 /skytest
+/release
+/sync-protocol
 *.exe
 *.exe~
 *.dll
