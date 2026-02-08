@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "release_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/albertocavalcante/sky/tools/release",
+    visibility = ["//visibility:private"],
+)
+
+go_binary(
+    name = "release",
+    embed = [":release_lib"],
+    visibility = ["//visibility:public"],
+)
