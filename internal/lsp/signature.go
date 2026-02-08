@@ -16,6 +16,13 @@ import (
 )
 
 // handleSignatureHelp returns signature information for the function call at the cursor position.
+//
+// TODO(type-inference): Add support for method signatures (e.g., list.append(), dict.get()).
+// This requires type inference to determine the receiver type. The builtins data already
+// has method signatures in TypeDef.Methods - we just need to:
+// 1. Detect method call syntax in extractFunctionName (e.g., "mylist.append" -> receiver="mylist", method="append")
+// 2. Infer the type of the receiver variable (requires analyzing assignments, function returns, etc.)
+// 3. Look up the method signature from the inferred type's Methods list
 func (s *Server) handleSignatureHelp(ctx context.Context, params json.RawMessage) (any, error) {
 	var p protocol.SignatureHelpParams
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -35,8 +42,6 @@ func (s *Server) handleSignatureHelp(ctx context.Context, params json.RawMessage
 	if callCtx == nil {
 		return nil, nil // Not inside a function call
 	}
-
-	log.Printf("signatureHelp: function=%s, argIndex=%d", callCtx.FunctionName, callCtx.ArgumentIndex)
 
 	// Try to find signature from builtins first
 	sig := s.getBuiltinSignature(callCtx.FunctionName, p.TextDocument.Uri)
@@ -159,6 +164,10 @@ func findCallContext(content string, line, char int) *callContext {
 }
 
 // extractFunctionName extracts the function name before the opening paren at position i.
+//
+// TODO(type-inference): Return full method call info for "receiver.method(" syntax.
+// Currently returns just "method" for "mylist.append(" - should return a struct with
+// {Receiver: "mylist", Method: "append"} to enable method signature lookup.
 func extractFunctionName(content string, parenPos int) string {
 	// Go backwards from paren to find the identifier
 	start := parenPos - 1
@@ -213,6 +222,10 @@ func lineCharToOffset(content string, line, char int) int {
 }
 
 // getBuiltinSignature returns the signature for a builtin function.
+//
+// TODO(type-inference): Add getBuiltinMethodSignature(typeName, methodName) to look up
+// method signatures from TypeDef.Methods. Example: getBuiltinMethodSignature("list", "append")
+// would return the signature for list.append().
 func (s *Server) getBuiltinSignature(name string, uri string) *builtins.Signature {
 	if s.builtins == nil {
 		return nil
