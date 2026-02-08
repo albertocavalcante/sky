@@ -1,5 +1,5 @@
 {
-  "lockFileVersion": 24,
+  "lockFileVersion": 26,
   "registryFileHashes": {
     "https://bcr.bazel.build/bazel_registry.json": "8a28e4aff06ee60aed2a8c281907fb8bcbf3b753c91fb5a5c57da3215d5b3497",
     "https://bcr.bazel.build/modules/abseil-cpp/20210324.2/MODULE.bazel": "7cd0312e064fde87c8d1cd79ba06c876bd23630c83466e9500321be55c96ace2",
@@ -229,7 +229,8 @@
     "https://bcr.bazel.build/modules/protobuf/30.0/MODULE.bazel": "0e736de5d52ad7824113f47e65256a26ee74b689ba859c5447a0663e5a075409",
     "https://bcr.bazel.build/modules/protobuf/32.1/MODULE.bazel": "89cd2866a9cb07fee9ff74c41ceace11554f32e0d849de4e23ac55515cfada4d",
     "https://bcr.bazel.build/modules/protobuf/33.0/MODULE.bazel": "c5270efb4aad37a2f893536076518793f409ea7df07a06df995d848d1690f21c",
-    "https://bcr.bazel.build/modules/protobuf/33.0/source.json": "cd7ac80ad863190b9151281a85acc11d77b5bde2ba56443a7215da2d4ace6da3",
+    "https://bcr.bazel.build/modules/protobuf/33.4/MODULE.bazel": "114775b816b38b6d0ca620450d6b02550c60ceedfdc8d9a229833b34a223dc42",
+    "https://bcr.bazel.build/modules/protobuf/33.4/source.json": "555f8686b4c7d6b5ba731fbea13bf656b4bfd9a7ff629c1d9d3f6e1d6155de79",
     "https://bcr.bazel.build/modules/protoc-gen-validate/1.0.4.bcr.2/MODULE.bazel": "c4bd2c850211ff5b7dadf9d2d0496c1c922fdedc303c775b01dfd3b3efc907ed",
     "https://bcr.bazel.build/modules/protoc-gen-validate/1.0.4/MODULE.bazel": "b8913c154b16177990f6126d2d2477d187f9ddc568e95ee3e2d50fc65d2c494a",
     "https://bcr.bazel.build/modules/protoc-gen-validate/1.2.1.bcr.1/MODULE.bazel": "4bf09676b62fa587ae07e073420a76ec8766dcce7545e5f8c68cfa8e484b5120",
@@ -279,7 +280,8 @@
     "https://bcr.bazel.build/modules/rules_diff/1.0.0/MODULE.bazel": "1739509d8db9a6cd7d3584822340d3dfe1f9f27e62462fbca60aa061d88741b2",
     "https://bcr.bazel.build/modules/rules_diff/1.0.0/source.json": "fc3824aed007b4db160ffb994036c6e558550857b6634a8e9ccee3e74c659312",
     "https://bcr.bazel.build/modules/rules_foreign_cc/0.10.1/MODULE.bazel": "b9527010e5fef060af92b6724edb3691970a5b1f76f74b21d39f7d433641be60",
-    "https://bcr.bazel.build/modules/rules_foreign_cc/0.10.1/source.json": "9300e71df0cdde0952f10afff1401fa664e9fc5d9ae6204660ba1b158d90d6a6",
+    "https://bcr.bazel.build/modules/rules_foreign_cc/0.14.0/MODULE.bazel": "56fb9a239503bab4183d06ba6cabb01cd73aae296ab499085b9193624a8a66e2",
+    "https://bcr.bazel.build/modules/rules_foreign_cc/0.14.0/source.json": "64ccb6c4bff8afc336a24af2487b4557b8d2b13f981f2d8190983bc196b36a68",
     "https://bcr.bazel.build/modules/rules_foreign_cc/0.9.0/MODULE.bazel": "c9e8c682bf75b0e7c704166d79b599f93b72cfca5ad7477df596947891feeef6",
     "https://bcr.bazel.build/modules/rules_fuzzing/0.5.2/MODULE.bazel": "40c97d1144356f52905566c55811f13b299453a14ac7769dfba2ac38192337a8",
     "https://bcr.bazel.build/modules/rules_go/0.33.0/MODULE.bazel": "a2b11b64cd24bf94f57454f53288a5dacfe6cb86453eee7761b7637728c1910c",
@@ -370,10 +372,12 @@
     "https://bcr.bazel.build/modules/rules_python/0.4.0/MODULE.bazel": "9208ee05fd48bf09ac60ed269791cf17fb343db56c8226a720fbb1cdf467166c",
     "https://bcr.bazel.build/modules/rules_python/0.40.0/MODULE.bazel": "9d1a3cd88ed7d8e39583d9ffe56ae8a244f67783ae89b60caafc9f5cf318ada7",
     "https://bcr.bazel.build/modules/rules_python/1.0.0/MODULE.bazel": "898a3d999c22caa585eb062b600f88654bf92efb204fa346fb55f6f8edffca43",
+    "https://bcr.bazel.build/modules/rules_python/1.1.0/MODULE.bazel": "57e01abae22956eb96d891572490d20e07d983e0c065de0b2170cafe5053e788",
     "https://bcr.bazel.build/modules/rules_python/1.3.0/MODULE.bazel": "8361d57eafb67c09b75bf4bbe6be360e1b8f4f18118ab48037f2bd50aa2ccb13",
     "https://bcr.bazel.build/modules/rules_python/1.4.1/MODULE.bazel": "8991ad45bdc25018301d6b7e1d3626afc3c8af8aaf4bc04f23d0b99c938b73a6",
     "https://bcr.bazel.build/modules/rules_python/1.6.0/MODULE.bazel": "7e04ad8f8d5bea40451cf80b1bd8262552aa73f841415d20db96b7241bd027d8",
-    "https://bcr.bazel.build/modules/rules_python/1.6.0/source.json": "e980f654cf66ec4928672f41fc66c4102b5ea54286acf4aecd23256c84211be6",
+    "https://bcr.bazel.build/modules/rules_python/1.7.0/MODULE.bazel": "d01f995ecd137abf30238ad9ce97f8fc3ac57289c8b24bd0bf53324d937a14f8",
+    "https://bcr.bazel.build/modules/rules_python/1.7.0/source.json": "028a084b65dcf8f4dc4f82f8778dbe65df133f234b316828a82e060d81bdce32",
     "https://bcr.bazel.build/modules/rules_rust/0.51.0/MODULE.bazel": "2b6d1617ac8503bfdcc0e4520c20539d4bba3a691100bee01afe193ceb0310f9",
     "https://bcr.bazel.build/modules/rules_rust/0.67.0/MODULE.bazel": "87c3816c4321352dcfd9e9e26b58e84efc5b21351ae3ef8fb5d0d57bde7237f5",
     "https://bcr.bazel.build/modules/rules_rust/0.67.0/source.json": "a8ef4d3be30eb98e060cad9e5875a55b603195487f76e01b619b51a1df4641cc",
@@ -431,108 +435,14 @@
   },
   "selectedYankedVersions": {},
   "moduleExtensions": {
-    "@@aspect_rules_js+//npm:extensions.bzl%pnpm": {
-      "general": {
-        "bzlTransitiveDigest": "wHpLCJZ/RM64rXUa1RdRFY1aaFI86uxD0bxvfU4yUW8=",
-        "usagesDigest": "ZYGEy1FrDUNPBzAzD+ujlHkMEsVPMYOvpHm9RhUexUE=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
-        "generatedRepoSpecs": {
-          "pnpm": {
-            "repoRuleId": "@@aspect_rules_js+//npm/private:npm_import.bzl%npm_import_rule",
-            "attributes": {
-              "package": "pnpm",
-              "version": "8.6.7",
-              "root_package": "",
-              "link_workspace": "",
-              "link_packages": {},
-              "integrity": "sha512-vRIWpD/L4phf9Bk2o/O2TDR8fFoJnpYrp2TKqTIZF/qZ2/rgL3qKXzHofHgbXsinwMoSEigz28sqk3pQ+yMEQQ==",
-              "url": "",
-              "commit": "",
-              "patch_args": [
-                "-p0"
-              ],
-              "patches": [],
-              "custom_postinstall": "",
-              "npm_auth": "",
-              "npm_auth_basic": "",
-              "npm_auth_username": "",
-              "npm_auth_password": "",
-              "lifecycle_hooks": [],
-              "extra_build_content": "load(\"@aspect_rules_js//js:defs.bzl\", \"js_binary\")\njs_binary(name = \"pnpm\", data = glob([\"package/**\"]), entry_point = \"package/dist/pnpm.cjs\", visibility = [\"//visibility:public\"])",
-              "extract_full_archive": true
-            }
-          },
-          "pnpm__links": {
-            "repoRuleId": "@@aspect_rules_js+//npm/private:npm_import.bzl%npm_import_links",
-            "attributes": {
-              "package": "pnpm",
-              "version": "8.6.7",
-              "dev": false,
-              "root_package": "",
-              "link_packages": {},
-              "deps": {},
-              "transitive_closure": {},
-              "lifecycle_build_target": false,
-              "lifecycle_hooks_env": [],
-              "lifecycle_hooks_execution_requirements": [
-                "no-sandbox"
-              ],
-              "lifecycle_hooks_use_default_shell_env": false,
-              "bins": {},
-              "package_visibility": [
-                "//visibility:public"
-              ]
-            }
-          }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "aspect_bazel_lib+",
-            "bazel_skylib",
-            "bazel_skylib+"
-          ],
-          [
-            "aspect_bazel_lib+",
-            "bazel_tools",
-            "bazel_tools"
-          ],
-          [
-            "aspect_rules_js+",
-            "aspect_bazel_lib",
-            "aspect_bazel_lib+"
-          ],
-          [
-            "aspect_rules_js+",
-            "bazel_features",
-            "bazel_features+"
-          ],
-          [
-            "aspect_rules_js+",
-            "bazel_skylib",
-            "bazel_skylib+"
-          ],
-          [
-            "aspect_rules_js+",
-            "bazel_tools",
-            "bazel_tools"
-          ],
-          [
-            "bazel_features+",
-            "bazel_tools",
-            "bazel_tools"
-          ]
-        ]
-      }
-    },
     "@@aspect_tools_telemetry+//:extension.bzl%telemetry": {
       "general": {
         "bzlTransitiveDigest": "gA7tPEdJXhskzPIEUxjX9IdDrM6+WjfbgXJ8Ez47umk=",
         "usagesDigest": "yGJ9UzsEPS2WLuKZ/MY7bDD9wuH2SRJsnJz4pme5tbY=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
+        "recordedInputs": [
+          "REPO_MAPPING:aspect_tools_telemetry+,aspect_bazel_lib aspect_bazel_lib+",
+          "REPO_MAPPING:aspect_tools_telemetry+,bazel_skylib bazel_skylib+"
+        ],
         "generatedRepoSpecs": {
           "aspect_tools_telemetry_report": {
             "repoRuleId": "@@aspect_tools_telemetry+//:extension.bzl%tel_repository",
@@ -543,28 +453,17 @@
               }
             }
           }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "aspect_tools_telemetry+",
-            "aspect_bazel_lib",
-            "aspect_bazel_lib+"
-          ],
-          [
-            "aspect_tools_telemetry+",
-            "bazel_skylib",
-            "bazel_skylib+"
-          ]
-        ]
+        }
       }
     },
     "@@buildifier_prebuilt+//:defs.bzl%buildifier_prebuilt_deps_extension": {
       "general": {
-        "bzlTransitiveDigest": "7Z4w06kvvve5H+4+1YFjqoFE57joWhFFoOw7JGa6L24=",
+        "bzlTransitiveDigest": "HYQPUyAYPNnJLXhodkPm4VbTY6gGVWXcBir9+m2HKwo=",
         "usagesDigest": "E92htUw9elHOT0ZHIEdwgPVnslFqL2iu3pcplYXXAxk=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
+        "recordedInputs": [
+          "REPO_MAPPING:buildifier_prebuilt+,bazel_skylib bazel_skylib+",
+          "REPO_MAPPING:buildifier_prebuilt+,bazel_tools bazel_tools"
+        ],
         "generatedRepoSpecs": {
           "buildifier_darwin_amd64": {
             "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_file",
@@ -682,570 +581,16 @@
               "assets_json": "[{\"arch\":\"amd64\",\"name\":\"buildifier\",\"platform\":\"darwin\",\"sha256\":\"b7a3152cde0b3971b1107f2274afe778c5c154dcdf6c9c669a231e3c004f047e\",\"version\":\"v8.0.3\"},{\"arch\":\"arm64\",\"name\":\"buildifier\",\"platform\":\"darwin\",\"sha256\":\"674c663f7b5cd03c002f8ca834a8c1c008ccb527a0a2a132d08a7a355883b22d\",\"version\":\"v8.0.3\"},{\"arch\":\"amd64\",\"name\":\"buildifier\",\"platform\":\"linux\",\"sha256\":\"c969487c1af85e708576c8dfdd0bb4681eae58aad79e68ae48882c70871841b7\",\"version\":\"v8.0.3\"},{\"arch\":\"arm64\",\"name\":\"buildifier\",\"platform\":\"linux\",\"sha256\":\"bdd9b92e2c65d46affeecaefb54e68d34c272d1f4a8c5b54929a3e92ab78820a\",\"version\":\"v8.0.3\"},{\"arch\":\"amd64\",\"name\":\"buildifier\",\"platform\":\"windows\",\"sha256\":\"63a242f57e253efe7b9573d739c08a3d0e628efd84015c8dad17d87b6429e443\",\"version\":\"v8.0.3\"},{\"arch\":\"amd64\",\"name\":\"buildozer\",\"platform\":\"darwin\",\"sha256\":\"7aa7929faddcee5a879135356bb4d38af3e895893c78d361e7cdb8dfb3e7d5e4\",\"version\":\"v8.0.3\"},{\"arch\":\"arm64\",\"name\":\"buildozer\",\"platform\":\"darwin\",\"sha256\":\"33b776862c31bfb4e2e6e88186cae02746d9084da8b7341930e77d42718277cc\",\"version\":\"v8.0.3\"},{\"arch\":\"amd64\",\"name\":\"buildozer\",\"platform\":\"linux\",\"sha256\":\"775d17118aecd023352e75611dbe7c12a340e23615ffb270a1dec3f339239949\",\"version\":\"v8.0.3\"},{\"arch\":\"arm64\",\"name\":\"buildozer\",\"platform\":\"linux\",\"sha256\":\"058ad60f279a7b1db339bb287aed2056a992eddfe1b5d2e56d86256bdc9a93b3\",\"version\":\"v8.0.3\"},{\"arch\":\"amd64\",\"name\":\"buildozer\",\"platform\":\"windows\",\"sha256\":\"5ba106b25230e0e321b7259bee325ae6fa5b5771e54163ad865b1d18856f59ca\",\"version\":\"v8.0.3\"}]"
             }
           }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "buildifier_prebuilt+",
-            "bazel_skylib",
-            "bazel_skylib+"
-          ],
-          [
-            "buildifier_prebuilt+",
-            "bazel_tools",
-            "bazel_tools"
-          ]
-        ]
-      }
-    },
-    "@@cel-spec+//:extensions.bzl%non_module_dependencies": {
-      "general": {
-        "bzlTransitiveDigest": "76QJowDQ8IZzi7OIK3YuODZUfwZz6rfZZlxF97YBNV4=",
-        "usagesDigest": "HFQJtQrL9nKaFZEjgwaHVMHALMW+cafu696xy7J4ueM=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
-        "generatedRepoSpecs": {
-          "com_google_googleapis": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "sha256": "bd8e735d881fb829751ecb1a77038dda4a8d274c45490cb9fcf004583ee10571",
-              "strip_prefix": "googleapis-07c27163ac591955d736f3057b1619ece66f5b99",
-              "urls": [
-                "https://github.com/googleapis/googleapis/archive/07c27163ac591955d736f3057b1619ece66f5b99.tar.gz"
-              ]
-            }
-          }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "cel-spec+",
-            "bazel_tools",
-            "bazel_tools"
-          ]
-        ]
-      }
-    },
-    "@@cel-spec+//:googleapis_ext.bzl%googleapis_ext": {
-      "general": {
-        "bzlTransitiveDigest": "yun2jmsomFi3bs5bjQWXApBzqQf66zBJ39JEBYigzdc=",
-        "usagesDigest": "Ek7VfZ+tuyRBx/1h5wcmtnW9EGpOb0dkXUwBluZbD8k=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
-        "generatedRepoSpecs": {
-          "com_google_googleapis_imports": {
-            "repoRuleId": "@@cel-spec++non_module_dependencies+com_google_googleapis//:repository_rules.bzl%switched_rules",
-            "attributes": {
-              "rules": {
-                "proto_library_with_info": [
-                  "",
-                  ""
-                ],
-                "moved_proto_library": [
-                  "",
-                  ""
-                ],
-                "java_proto_library": [
-                  "",
-                  ""
-                ],
-                "java_grpc_library": [
-                  "",
-                  ""
-                ],
-                "java_gapic_library": [
-                  "",
-                  ""
-                ],
-                "java_gapic_test": [
-                  "",
-                  ""
-                ],
-                "java_gapic_assembly_gradle_pkg": [
-                  "",
-                  ""
-                ],
-                "py_proto_library": [
-                  "",
-                  ""
-                ],
-                "py_grpc_library": [
-                  "",
-                  ""
-                ],
-                "py_gapic_library": [
-                  "",
-                  ""
-                ],
-                "py_test": [
-                  "",
-                  ""
-                ],
-                "py_gapic_assembly_pkg": [
-                  "",
-                  ""
-                ],
-                "py_import": [
-                  "",
-                  ""
-                ],
-                "go_proto_library": [
-                  "",
-                  ""
-                ],
-                "go_library": [
-                  "",
-                  ""
-                ],
-                "go_test": [
-                  "",
-                  ""
-                ],
-                "go_gapic_library": [
-                  "",
-                  ""
-                ],
-                "go_gapic_assembly_pkg": [
-                  "",
-                  ""
-                ],
-                "cc_proto_library": [
-                  "native.cc_proto_library",
-                  ""
-                ],
-                "cc_grpc_library": [
-                  "",
-                  ""
-                ],
-                "cc_gapic_library": [
-                  "",
-                  ""
-                ],
-                "php_proto_library": [
-                  "",
-                  "php_proto_library"
-                ],
-                "php_grpc_library": [
-                  "",
-                  "php_grpc_library"
-                ],
-                "php_gapic_library": [
-                  "",
-                  "php_gapic_library"
-                ],
-                "php_gapic_assembly_pkg": [
-                  "",
-                  "php_gapic_assembly_pkg"
-                ],
-                "nodejs_gapic_library": [
-                  "",
-                  "typescript_gapic_library"
-                ],
-                "nodejs_gapic_assembly_pkg": [
-                  "",
-                  "typescript_gapic_assembly_pkg"
-                ],
-                "ruby_proto_library": [
-                  "",
-                  ""
-                ],
-                "ruby_grpc_library": [
-                  "",
-                  ""
-                ],
-                "ruby_ads_gapic_library": [
-                  "",
-                  ""
-                ],
-                "ruby_cloud_gapic_library": [
-                  "",
-                  ""
-                ],
-                "ruby_gapic_assembly_pkg": [
-                  "",
-                  ""
-                ],
-                "csharp_proto_library": [
-                  "",
-                  ""
-                ],
-                "csharp_grpc_library": [
-                  "",
-                  ""
-                ],
-                "csharp_gapic_library": [
-                  "",
-                  ""
-                ],
-                "csharp_gapic_assembly_pkg": [
-                  "",
-                  ""
-                ]
-              }
-            }
-          }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "cel-spec+",
-            "com_google_googleapis",
-            "cel-spec++non_module_dependencies+com_google_googleapis"
-          ]
-        ]
-      }
-    },
-    "@@copybara+//:repositories.bzl%async_profiler_repos": {
-      "general": {
-        "bzlTransitiveDigest": "6Yc+yyzmjF6NmyJTb/IE5JFFjmG0A//h12qEuvKk7QM=",
-        "usagesDigest": "eFgYcS7P24dg6Ml+7a0XJCV1hTOXFj9OU9Ad6TqWrW8=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
-        "generatedRepoSpecs": {
-          "async_profiler": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_file",
-            "attributes": {
-              "downloaded_file_path": "async-profiler.jar",
-              "sha256": "da95a5292fb203966196ecb68a39a8c26ad7276aeef642ec1de872513be1d8b3",
-              "urls": [
-                "https://mirror.bazel.build/github.com/async-profiler/async-profiler/releases/download/nightly/async-profiler.jar"
-              ]
-            }
-          },
-          "async_profiler_linux_arm64": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "build_file_content": "\nload(\"@bazel_skylib//rules:copy_file.bzl\", \"copy_file\")\ncopy_file(\n    name = \"libasyncProfiler\",\n    src = \"libasyncProfiler.so\",\n    out = \"linux-arm64/libasyncProfiler.so\",\n    visibility = [\"//visibility:public\"],\n)\n",
-              "sha256": "7c6243bb91272a2797acb8cc44acf3e406e0b658a94d90d9391ca375fc961857",
-              "strip_prefix": "async-profiler-3.0-f0ceda6-linux-arm64/lib",
-              "urls": [
-                "https://mirror.bazel.build/github.com/async-profiler/async-profiler/releases/download/nightly/async-profiler-3.0-f0ceda6-linux-arm64.tar.gz"
-              ]
-            }
-          },
-          "async_profiler_linux_x64": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "build_file_content": "\nload(\"@bazel_skylib//rules:copy_file.bzl\", \"copy_file\")\ncopy_file(\n    name = \"libasyncProfiler\",\n    src = \"libasyncProfiler.so\",\n    out = \"linux-x64/libasyncProfiler.so\",\n    visibility = [\"//visibility:public\"],\n)\n",
-              "sha256": "448a3dc681375860eba2264d6cae7a848bd3f07f81f547a9ce58b742a1541d25",
-              "strip_prefix": "async-profiler-3.0-f0ceda6-linux-x64/lib",
-              "urls": [
-                "https://mirror.bazel.build/github.com/async-profiler/async-profiler/releases/download/nightly/async-profiler-3.0-f0ceda6-linux-x64.tar.gz"
-              ]
-            }
-          },
-          "async_profiler_macos": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "build_file_content": "\nload(\"@bazel_skylib//rules:copy_file.bzl\", \"copy_file\")\ncopy_file(\n    name = \"libasyncProfiler\",\n    src = \"libasyncProfiler.dylib\",\n    out = \"macos/libasyncProfiler.so\",\n    visibility = [\"//visibility:public\"],\n)\n",
-              "sha256": "0651004c78d080f67763cddde6e1f58cd0d0c4cb0b57034beef80b450ff5adf2",
-              "strip_prefix": "async-profiler-3.0-f0ceda6-macos/lib",
-              "urls": [
-                "https://mirror.bazel.build/github.com/async-profiler/async-profiler/releases/download/nightly/async-profiler-3.0-f0ceda6-macos.zip"
-              ]
-            }
-          }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "copybara+",
-            "bazel_tools",
-            "bazel_tools"
-          ]
-        ]
-      }
-    },
-    "@@copybara+//:repositories.bzl%non_module_deps": {
-      "general": {
-        "bzlTransitiveDigest": "6Yc+yyzmjF6NmyJTb/IE5JFFjmG0A//h12qEuvKk7QM=",
-        "usagesDigest": "ItMCuo/TS0r0VVoli6YgF75kwJN/W5GEe8DyYqyQpjA=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
-        "generatedRepoSpecs": {
-          "io_bazel": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "sha256": "9acfde85bec9df762b7a7e824c0e1654d98530a4bc2e38d464adcdc0beab1b63",
-              "strip_prefix": "bazel-3c81f8b9693c183652383986a032300c16a09df5",
-              "url": "https://github.com/bazelbuild/bazel/archive/3c81f8b9693c183652383986a032300c16a09df5.zip",
-              "patch_args": [
-                "-p1"
-              ],
-              "patches": [
-                "@@copybara+//third_party/bazel:remove_proguard.patch"
-              ]
-            }
-          }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "copybara+",
-            "bazel_tools",
-            "bazel_tools"
-          ]
-        ]
-      }
-    },
-    "@@envoy_api+//bazel:repositories.bzl%non_module_deps": {
-      "general": {
-        "bzlTransitiveDigest": "cZpXJKJiLWhMDT8rtSQP2dUIAcLWFCvnNV2OIttbfkA=",
-        "usagesDigest": "OP2p9QPxt4WFY/lah8Iecqt6SOUwZHs89hYRyaV+rSg=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
-        "generatedRepoSpecs": {
-          "prometheus_metrics_model": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "urls": [
-                "https://github.com/prometheus/client_model/archive/v0.6.1.tar.gz"
-              ],
-              "sha256": "b9b690bc35d80061f255faa7df7621eae39fe157179ccd78ff6409c3b004f05e",
-              "strip_prefix": "client_model-0.6.1",
-              "build_file_content": "\nload(\"@envoy_api//bazel:api_build_system.bzl\", \"api_cc_py_proto_library\")\nload(\"@io_bazel_rules_go//proto:def.bzl\", \"go_proto_library\")\n\napi_cc_py_proto_library(\n    name = \"client_model\",\n    srcs = [\n        \"io/prometheus/client/metrics.proto\",\n    ],\n    visibility = [\"//visibility:public\"],\n)\n\ngo_proto_library(\n    name = \"client_model_go_proto\",\n    importpath = \"github.com/prometheus/client_model/go\",\n    proto = \":client_model\",\n    visibility = [\"//visibility:public\"],\n)\n"
-            }
-          },
-          "com_github_bufbuild_buf": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "urls": [
-                "https://github.com/bufbuild/buf/releases/download/v1.49.0/buf-Linux-x86_64.tar.gz"
-              ],
-              "sha256": "ee8da9748249f7946d79191e36469ce7bc3b8ba80019bff1fa4289a44cbc23bf",
-              "strip_prefix": "buf",
-              "build_file_content": "\npackage(\n    default_visibility = [\"//visibility:public\"],\n)\n\nfilegroup(\n    name = \"buf\",\n    srcs = [\n        \"@com_github_bufbuild_buf//:bin/buf\",\n    ],\n    tags = [\"manual\"], # buf is downloaded as a linux binary; tagged manual to prevent build for non-linux users\n)\n"
-            }
-          },
-          "envoy_toolshed": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "urls": [
-                "https://github.com/envoyproxy/toolshed/archive/bazel-v0.2.2.tar.gz"
-              ],
-              "sha256": "443fe177aba0cef8c17b7a48905c925c67b09005b10dd70ff12cd9f729a72d51",
-              "strip_prefix": "toolshed-bazel-v0.2.2/bazel"
-            }
-          }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "envoy_api+",
-            "bazel_tools",
-            "bazel_tools"
-          ],
-          [
-            "envoy_api+",
-            "envoy_api",
-            "envoy_api+"
-          ]
-        ]
-      }
-    },
-    "@@googleapis+//:extensions.bzl%switched_rules": {
-      "general": {
-        "bzlTransitiveDigest": "vG6fuTzXD8MMvHWZEQud0MMH7eoC4GXY0va7VrFFh04=",
-        "usagesDigest": "3aV1AZvpX/1q9nt8CcWTGjTwq8v7GsbBiE951Go6hes=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
-        "generatedRepoSpecs": {
-          "com_google_googleapis_imports": {
-            "repoRuleId": "@@googleapis+//:repository_rules.bzl%switched_rules",
-            "attributes": {
-              "rules": {
-                "proto_library_with_info": [
-                  "",
-                  ""
-                ],
-                "moved_proto_library": [
-                  "",
-                  ""
-                ],
-                "java_proto_library": [
-                  "",
-                  ""
-                ],
-                "java_grpc_library": [
-                  "",
-                  ""
-                ],
-                "java_gapic_library": [
-                  "",
-                  ""
-                ],
-                "java_gapic_test": [
-                  "",
-                  ""
-                ],
-                "java_gapic_assembly_gradle_pkg": [
-                  "",
-                  ""
-                ],
-                "py_proto_library": [
-                  "",
-                  ""
-                ],
-                "py_grpc_library": [
-                  "",
-                  ""
-                ],
-                "py_gapic_library": [
-                  "",
-                  ""
-                ],
-                "py_test": [
-                  "",
-                  ""
-                ],
-                "py_gapic_assembly_pkg": [
-                  "",
-                  ""
-                ],
-                "py_import": [
-                  "",
-                  ""
-                ],
-                "go_proto_library": [
-                  "",
-                  ""
-                ],
-                "go_grpc_library": [
-                  "",
-                  ""
-                ],
-                "go_library": [
-                  "",
-                  ""
-                ],
-                "go_test": [
-                  "",
-                  ""
-                ],
-                "go_gapic_library": [
-                  "",
-                  ""
-                ],
-                "go_gapic_assembly_pkg": [
-                  "",
-                  ""
-                ],
-                "cc_proto_library": [
-                  "",
-                  ""
-                ],
-                "cc_grpc_library": [
-                  "",
-                  ""
-                ],
-                "cc_gapic_library": [
-                  "",
-                  ""
-                ],
-                "php_proto_library": [
-                  "",
-                  "php_proto_library"
-                ],
-                "php_grpc_library": [
-                  "",
-                  "php_grpc_library"
-                ],
-                "php_gapic_library": [
-                  "",
-                  "php_gapic_library"
-                ],
-                "php_gapic_assembly_pkg": [
-                  "",
-                  "php_gapic_assembly_pkg"
-                ],
-                "nodejs_gapic_library": [
-                  "",
-                  "typescript_gapic_library"
-                ],
-                "nodejs_gapic_assembly_pkg": [
-                  "",
-                  "typescript_gapic_assembly_pkg"
-                ],
-                "ruby_proto_library": [
-                  "",
-                  ""
-                ],
-                "ruby_grpc_library": [
-                  "",
-                  ""
-                ],
-                "ruby_ads_gapic_library": [
-                  "",
-                  ""
-                ],
-                "ruby_cloud_gapic_library": [
-                  "",
-                  ""
-                ],
-                "ruby_gapic_assembly_pkg": [
-                  "",
-                  ""
-                ],
-                "csharp_proto_library": [
-                  "",
-                  ""
-                ],
-                "csharp_grpc_library": [
-                  "",
-                  ""
-                ],
-                "csharp_gapic_library": [
-                  "",
-                  ""
-                ],
-                "csharp_gapic_assembly_pkg": [
-                  "",
-                  ""
-                ]
-              }
-            }
-          }
-        },
-        "recordedRepoMappingEntries": []
-      }
-    },
-    "@@pybind11_bazel+//:internal_configure.bzl%internal_configure_extension": {
-      "general": {
-        "bzlTransitiveDigest": "KZmG+HXFo6h6+eo0EHaCTECvOyY2l/VFoUYsOr0Phhk=",
-        "usagesDigest": "D1r3lfzMuUBFxgG8V6o0bQTLMk3GkaGOaPzw53wrwyw=",
-        "recordedFileInputs": {
-          "@@pybind11_bazel+//MODULE.bazel": "e6f4c20442eaa7c90d7190d8dc539d0ab422f95c65a57cc59562170c58ae3d34"
-        },
-        "recordedDirentsInputs": {},
-        "envVariables": {},
-        "generatedRepoSpecs": {
-          "pybind11": {
-            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
-            "attributes": {
-              "build_file": "@@pybind11_bazel+//:pybind11-BUILD.bazel",
-              "strip_prefix": "pybind11-2.12.0",
-              "urls": [
-                "https://github.com/pybind/pybind11/archive/v2.12.0.zip"
-              ]
-            }
-          }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "pybind11_bazel+",
-            "bazel_tools",
-            "bazel_tools"
-          ]
-        ]
+        }
       }
     },
     "@@rules_buf+//buf:extensions.bzl%buf": {
       "general": {
-        "bzlTransitiveDigest": "7lUQZIi5u5kjLotkiZrmQ3jldx7w/31P5crwGwQQnmI=",
+        "bzlTransitiveDigest": "dSWqckK2ILN7aDIDHfv+Qrl1fb1hF7o7MDXY6T8C41s=",
         "usagesDigest": "vxN6C2h72rUERbAmd1476FWpxdxo1NhYoY5JSFXJT3g=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
+        "recordedInputs": [
+          "REPO_MAPPING:rules_buf+,bazel_tools bazel_tools"
+        ],
         "generatedRepoSpecs": {
           "rules_buf_toolchains": {
             "repoRuleId": "@@rules_buf+//buf/internal:toolchain.bzl%buf_download_releases",
@@ -1254,23 +599,389 @@
               "sha256": "1b37b75dc0a777a0cba17fa2604bc9906e55bb4c578823d8b7a8fe3fc9fe4439"
             }
           }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "rules_buf+",
-            "bazel_tools",
-            "bazel_tools"
-          ]
-        ]
+        }
+      }
+    },
+    "@@rules_foreign_cc+//foreign_cc:extensions.bzl%tools": {
+      "general": {
+        "bzlTransitiveDigest": "dWWiLQWKST2+NU4SkbVS2OhS6KgYdZ4jBI5MBsDEBt0=",
+        "usagesDigest": "Eyh4mAOi6L+Nn/lY/wQBJclQrmBnWdQM+B4lZeq6azA=",
+        "recordedInputs": [
+          "REPO_MAPPING:rules_foreign_cc+,bazel_tools bazel_tools",
+          "REPO_MAPPING:rules_foreign_cc+,rules_foreign_cc rules_foreign_cc+"
+        ],
+        "generatedRepoSpecs": {
+          "rules_foreign_cc_framework_toolchain_linux": {
+            "repoRuleId": "@@rules_foreign_cc+//foreign_cc/private/framework:toolchain.bzl%framework_toolchain_repository",
+            "attributes": {
+              "commands_src": "@rules_foreign_cc//foreign_cc/private/framework/toolchains:linux_commands.bzl",
+              "exec_compatible_with": [
+                "@platforms//os:linux"
+              ]
+            }
+          },
+          "rules_foreign_cc_framework_toolchain_freebsd": {
+            "repoRuleId": "@@rules_foreign_cc+//foreign_cc/private/framework:toolchain.bzl%framework_toolchain_repository",
+            "attributes": {
+              "commands_src": "@rules_foreign_cc//foreign_cc/private/framework/toolchains:freebsd_commands.bzl",
+              "exec_compatible_with": [
+                "@platforms//os:freebsd"
+              ]
+            }
+          },
+          "rules_foreign_cc_framework_toolchain_windows": {
+            "repoRuleId": "@@rules_foreign_cc+//foreign_cc/private/framework:toolchain.bzl%framework_toolchain_repository",
+            "attributes": {
+              "commands_src": "@rules_foreign_cc//foreign_cc/private/framework/toolchains:windows_commands.bzl",
+              "exec_compatible_with": [
+                "@platforms//os:windows"
+              ]
+            }
+          },
+          "rules_foreign_cc_framework_toolchain_macos": {
+            "repoRuleId": "@@rules_foreign_cc+//foreign_cc/private/framework:toolchain.bzl%framework_toolchain_repository",
+            "attributes": {
+              "commands_src": "@rules_foreign_cc//foreign_cc/private/framework/toolchains:macos_commands.bzl",
+              "exec_compatible_with": [
+                "@platforms//os:macos"
+              ]
+            }
+          },
+          "rules_foreign_cc_framework_toolchains": {
+            "repoRuleId": "@@rules_foreign_cc+//foreign_cc/private/framework:toolchain.bzl%framework_toolchain_repository_hub",
+            "attributes": {}
+          },
+          "cmake_src": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "filegroup(\n    name = \"all_srcs\",\n    srcs = glob([\"**\"]),\n    visibility = [\"//visibility:public\"],\n)\n",
+              "sha256": "f316b40053466f9a416adf981efda41b160ca859e97f6a484b447ea299ff26aa",
+              "strip_prefix": "cmake-3.23.2",
+              "urls": [
+                "https://github.com/Kitware/CMake/releases/download/v3.23.2/cmake-3.23.2.tar.gz"
+              ],
+              "patches": [
+                "@@rules_foreign_cc+//toolchains/patches:cmake-c++11.patch"
+              ]
+            }
+          },
+          "gnumake_src": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "filegroup(\n    name = \"all_srcs\",\n    srcs = glob([\"**\"]),\n    visibility = [\"//visibility:public\"],\n)\n",
+              "sha256": "dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3",
+              "strip_prefix": "make-4.4.1",
+              "urls": [
+                "https://mirror.bazel.build/ftpmirror.gnu.org/gnu/make/make-4.4.1.tar.gz",
+                "http://ftpmirror.gnu.org/gnu/make/make-4.4.1.tar.gz"
+              ]
+            }
+          },
+          "ninja_build_src": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "filegroup(\n    name = \"all_srcs\",\n    srcs = glob([\"**\"]),\n    visibility = [\"//visibility:public\"],\n)\n",
+              "integrity": "sha256-ghvf9Io/aDvEuztvC1/nstZHz2XVKutjMoyRpsbfKFo=",
+              "strip_prefix": "ninja-1.12.1",
+              "urls": [
+                "https://mirror.bazel.build/github.com/ninja-build/ninja/archive/v1.12.1.tar.gz",
+                "https://github.com/ninja-build/ninja/archive/v1.12.1.tar.gz"
+              ]
+            }
+          },
+          "meson_src": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "exports_files([\"meson.py\"])\n\nfilegroup(\n    name = \"runtime\",\n    # NOTE: excluding __pycache__ is important to avoid rebuilding due to pyc\n    # files, see https://github.com/bazel-contrib/rules_foreign_cc/issues/1342\n    srcs = glob([\"mesonbuild/**\"], exclude = [\"**/__pycache__/*\"]),\n    visibility = [\"//visibility:public\"],\n)\n",
+              "sha256": "567e533adf255de73a2de35049b99923caf872a455af9ce03e01077e0d384bed",
+              "strip_prefix": "meson-1.5.1",
+              "urls": [
+                "https://mirror.bazel.build/github.com/mesonbuild/meson/releases/download/1.5.1/meson-1.5.1.tar.gz",
+                "https://github.com/mesonbuild/meson/releases/download/1.5.1/meson-1.5.1.tar.gz"
+              ]
+            }
+          },
+          "glib_dev": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "\ncc_import(\n    name = \"glib_dev\",\n    hdrs = glob([\"include/**\"]),\n    shared_library = \"@glib_runtime//:bin/libglib-2.0-0.dll\",\n    visibility = [\"//visibility:public\"],\n)\n        ",
+              "sha256": "bdf18506df304d38be98a4b3f18055b8b8cca81beabecad0eece6ce95319c369",
+              "urls": [
+                "https://mirror.bazel.build/download.gnome.org/binaries/win64/glib/2.26/glib-dev_2.26.1-1_win64.zip",
+                "https://download.gnome.org/binaries/win64/glib/2.26/glib-dev_2.26.1-1_win64.zip"
+              ]
+            }
+          },
+          "glib_src": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "\ncc_import(\n    name = \"msvc_hdr\",\n    hdrs = [\"msvc_recommended_pragmas.h\"],\n    visibility = [\"//visibility:public\"],\n)\n        ",
+              "sha256": "bc96f63112823b7d6c9f06572d2ad626ddac7eb452c04d762592197f6e07898e",
+              "strip_prefix": "glib-2.26.1",
+              "urls": [
+                "https://mirror.bazel.build/download.gnome.org/sources/glib/2.26/glib-2.26.1.tar.gz",
+                "https://download.gnome.org/sources/glib/2.26/glib-2.26.1.tar.gz"
+              ]
+            }
+          },
+          "glib_runtime": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "\nexports_files(\n    [\n        \"bin/libgio-2.0-0.dll\",\n        \"bin/libglib-2.0-0.dll\",\n        \"bin/libgmodule-2.0-0.dll\",\n        \"bin/libgobject-2.0-0.dll\",\n        \"bin/libgthread-2.0-0.dll\",\n    ],\n    visibility = [\"//visibility:public\"],\n)\n        ",
+              "sha256": "88d857087e86f16a9be651ee7021880b3f7ba050d34a1ed9f06113b8799cb973",
+              "urls": [
+                "https://mirror.bazel.build/download.gnome.org/binaries/win64/glib/2.26/glib_2.26.1-1_win64.zip",
+                "https://download.gnome.org/binaries/win64/glib/2.26/glib_2.26.1-1_win64.zip"
+              ]
+            }
+          },
+          "gettext_runtime": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "\ncc_import(\n    name = \"gettext_runtime\",\n    shared_library = \"bin/libintl-8.dll\",\n    visibility = [\"//visibility:public\"],\n)\n        ",
+              "sha256": "1f4269c0e021076d60a54e98da6f978a3195013f6de21674ba0edbc339c5b079",
+              "urls": [
+                "https://mirror.bazel.build/download.gnome.org/binaries/win64/dependencies/gettext-runtime_0.18.1.1-2_win64.zip",
+                "https://download.gnome.org/binaries/win64/dependencies/gettext-runtime_0.18.1.1-2_win64.zip"
+              ]
+            }
+          },
+          "pkgconfig_src": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "filegroup(\n    name = \"all_srcs\",\n    srcs = glob([\"**\"]),\n    visibility = [\"//visibility:public\"],\n)\n",
+              "sha256": "6fc69c01688c9458a57eb9a1664c9aba372ccda420a02bf4429fe610e7e7d591",
+              "strip_prefix": "pkg-config-0.29.2",
+              "patches": [
+                "@@rules_foreign_cc+//toolchains/patches:pkgconfig-detectenv.patch",
+                "@@rules_foreign_cc+//toolchains/patches:pkgconfig-makefile-vc.patch",
+                "@@rules_foreign_cc+//toolchains/patches:pkgconfig-builtin-glib-int-conversion.patch"
+              ],
+              "urls": [
+                "https://pkgconfig.freedesktop.org/releases/pkg-config-0.29.2.tar.gz",
+                "https://mirror.bazel.build/pkgconfig.freedesktop.org/releases/pkg-config-0.29.2.tar.gz"
+              ]
+            }
+          },
+          "bazel_features": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "sha256": "ba1282c1aa1d1fffdcf994ab32131d7c7551a9bc960fbf05f42d55a1b930cbfb",
+              "strip_prefix": "bazel_features-1.15.0",
+              "url": "https://github.com/bazel-contrib/bazel_features/releases/download/v1.15.0/bazel_features-v1.15.0.tar.gz"
+            }
+          },
+          "bazel_skylib": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "sha256": "bc283cdfcd526a52c3201279cda4bc298652efa898b10b4db0837dc51652756f",
+              "urls": [
+                "https://mirror.bazel.build/github.com/bazelbuild/bazel-skylib/releases/download/1.7.1/bazel-skylib-1.7.1.tar.gz",
+                "https://github.com/bazelbuild/bazel-skylib/releases/download/1.7.1/bazel-skylib-1.7.1.tar.gz"
+              ]
+            }
+          },
+          "rules_cc": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "urls": [
+                "https://github.com/bazelbuild/rules_cc/releases/download/0.0.17/rules_cc-0.0.17.tar.gz"
+              ],
+              "sha256": "abc605dd850f813bb37004b77db20106a19311a96b2da1c92b789da529d28fe1",
+              "strip_prefix": "rules_cc-0.0.17"
+            }
+          },
+          "rules_python": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "sha256": "0a158f883fc494724f25e2ce6a5c3d31fd52163a92d4b7180aef0ff9a0622f70",
+              "strip_prefix": "rules_python-1.1.0-rc0",
+              "url": "https://github.com/bazelbuild/rules_python/releases/download/1.1.0-rc0/rules_python-1.1.0-rc0.tar.gz"
+            }
+          },
+          "rules_shell": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "sha256": "d8cd4a3a91fc1dc68d4c7d6b655f09def109f7186437e3f50a9b60ab436a0c53",
+              "strip_prefix": "rules_shell-0.3.0",
+              "url": "https://github.com/bazelbuild/rules_shell/releases/download/v0.3.0/rules_shell-v0.3.0.tar.gz"
+            }
+          },
+          "cmake-3.23.2-linux-aarch64": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "urls": [
+                "https://github.com/Kitware/CMake/releases/download/v3.23.2/cmake-3.23.2-linux-aarch64.tar.gz"
+              ],
+              "sha256": "f2654bf780b53f170bbbec44d8ac67d401d24788e590faa53036a89476efa91e",
+              "strip_prefix": "cmake-3.23.2-linux-aarch64",
+              "build_file_content": "load(\"@rules_foreign_cc//toolchains/native_tools:native_tools_toolchain.bzl\", \"native_tool_toolchain\")\n\npackage(default_visibility = [\"//visibility:public\"])\n\nfilegroup(\n    name = \"cmake_bin\",\n    srcs = [\"bin/cmake\"],\n)\n\nfilegroup(\n    name = \"cmake_data\",\n    srcs = glob(\n        [\n            \"**\",\n        ],\n        exclude = [\n            \"WORKSPACE\",\n            \"WORKSPACE.bazel\",\n            \"BUILD\",\n            \"BUILD.bazel\",\n            \"**/* *\",\n        ],\n    ),\n)\n\nnative_tool_toolchain(\n    name = \"cmake_tool\",\n    path = \"bin/cmake\",\n    target = \":cmake_data\",\n    env = {\"CMAKE\": \"$(execpath :cmake_bin)\"},\n    tools = [\":cmake_bin\"],\n)\n"
+            }
+          },
+          "cmake-3.23.2-linux-x86_64": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "urls": [
+                "https://github.com/Kitware/CMake/releases/download/v3.23.2/cmake-3.23.2-linux-x86_64.tar.gz"
+              ],
+              "sha256": "aaced6f745b86ce853661a595bdac6c5314a60f8181b6912a0a4920acfa32708",
+              "strip_prefix": "cmake-3.23.2-linux-x86_64",
+              "build_file_content": "load(\"@rules_foreign_cc//toolchains/native_tools:native_tools_toolchain.bzl\", \"native_tool_toolchain\")\n\npackage(default_visibility = [\"//visibility:public\"])\n\nfilegroup(\n    name = \"cmake_bin\",\n    srcs = [\"bin/cmake\"],\n)\n\nfilegroup(\n    name = \"cmake_data\",\n    srcs = glob(\n        [\n            \"**\",\n        ],\n        exclude = [\n            \"WORKSPACE\",\n            \"WORKSPACE.bazel\",\n            \"BUILD\",\n            \"BUILD.bazel\",\n            \"**/* *\",\n        ],\n    ),\n)\n\nnative_tool_toolchain(\n    name = \"cmake_tool\",\n    path = \"bin/cmake\",\n    target = \":cmake_data\",\n    env = {\"CMAKE\": \"$(execpath :cmake_bin)\"},\n    tools = [\":cmake_bin\"],\n)\n"
+            }
+          },
+          "cmake-3.23.2-macos-universal": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "urls": [
+                "https://github.com/Kitware/CMake/releases/download/v3.23.2/cmake-3.23.2-macos-universal.tar.gz"
+              ],
+              "sha256": "853a0f9af148c5ef47282ffffee06c4c9f257be2635936755f39ca13c3286c88",
+              "strip_prefix": "cmake-3.23.2-macos-universal/CMake.app/Contents",
+              "build_file_content": "load(\"@rules_foreign_cc//toolchains/native_tools:native_tools_toolchain.bzl\", \"native_tool_toolchain\")\n\npackage(default_visibility = [\"//visibility:public\"])\n\nfilegroup(\n    name = \"cmake_bin\",\n    srcs = [\"bin/cmake\"],\n)\n\nfilegroup(\n    name = \"cmake_data\",\n    srcs = glob(\n        [\n            \"**\",\n        ],\n        exclude = [\n            \"WORKSPACE\",\n            \"WORKSPACE.bazel\",\n            \"BUILD\",\n            \"BUILD.bazel\",\n            \"**/* *\",\n        ],\n    ),\n)\n\nnative_tool_toolchain(\n    name = \"cmake_tool\",\n    path = \"bin/cmake\",\n    target = \":cmake_data\",\n    env = {\"CMAKE\": \"$(execpath :cmake_bin)\"},\n    tools = [\":cmake_bin\"],\n)\n"
+            }
+          },
+          "cmake-3.23.2-windows-i386": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "urls": [
+                "https://github.com/Kitware/CMake/releases/download/v3.23.2/cmake-3.23.2-windows-i386.zip"
+              ],
+              "sha256": "6a4fcd6a2315b93cb23c93507efccacc30c449c2bf98f14d6032bb226c582e07",
+              "strip_prefix": "cmake-3.23.2-windows-i386",
+              "build_file_content": "load(\"@rules_foreign_cc//toolchains/native_tools:native_tools_toolchain.bzl\", \"native_tool_toolchain\")\n\npackage(default_visibility = [\"//visibility:public\"])\n\nfilegroup(\n    name = \"cmake_bin\",\n    srcs = [\"bin/cmake.exe\"],\n)\n\nfilegroup(\n    name = \"cmake_data\",\n    srcs = glob(\n        [\n            \"**\",\n        ],\n        exclude = [\n            \"WORKSPACE\",\n            \"WORKSPACE.bazel\",\n            \"BUILD\",\n            \"BUILD.bazel\",\n            \"**/* *\",\n        ],\n    ),\n)\n\nnative_tool_toolchain(\n    name = \"cmake_tool\",\n    path = \"bin/cmake.exe\",\n    target = \":cmake_data\",\n    env = {\"CMAKE\": \"$(execpath :cmake_bin)\"},\n    tools = [\":cmake_bin\"],\n)\n"
+            }
+          },
+          "cmake-3.23.2-windows-x86_64": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "urls": [
+                "https://github.com/Kitware/CMake/releases/download/v3.23.2/cmake-3.23.2-windows-x86_64.zip"
+              ],
+              "sha256": "2329387f3166b84c25091c86389fb891193967740c9bcf01e7f6d3306f7ffda0",
+              "strip_prefix": "cmake-3.23.2-windows-x86_64",
+              "build_file_content": "load(\"@rules_foreign_cc//toolchains/native_tools:native_tools_toolchain.bzl\", \"native_tool_toolchain\")\n\npackage(default_visibility = [\"//visibility:public\"])\n\nfilegroup(\n    name = \"cmake_bin\",\n    srcs = [\"bin/cmake.exe\"],\n)\n\nfilegroup(\n    name = \"cmake_data\",\n    srcs = glob(\n        [\n            \"**\",\n        ],\n        exclude = [\n            \"WORKSPACE\",\n            \"WORKSPACE.bazel\",\n            \"BUILD\",\n            \"BUILD.bazel\",\n            \"**/* *\",\n        ],\n    ),\n)\n\nnative_tool_toolchain(\n    name = \"cmake_tool\",\n    path = \"bin/cmake.exe\",\n    target = \":cmake_data\",\n    env = {\"CMAKE\": \"$(execpath :cmake_bin)\"},\n    tools = [\":cmake_bin\"],\n)\n"
+            }
+          },
+          "cmake_3.23.2_toolchains": {
+            "repoRuleId": "@@rules_foreign_cc+//toolchains:prebuilt_toolchains_repository.bzl%prebuilt_toolchains_repository",
+            "attributes": {
+              "repos": {
+                "cmake-3.23.2-linux-aarch64": [
+                  "@platforms//cpu:aarch64",
+                  "@platforms//os:linux"
+                ],
+                "cmake-3.23.2-linux-x86_64": [
+                  "@platforms//cpu:x86_64",
+                  "@platforms//os:linux"
+                ],
+                "cmake-3.23.2-macos-universal": [
+                  "@platforms//os:macos"
+                ],
+                "cmake-3.23.2-windows-i386": [
+                  "@platforms//cpu:x86_32",
+                  "@platforms//os:windows"
+                ],
+                "cmake-3.23.2-windows-x86_64": [
+                  "@platforms//cpu:x86_64",
+                  "@platforms//os:windows"
+                ]
+              },
+              "tool": "cmake"
+            }
+          },
+          "ninja_1.12.1_linux": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "urls": [
+                "https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-linux.zip"
+              ],
+              "sha256": "6f98805688d19672bd699fbbfa2c2cf0fc054ac3df1f0e6a47664d963d530255",
+              "strip_prefix": "",
+              "build_file_content": "load(\"@rules_foreign_cc//toolchains/native_tools:native_tools_toolchain.bzl\", \"native_tool_toolchain\")\n\npackage(default_visibility = [\"//visibility:public\"])\n\nfilegroup(\n    name = \"ninja_bin\",\n    srcs = [\"ninja\"],\n)\n\nnative_tool_toolchain(\n    name = \"ninja_tool\",\n    env = {\"NINJA\": \"$(execpath :ninja_bin)\"},\n    path = \"$(execpath :ninja_bin)\",\n    target = \":ninja_bin\",\n)\n"
+            }
+          },
+          "ninja_1.12.1_linux-aarch64": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "urls": [
+                "https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-linux-aarch64.zip"
+              ],
+              "sha256": "5c25c6570b0155e95fce5918cb95f1ad9870df5768653afe128db822301a05a1",
+              "strip_prefix": "",
+              "build_file_content": "load(\"@rules_foreign_cc//toolchains/native_tools:native_tools_toolchain.bzl\", \"native_tool_toolchain\")\n\npackage(default_visibility = [\"//visibility:public\"])\n\nfilegroup(\n    name = \"ninja_bin\",\n    srcs = [\"ninja\"],\n)\n\nnative_tool_toolchain(\n    name = \"ninja_tool\",\n    env = {\"NINJA\": \"$(execpath :ninja_bin)\"},\n    path = \"$(execpath :ninja_bin)\",\n    target = \":ninja_bin\",\n)\n"
+            }
+          },
+          "ninja_1.12.1_mac": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "urls": [
+                "https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-mac.zip"
+              ],
+              "sha256": "89a287444b5b3e98f88a945afa50ce937b8ffd1dcc59c555ad9b1baf855298c9",
+              "strip_prefix": "",
+              "build_file_content": "load(\"@rules_foreign_cc//toolchains/native_tools:native_tools_toolchain.bzl\", \"native_tool_toolchain\")\n\npackage(default_visibility = [\"//visibility:public\"])\n\nfilegroup(\n    name = \"ninja_bin\",\n    srcs = [\"ninja\"],\n)\n\nnative_tool_toolchain(\n    name = \"ninja_tool\",\n    env = {\"NINJA\": \"$(execpath :ninja_bin)\"},\n    path = \"$(execpath :ninja_bin)\",\n    target = \":ninja_bin\",\n)\n"
+            }
+          },
+          "ninja_1.12.1_mac_aarch64": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "urls": [
+                "https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-mac.zip"
+              ],
+              "sha256": "89a287444b5b3e98f88a945afa50ce937b8ffd1dcc59c555ad9b1baf855298c9",
+              "strip_prefix": "",
+              "build_file_content": "load(\"@rules_foreign_cc//toolchains/native_tools:native_tools_toolchain.bzl\", \"native_tool_toolchain\")\n\npackage(default_visibility = [\"//visibility:public\"])\n\nfilegroup(\n    name = \"ninja_bin\",\n    srcs = [\"ninja\"],\n)\n\nnative_tool_toolchain(\n    name = \"ninja_tool\",\n    env = {\"NINJA\": \"$(execpath :ninja_bin)\"},\n    path = \"$(execpath :ninja_bin)\",\n    target = \":ninja_bin\",\n)\n"
+            }
+          },
+          "ninja_1.12.1_win": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "urls": [
+                "https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-win.zip"
+              ],
+              "sha256": "f550fec705b6d6ff58f2db3c374c2277a37691678d6aba463adcbb129108467a",
+              "strip_prefix": "",
+              "build_file_content": "load(\"@rules_foreign_cc//toolchains/native_tools:native_tools_toolchain.bzl\", \"native_tool_toolchain\")\n\npackage(default_visibility = [\"//visibility:public\"])\n\nfilegroup(\n    name = \"ninja_bin\",\n    srcs = [\"ninja.exe\"],\n)\n\nnative_tool_toolchain(\n    name = \"ninja_tool\",\n    env = {\"NINJA\": \"$(execpath :ninja_bin)\"},\n    path = \"$(execpath :ninja_bin)\",\n    target = \":ninja_bin\",\n)\n"
+            }
+          },
+          "ninja_1.12.1_toolchains": {
+            "repoRuleId": "@@rules_foreign_cc+//toolchains:prebuilt_toolchains_repository.bzl%prebuilt_toolchains_repository",
+            "attributes": {
+              "repos": {
+                "ninja_1.12.1_linux": [
+                  "@platforms//cpu:x86_64",
+                  "@platforms//os:linux"
+                ],
+                "ninja_1.12.1_linux-aarch64": [
+                  "@platforms//cpu:aarch64",
+                  "@platforms//os:linux"
+                ],
+                "ninja_1.12.1_mac": [
+                  "@platforms//cpu:x86_64",
+                  "@platforms//os:macos"
+                ],
+                "ninja_1.12.1_mac_aarch64": [
+                  "@platforms//cpu:aarch64",
+                  "@platforms//os:macos"
+                ],
+                "ninja_1.12.1_win": [
+                  "@platforms//cpu:x86_64",
+                  "@platforms//os:windows"
+                ]
+              },
+              "tool": "ninja"
+            }
+          }
+        }
       }
     },
     "@@rules_kotlin+//src/main/starlark/core/repositories:bzlmod_setup.bzl%rules_kotlin_extensions": {
       "general": {
-        "bzlTransitiveDigest": "BcC1+HOMyQbaxCezYLAcpAFojGIgibGrmncgO+T2cCU=",
+        "bzlTransitiveDigest": "ABI1D/sbS1ovwaW/kHDoj8nnXjQ0oKU9fzmzEG4iT8o=",
         "usagesDigest": "QI2z8ZUR+mqtbwsf2fLqYdJAkPOHdOV+tF2yVAUgRzw=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
+        "recordedInputs": [
+          "REPO_MAPPING:rules_kotlin+,bazel_tools bazel_tools"
+        ],
         "generatedRepoSpecs": {
           "com_github_jetbrains_kotlin_git": {
             "repoRuleId": "@@rules_kotlin+//src/main/starlark/core/repositories:compiler.bzl%kotlin_compiler_git_repository",
@@ -1318,23 +1029,18 @@
               ]
             }
           }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "rules_kotlin+",
-            "bazel_tools",
-            "bazel_tools"
-          ]
-        ]
+        }
       }
     },
     "@@rules_multitool+//multitool:extension.bzl%multitool": {
       "general": {
-        "bzlTransitiveDigest": "uSTSs3hzieoiBrat70WH3MVlo7y+kNgKH4QBA6VkDe8=",
+        "bzlTransitiveDigest": "+LUY9cATgwGUa8VHgVp1rF/u2TeV+5UM4hIqcjNgQUQ=",
         "usagesDigest": "MlgKQ9MLWajNkZDrYOke+2hBkmLbwGd2PvcmpV17cbk=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
+        "recordedInputs": [
+          "REPO_MAPPING:bazel_features+,bazel_features_globals bazel_features++version_extension+bazel_features_globals",
+          "REPO_MAPPING:bazel_features+,bazel_features_version bazel_features++version_extension+bazel_features_version",
+          "REPO_MAPPING:rules_multitool+,bazel_features bazel_features+"
+        ],
         "generatedRepoSpecs": {
           "multitool.linux_arm64": {
             "repoRuleId": "@@rules_multitool+//multitool/private:multitool.bzl%_env_specific_tools",
@@ -1411,33 +1117,14 @@
               ]
             }
           }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "bazel_features+",
-            "bazel_features_globals",
-            "bazel_features++version_extension+bazel_features_globals"
-          ],
-          [
-            "bazel_features+",
-            "bazel_features_version",
-            "bazel_features++version_extension+bazel_features_version"
-          ],
-          [
-            "rules_multitool+",
-            "bazel_features",
-            "bazel_features+"
-          ]
-        ]
+        }
       }
     },
     "@@rules_nodejs+//nodejs:extensions.bzl%node": {
       "general": {
         "bzlTransitiveDigest": "FmfMiNXAxRoLWw3NloQbssosE1egrSvzirbQnso7j7E=",
         "usagesDigest": "+/eD+bbRTXQvCxo1j0JSXtArQ5RZAZSjW14VyIMoWxY=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
+        "recordedInputs": [],
         "generatedRepoSpecs": {
           "nodejs_linux_amd64": {
             "repoRuleId": "@@rules_nodejs+//nodejs:repositories.bzl%_nodejs_repositories",
@@ -1561,91 +1248,185 @@
               "user_node_repository_name": "nodejs"
             }
           }
-        },
-        "recordedRepoMappingEntries": []
+        }
       }
     },
-    "@@rules_perl+//perl:extensions.bzl%perl_repositories": {
+    "@@rules_python+//python/extensions:config.bzl%config": {
       "general": {
-        "bzlTransitiveDigest": "7Z7RjZajNiC9G9E2xeK9Kvy76PfF3gn+JLOHcOfYIIY=",
-        "usagesDigest": "qSSNDdCNVxNhY36wMndEAFacdhR0ooLTmumfad0km9s=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
+        "bzlTransitiveDigest": "2hLgIvNVTLgxus0ZuXtleBe70intCfo0cHs8qvt6cdM=",
+        "usagesDigest": "ZVSXMAGpD+xzVNPuvF1IoLBkty7TROO0+akMapt1pAg=",
+        "recordedInputs": [
+          "REPO_MAPPING:rules_python+,bazel_tools bazel_tools",
+          "REPO_MAPPING:rules_python+,pypi__build rules_python++config+pypi__build",
+          "REPO_MAPPING:rules_python+,pypi__click rules_python++config+pypi__click",
+          "REPO_MAPPING:rules_python+,pypi__colorama rules_python++config+pypi__colorama",
+          "REPO_MAPPING:rules_python+,pypi__importlib_metadata rules_python++config+pypi__importlib_metadata",
+          "REPO_MAPPING:rules_python+,pypi__installer rules_python++config+pypi__installer",
+          "REPO_MAPPING:rules_python+,pypi__more_itertools rules_python++config+pypi__more_itertools",
+          "REPO_MAPPING:rules_python+,pypi__packaging rules_python++config+pypi__packaging",
+          "REPO_MAPPING:rules_python+,pypi__pep517 rules_python++config+pypi__pep517",
+          "REPO_MAPPING:rules_python+,pypi__pip rules_python++config+pypi__pip",
+          "REPO_MAPPING:rules_python+,pypi__pip_tools rules_python++config+pypi__pip_tools",
+          "REPO_MAPPING:rules_python+,pypi__pyproject_hooks rules_python++config+pypi__pyproject_hooks",
+          "REPO_MAPPING:rules_python+,pypi__setuptools rules_python++config+pypi__setuptools",
+          "REPO_MAPPING:rules_python+,pypi__tomli rules_python++config+pypi__tomli",
+          "REPO_MAPPING:rules_python+,pypi__wheel rules_python++config+pypi__wheel",
+          "REPO_MAPPING:rules_python+,pypi__zipp rules_python++config+pypi__zipp"
+        ],
         "generatedRepoSpecs": {
-          "perl_darwin_arm64": {
-            "repoRuleId": "@@rules_perl+//perl:repo.bzl%perl_download",
+          "rules_python_internal": {
+            "repoRuleId": "@@rules_python+//python/private:internal_config_repo.bzl%internal_config_repo",
             "attributes": {
-              "strip_prefix": "perl-darwin-arm64",
-              "sha256": "285769f3c50c339fb59a3987b216ae3c5c573b95babe6875a1ef56fb178433da",
-              "urls": [
-                "https://github.com/skaji/relocatable-perl/releases/download/5.36.0.1/perl-darwin-arm64.tar.xz"
-              ]
+              "transition_setting_generators": {},
+              "transition_settings": []
             }
           },
-          "perl_darwin_amd64": {
-            "repoRuleId": "@@rules_perl+//perl:repo.bzl%perl_download",
+          "pypi__build": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
             "attributes": {
-              "strip_prefix": "perl-darwin-amd64",
-              "sha256": "63bc5ee36f5394d71c50cca6cafdd333ee58f9eaa40bca63c85f9bd06f2c1fd6",
-              "urls": [
-                "https://github.com/skaji/relocatable-perl/releases/download/5.36.0.1/perl-darwin-amd64.tar.xz"
-              ]
+              "url": "https://files.pythonhosted.org/packages/e2/03/f3c8ba0a6b6e30d7d18c40faab90807c9bb5e9a1e3b2fe2008af624a9c97/build-1.2.1-py3-none-any.whl",
+              "sha256": "75e10f767a433d9a86e50d83f418e83efc18ede923ee5ff7df93b6cb0306c5d4",
+              "type": "zip",
+              "build_file_content": "package(default_visibility = [\"//visibility:public\"])\n\nload(\"@rules_python//python:py_library.bzl\", \"py_library\")\n\npy_library(\n    name = \"lib\",\n    srcs = glob([\"**/*.py\"]),\n    data = glob([\"**/*\"], exclude=[\n        # These entries include those put into user-installed dependencies by\n        # data_exclude to avoid non-determinism.\n        \"**/*.py\",\n        \"**/*.pyc\",\n        \"**/*.pyc.*\",  # During pyc creation, temp files named *.pyc.NNN are created\n        \"**/*.dist-info/RECORD\",\n        \"BUILD\",\n        \"WORKSPACE\",\n    ]),\n    # This makes this directory a top-level in the python import\n    # search path for anything that depends on this.\n    imports = [\".\"],\n)\n"
             }
           },
-          "perl_linux_amd64": {
-            "repoRuleId": "@@rules_perl+//perl:repo.bzl%perl_download",
+          "pypi__click": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
             "attributes": {
-              "strip_prefix": "perl-linux-amd64",
-              "sha256": "3bdffa9d7a3f97c0207314637b260ba5115b1d0829f97e3e2e301191a4d4d076",
-              "urls": [
-                "https://github.com/skaji/relocatable-perl/releases/download/5.36.0.1/perl-linux-amd64.tar.xz"
-              ]
+              "url": "https://files.pythonhosted.org/packages/00/2e/d53fa4befbf2cfa713304affc7ca780ce4fc1fd8710527771b58311a3229/click-8.1.7-py3-none-any.whl",
+              "sha256": "ae74fb96c20a0277a1d615f1e4d73c8414f5a98db8b799a7931d1582f3390c28",
+              "type": "zip",
+              "build_file_content": "package(default_visibility = [\"//visibility:public\"])\n\nload(\"@rules_python//python:py_library.bzl\", \"py_library\")\n\npy_library(\n    name = \"lib\",\n    srcs = glob([\"**/*.py\"]),\n    data = glob([\"**/*\"], exclude=[\n        # These entries include those put into user-installed dependencies by\n        # data_exclude to avoid non-determinism.\n        \"**/*.py\",\n        \"**/*.pyc\",\n        \"**/*.pyc.*\",  # During pyc creation, temp files named *.pyc.NNN are created\n        \"**/*.dist-info/RECORD\",\n        \"BUILD\",\n        \"WORKSPACE\",\n    ]),\n    # This makes this directory a top-level in the python import\n    # search path for anything that depends on this.\n    imports = [\".\"],\n)\n"
             }
           },
-          "perl_linux_arm64": {
-            "repoRuleId": "@@rules_perl+//perl:repo.bzl%perl_download",
+          "pypi__colorama": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
             "attributes": {
-              "strip_prefix": "perl-linux-arm64",
-              "sha256": "6fa4ece99e790ecbc2861f6ecb7b52694c01c2eeb215b4370f16a3b12d952117",
-              "urls": [
-                "https://github.com/skaji/relocatable-perl/releases/download/5.36.0.1/perl-linux-arm64.tar.xz"
-              ]
+              "url": "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl",
+              "sha256": "4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6",
+              "type": "zip",
+              "build_file_content": "package(default_visibility = [\"//visibility:public\"])\n\nload(\"@rules_python//python:py_library.bzl\", \"py_library\")\n\npy_library(\n    name = \"lib\",\n    srcs = glob([\"**/*.py\"]),\n    data = glob([\"**/*\"], exclude=[\n        # These entries include those put into user-installed dependencies by\n        # data_exclude to avoid non-determinism.\n        \"**/*.py\",\n        \"**/*.pyc\",\n        \"**/*.pyc.*\",  # During pyc creation, temp files named *.pyc.NNN are created\n        \"**/*.dist-info/RECORD\",\n        \"BUILD\",\n        \"WORKSPACE\",\n    ]),\n    # This makes this directory a top-level in the python import\n    # search path for anything that depends on this.\n    imports = [\".\"],\n)\n"
             }
           },
-          "perl_windows_x86_64": {
-            "repoRuleId": "@@rules_perl+//perl:repo.bzl%perl_download",
+          "pypi__importlib_metadata": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
             "attributes": {
-              "strip_prefix": "",
-              "sha256": "aeb973da474f14210d3e1a1f942dcf779e2ae7e71e4c535e6c53ebabe632cc98",
-              "urls": [
-                "https://mirror.bazel.build/strawberryperl.com/download/5.32.1.1/strawberry-perl-5.32.1.1-64bit.zip",
-                "https://strawberryperl.com/download/5.32.1.1/strawberry-perl-5.32.1.1-64bit.zip"
-              ]
+              "url": "https://files.pythonhosted.org/packages/2d/0a/679461c511447ffaf176567d5c496d1de27cbe34a87df6677d7171b2fbd4/importlib_metadata-7.1.0-py3-none-any.whl",
+              "sha256": "30962b96c0c223483ed6cc7280e7f0199feb01a0e40cfae4d4450fc6fab1f570",
+              "type": "zip",
+              "build_file_content": "package(default_visibility = [\"//visibility:public\"])\n\nload(\"@rules_python//python:py_library.bzl\", \"py_library\")\n\npy_library(\n    name = \"lib\",\n    srcs = glob([\"**/*.py\"]),\n    data = glob([\"**/*\"], exclude=[\n        # These entries include those put into user-installed dependencies by\n        # data_exclude to avoid non-determinism.\n        \"**/*.py\",\n        \"**/*.pyc\",\n        \"**/*.pyc.*\",  # During pyc creation, temp files named *.pyc.NNN are created\n        \"**/*.dist-info/RECORD\",\n        \"BUILD\",\n        \"WORKSPACE\",\n    ]),\n    # This makes this directory a top-level in the python import\n    # search path for anything that depends on this.\n    imports = [\".\"],\n)\n"
+            }
+          },
+          "pypi__installer": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "url": "https://files.pythonhosted.org/packages/e5/ca/1172b6638d52f2d6caa2dd262ec4c811ba59eee96d54a7701930726bce18/installer-0.7.0-py3-none-any.whl",
+              "sha256": "05d1933f0a5ba7d8d6296bb6d5018e7c94fa473ceb10cf198a92ccea19c27b53",
+              "type": "zip",
+              "build_file_content": "package(default_visibility = [\"//visibility:public\"])\n\nload(\"@rules_python//python:py_library.bzl\", \"py_library\")\n\npy_library(\n    name = \"lib\",\n    srcs = glob([\"**/*.py\"]),\n    data = glob([\"**/*\"], exclude=[\n        # These entries include those put into user-installed dependencies by\n        # data_exclude to avoid non-determinism.\n        \"**/*.py\",\n        \"**/*.pyc\",\n        \"**/*.pyc.*\",  # During pyc creation, temp files named *.pyc.NNN are created\n        \"**/*.dist-info/RECORD\",\n        \"BUILD\",\n        \"WORKSPACE\",\n    ]),\n    # This makes this directory a top-level in the python import\n    # search path for anything that depends on this.\n    imports = [\".\"],\n)\n"
+            }
+          },
+          "pypi__more_itertools": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "url": "https://files.pythonhosted.org/packages/50/e2/8e10e465ee3987bb7c9ab69efb91d867d93959095f4807db102d07995d94/more_itertools-10.2.0-py3-none-any.whl",
+              "sha256": "686b06abe565edfab151cb8fd385a05651e1fdf8f0a14191e4439283421f8684",
+              "type": "zip",
+              "build_file_content": "package(default_visibility = [\"//visibility:public\"])\n\nload(\"@rules_python//python:py_library.bzl\", \"py_library\")\n\npy_library(\n    name = \"lib\",\n    srcs = glob([\"**/*.py\"]),\n    data = glob([\"**/*\"], exclude=[\n        # These entries include those put into user-installed dependencies by\n        # data_exclude to avoid non-determinism.\n        \"**/*.py\",\n        \"**/*.pyc\",\n        \"**/*.pyc.*\",  # During pyc creation, temp files named *.pyc.NNN are created\n        \"**/*.dist-info/RECORD\",\n        \"BUILD\",\n        \"WORKSPACE\",\n    ]),\n    # This makes this directory a top-level in the python import\n    # search path for anything that depends on this.\n    imports = [\".\"],\n)\n"
+            }
+          },
+          "pypi__packaging": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "url": "https://files.pythonhosted.org/packages/49/df/1fceb2f8900f8639e278b056416d49134fb8d84c5942ffaa01ad34782422/packaging-24.0-py3-none-any.whl",
+              "sha256": "2ddfb553fdf02fb784c234c7ba6ccc288296ceabec964ad2eae3777778130bc5",
+              "type": "zip",
+              "build_file_content": "package(default_visibility = [\"//visibility:public\"])\n\nload(\"@rules_python//python:py_library.bzl\", \"py_library\")\n\npy_library(\n    name = \"lib\",\n    srcs = glob([\"**/*.py\"]),\n    data = glob([\"**/*\"], exclude=[\n        # These entries include those put into user-installed dependencies by\n        # data_exclude to avoid non-determinism.\n        \"**/*.py\",\n        \"**/*.pyc\",\n        \"**/*.pyc.*\",  # During pyc creation, temp files named *.pyc.NNN are created\n        \"**/*.dist-info/RECORD\",\n        \"BUILD\",\n        \"WORKSPACE\",\n    ]),\n    # This makes this directory a top-level in the python import\n    # search path for anything that depends on this.\n    imports = [\".\"],\n)\n"
+            }
+          },
+          "pypi__pep517": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "url": "https://files.pythonhosted.org/packages/25/6e/ca4a5434eb0e502210f591b97537d322546e4833dcb4d470a48c375c5540/pep517-0.13.1-py3-none-any.whl",
+              "sha256": "31b206f67165b3536dd577c5c3f1518e8fbaf38cbc57efff8369a392feff1721",
+              "type": "zip",
+              "build_file_content": "package(default_visibility = [\"//visibility:public\"])\n\nload(\"@rules_python//python:py_library.bzl\", \"py_library\")\n\npy_library(\n    name = \"lib\",\n    srcs = glob([\"**/*.py\"]),\n    data = glob([\"**/*\"], exclude=[\n        # These entries include those put into user-installed dependencies by\n        # data_exclude to avoid non-determinism.\n        \"**/*.py\",\n        \"**/*.pyc\",\n        \"**/*.pyc.*\",  # During pyc creation, temp files named *.pyc.NNN are created\n        \"**/*.dist-info/RECORD\",\n        \"BUILD\",\n        \"WORKSPACE\",\n    ]),\n    # This makes this directory a top-level in the python import\n    # search path for anything that depends on this.\n    imports = [\".\"],\n)\n"
+            }
+          },
+          "pypi__pip": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "url": "https://files.pythonhosted.org/packages/8a/6a/19e9fe04fca059ccf770861c7d5721ab4c2aebc539889e97c7977528a53b/pip-24.0-py3-none-any.whl",
+              "sha256": "ba0d021a166865d2265246961bec0152ff124de910c5cc39f1156ce3fa7c69dc",
+              "type": "zip",
+              "build_file_content": "package(default_visibility = [\"//visibility:public\"])\n\nload(\"@rules_python//python:py_library.bzl\", \"py_library\")\n\npy_library(\n    name = \"lib\",\n    srcs = glob([\"**/*.py\"]),\n    data = glob([\"**/*\"], exclude=[\n        # These entries include those put into user-installed dependencies by\n        # data_exclude to avoid non-determinism.\n        \"**/*.py\",\n        \"**/*.pyc\",\n        \"**/*.pyc.*\",  # During pyc creation, temp files named *.pyc.NNN are created\n        \"**/*.dist-info/RECORD\",\n        \"BUILD\",\n        \"WORKSPACE\",\n    ]),\n    # This makes this directory a top-level in the python import\n    # search path for anything that depends on this.\n    imports = [\".\"],\n)\n"
+            }
+          },
+          "pypi__pip_tools": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "url": "https://files.pythonhosted.org/packages/0d/dc/38f4ce065e92c66f058ea7a368a9c5de4e702272b479c0992059f7693941/pip_tools-7.4.1-py3-none-any.whl",
+              "sha256": "4c690e5fbae2f21e87843e89c26191f0d9454f362d8acdbd695716493ec8b3a9",
+              "type": "zip",
+              "build_file_content": "package(default_visibility = [\"//visibility:public\"])\n\nload(\"@rules_python//python:py_library.bzl\", \"py_library\")\n\npy_library(\n    name = \"lib\",\n    srcs = glob([\"**/*.py\"]),\n    data = glob([\"**/*\"], exclude=[\n        # These entries include those put into user-installed dependencies by\n        # data_exclude to avoid non-determinism.\n        \"**/*.py\",\n        \"**/*.pyc\",\n        \"**/*.pyc.*\",  # During pyc creation, temp files named *.pyc.NNN are created\n        \"**/*.dist-info/RECORD\",\n        \"BUILD\",\n        \"WORKSPACE\",\n    ]),\n    # This makes this directory a top-level in the python import\n    # search path for anything that depends on this.\n    imports = [\".\"],\n)\n"
+            }
+          },
+          "pypi__pyproject_hooks": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "url": "https://files.pythonhosted.org/packages/ae/f3/431b9d5fe7d14af7a32340792ef43b8a714e7726f1d7b69cc4e8e7a3f1d7/pyproject_hooks-1.1.0-py3-none-any.whl",
+              "sha256": "7ceeefe9aec63a1064c18d939bdc3adf2d8aa1988a510afec15151578b232aa2",
+              "type": "zip",
+              "build_file_content": "package(default_visibility = [\"//visibility:public\"])\n\nload(\"@rules_python//python:py_library.bzl\", \"py_library\")\n\npy_library(\n    name = \"lib\",\n    srcs = glob([\"**/*.py\"]),\n    data = glob([\"**/*\"], exclude=[\n        # These entries include those put into user-installed dependencies by\n        # data_exclude to avoid non-determinism.\n        \"**/*.py\",\n        \"**/*.pyc\",\n        \"**/*.pyc.*\",  # During pyc creation, temp files named *.pyc.NNN are created\n        \"**/*.dist-info/RECORD\",\n        \"BUILD\",\n        \"WORKSPACE\",\n    ]),\n    # This makes this directory a top-level in the python import\n    # search path for anything that depends on this.\n    imports = [\".\"],\n)\n"
+            }
+          },
+          "pypi__setuptools": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "url": "https://files.pythonhosted.org/packages/90/99/158ad0609729111163fc1f674a5a42f2605371a4cf036d0441070e2f7455/setuptools-78.1.1-py3-none-any.whl",
+              "sha256": "c3a9c4211ff4c309edb8b8c4f1cbfa7ae324c4ba9f91ff254e3d305b9fd54561",
+              "type": "zip",
+              "build_file_content": "package(default_visibility = [\"//visibility:public\"])\n\nload(\"@rules_python//python:py_library.bzl\", \"py_library\")\n\npy_library(\n    name = \"lib\",\n    srcs = glob([\"**/*.py\"]),\n    data = glob([\"**/*\"], exclude=[\n        # These entries include those put into user-installed dependencies by\n        # data_exclude to avoid non-determinism.\n        \"**/*.py\",\n        \"**/*.pyc\",\n        \"**/*.pyc.*\",  # During pyc creation, temp files named *.pyc.NNN are created\n        \"**/*.dist-info/RECORD\",\n        \"BUILD\",\n        \"WORKSPACE\",\n    ]),\n    # This makes this directory a top-level in the python import\n    # search path for anything that depends on this.\n    imports = [\".\"],\n)\n"
+            }
+          },
+          "pypi__tomli": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "url": "https://files.pythonhosted.org/packages/97/75/10a9ebee3fd790d20926a90a2547f0bf78f371b2f13aa822c759680ca7b9/tomli-2.0.1-py3-none-any.whl",
+              "sha256": "939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc",
+              "type": "zip",
+              "build_file_content": "package(default_visibility = [\"//visibility:public\"])\n\nload(\"@rules_python//python:py_library.bzl\", \"py_library\")\n\npy_library(\n    name = \"lib\",\n    srcs = glob([\"**/*.py\"]),\n    data = glob([\"**/*\"], exclude=[\n        # These entries include those put into user-installed dependencies by\n        # data_exclude to avoid non-determinism.\n        \"**/*.py\",\n        \"**/*.pyc\",\n        \"**/*.pyc.*\",  # During pyc creation, temp files named *.pyc.NNN are created\n        \"**/*.dist-info/RECORD\",\n        \"BUILD\",\n        \"WORKSPACE\",\n    ]),\n    # This makes this directory a top-level in the python import\n    # search path for anything that depends on this.\n    imports = [\".\"],\n)\n"
+            }
+          },
+          "pypi__wheel": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "url": "https://files.pythonhosted.org/packages/7d/cd/d7460c9a869b16c3dd4e1e403cce337df165368c71d6af229a74699622ce/wheel-0.43.0-py3-none-any.whl",
+              "sha256": "55c570405f142630c6b9f72fe09d9b67cf1477fcf543ae5b8dcb1f5b7377da81",
+              "type": "zip",
+              "build_file_content": "package(default_visibility = [\"//visibility:public\"])\n\nload(\"@rules_python//python:py_library.bzl\", \"py_library\")\n\npy_library(\n    name = \"lib\",\n    srcs = glob([\"**/*.py\"]),\n    data = glob([\"**/*\"], exclude=[\n        # These entries include those put into user-installed dependencies by\n        # data_exclude to avoid non-determinism.\n        \"**/*.py\",\n        \"**/*.pyc\",\n        \"**/*.pyc.*\",  # During pyc creation, temp files named *.pyc.NNN are created\n        \"**/*.dist-info/RECORD\",\n        \"BUILD\",\n        \"WORKSPACE\",\n    ]),\n    # This makes this directory a top-level in the python import\n    # search path for anything that depends on this.\n    imports = [\".\"],\n)\n"
+            }
+          },
+          "pypi__zipp": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "url": "https://files.pythonhosted.org/packages/da/55/a03fd7240714916507e1fcf7ae355bd9d9ed2e6db492595f1a67f61681be/zipp-3.18.2-py3-none-any.whl",
+              "sha256": "dce197b859eb796242b0622af1b8beb0a722d52aa2f57133ead08edd5bf5374e",
+              "type": "zip",
+              "build_file_content": "package(default_visibility = [\"//visibility:public\"])\n\nload(\"@rules_python//python:py_library.bzl\", \"py_library\")\n\npy_library(\n    name = \"lib\",\n    srcs = glob([\"**/*.py\"]),\n    data = glob([\"**/*\"], exclude=[\n        # These entries include those put into user-installed dependencies by\n        # data_exclude to avoid non-determinism.\n        \"**/*.py\",\n        \"**/*.pyc\",\n        \"**/*.pyc.*\",  # During pyc creation, temp files named *.pyc.NNN are created\n        \"**/*.dist-info/RECORD\",\n        \"BUILD\",\n        \"WORKSPACE\",\n    ]),\n    # This makes this directory a top-level in the python import\n    # search path for anything that depends on this.\n    imports = [\".\"],\n)\n"
             }
           }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "rules_perl+",
-            "bazel_tools",
-            "bazel_tools"
-          ],
-          [
-            "rules_perl+",
-            "rules_perl",
-            "rules_perl+"
-          ]
-        ]
+        }
       }
     },
     "@@rules_python+//python/uv:uv.bzl%uv": {
       "general": {
-        "bzlTransitiveDigest": "8vT1ddXtljNxYD0tJkksqzeKE6xqx4Ix+tXthAppjTI=",
-        "usagesDigest": "p80sy6cYQuWxx5jhV3fOTu+N9EyIUFG9+F7UC/nhXic=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
+        "bzlTransitiveDigest": "ijW9KS7qsIY+yBVvJ+Nr1mzwQox09j13DnE3iIwaeTM=",
+        "usagesDigest": "H8dQoNZcoqP+Mu0tHZTi4KHATzvNkM5ePuEqoQdklIU=",
+        "recordedInputs": [
+          "REPO_MAPPING:rules_python+,bazel_tools bazel_tools",
+          "REPO_MAPPING:rules_python+,platforms platforms"
+        ],
         "generatedRepoSpecs": {
           "uv": {
             "repoRuleId": "@@rules_python+//python/uv/private:uv_toolchains_repo.bzl%uv_toolchains_repo",
@@ -1665,190 +1446,14 @@
               "toolchain_target_settings": {}
             }
           }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "rules_python+",
-            "bazel_tools",
-            "bazel_tools"
-          ],
-          [
-            "rules_python+",
-            "platforms",
-            "platforms"
-          ]
-        ]
-      }
-    },
-    "@@rules_rust+//crate_universe/private:internal_extensions.bzl%cu_nr": {
-      "general": {
-        "bzlTransitiveDigest": "HrPkufC6RhtIO4KkknIVIz/gac97tZqX52DL5PkIQz8=",
-        "usagesDigest": "dQ7SQZ7uSSL3vVKSMBKRxKJUm9OVrZZA+S1/QQfT570=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
-        "generatedRepoSpecs": {
-          "cargo_bazel_bootstrap": {
-            "repoRuleId": "@@rules_rust+//cargo/private:cargo_bootstrap.bzl%cargo_bootstrap_repository",
-            "attributes": {
-              "srcs": [
-                "@@rules_rust+//crate_universe:src/api.rs",
-                "@@rules_rust+//crate_universe:src/api/lockfile.rs",
-                "@@rules_rust+//crate_universe:src/cli.rs",
-                "@@rules_rust+//crate_universe:src/cli/generate.rs",
-                "@@rules_rust+//crate_universe:src/cli/query.rs",
-                "@@rules_rust+//crate_universe:src/cli/render.rs",
-                "@@rules_rust+//crate_universe:src/cli/splice.rs",
-                "@@rules_rust+//crate_universe:src/cli/vendor.rs",
-                "@@rules_rust+//crate_universe:src/config.rs",
-                "@@rules_rust+//crate_universe:src/context.rs",
-                "@@rules_rust+//crate_universe:src/context/crate_context.rs",
-                "@@rules_rust+//crate_universe:src/context/platforms.rs",
-                "@@rules_rust+//crate_universe:src/lib.rs",
-                "@@rules_rust+//crate_universe:src/lockfile.rs",
-                "@@rules_rust+//crate_universe:src/main.rs",
-                "@@rules_rust+//crate_universe:src/metadata.rs",
-                "@@rules_rust+//crate_universe:src/metadata/cargo_bin.rs",
-                "@@rules_rust+//crate_universe:src/metadata/cargo_tree_resolver.rs",
-                "@@rules_rust+//crate_universe:src/metadata/cargo_tree_rustc_wrapper.bat",
-                "@@rules_rust+//crate_universe:src/metadata/cargo_tree_rustc_wrapper.sh",
-                "@@rules_rust+//crate_universe:src/metadata/dependency.rs",
-                "@@rules_rust+//crate_universe:src/metadata/metadata_annotation.rs",
-                "@@rules_rust+//crate_universe:src/rendering.rs",
-                "@@rules_rust+//crate_universe:src/rendering/template_engine.rs",
-                "@@rules_rust+//crate_universe:src/rendering/templates/module_bzl.j2",
-                "@@rules_rust+//crate_universe:src/rendering/templates/partials/header.j2",
-                "@@rules_rust+//crate_universe:src/rendering/templates/partials/module/aliases_map.j2",
-                "@@rules_rust+//crate_universe:src/rendering/templates/partials/module/deps_map.j2",
-                "@@rules_rust+//crate_universe:src/rendering/templates/partials/module/repo_git.j2",
-                "@@rules_rust+//crate_universe:src/rendering/templates/partials/module/repo_http.j2",
-                "@@rules_rust+//crate_universe:src/rendering/templates/vendor_module.j2",
-                "@@rules_rust+//crate_universe:src/rendering/verbatim/alias_rules.bzl",
-                "@@rules_rust+//crate_universe:src/select.rs",
-                "@@rules_rust+//crate_universe:src/splicing.rs",
-                "@@rules_rust+//crate_universe:src/splicing/cargo_config.rs",
-                "@@rules_rust+//crate_universe:src/splicing/crate_index_lookup.rs",
-                "@@rules_rust+//crate_universe:src/splicing/splicer.rs",
-                "@@rules_rust+//crate_universe:src/test.rs",
-                "@@rules_rust+//crate_universe:src/utils.rs",
-                "@@rules_rust+//crate_universe:src/utils/starlark.rs",
-                "@@rules_rust+//crate_universe:src/utils/starlark/glob.rs",
-                "@@rules_rust+//crate_universe:src/utils/starlark/label.rs",
-                "@@rules_rust+//crate_universe:src/utils/starlark/select.rs",
-                "@@rules_rust+//crate_universe:src/utils/starlark/select_dict.rs",
-                "@@rules_rust+//crate_universe:src/utils/starlark/select_list.rs",
-                "@@rules_rust+//crate_universe:src/utils/starlark/select_scalar.rs",
-                "@@rules_rust+//crate_universe:src/utils/starlark/select_set.rs",
-                "@@rules_rust+//crate_universe:src/utils/starlark/serialize.rs",
-                "@@rules_rust+//crate_universe:src/utils/starlark/target_compatible_with.rs",
-                "@@rules_rust+//crate_universe:src/utils/symlink.rs",
-                "@@rules_rust+//crate_universe:src/utils/target_triple.rs"
-              ],
-              "binary": "cargo-bazel",
-              "cargo_lockfile": "@@rules_rust+//crate_universe:Cargo.lock",
-              "cargo_toml": "@@rules_rust+//crate_universe:Cargo.toml",
-              "version": "1.86.0",
-              "timeout": 900,
-              "rust_toolchain_cargo_template": "@rust_host_tools//:bin/{tool}",
-              "rust_toolchain_rustc_template": "@rust_host_tools//:bin/{tool}",
-              "compressed_windows_toolchain_names": false
-            }
-          }
-        },
-        "moduleExtensionMetadata": {
-          "explicitRootModuleDirectDeps": [
-            "cargo_bazel_bootstrap"
-          ],
-          "explicitRootModuleDirectDevDeps": [],
-          "useAllRepos": "NO",
-          "reproducible": false
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "bazel_features+",
-            "bazel_features_globals",
-            "bazel_features++version_extension+bazel_features_globals"
-          ],
-          [
-            "bazel_features+",
-            "bazel_features_version",
-            "bazel_features++version_extension+bazel_features_version"
-          ],
-          [
-            "rules_cc+",
-            "bazel_skylib",
-            "bazel_skylib+"
-          ],
-          [
-            "rules_cc+",
-            "bazel_tools",
-            "bazel_tools"
-          ],
-          [
-            "rules_cc+",
-            "cc_compatibility_proxy",
-            "rules_cc++compatibility_proxy+cc_compatibility_proxy"
-          ],
-          [
-            "rules_cc+",
-            "platforms",
-            "platforms"
-          ],
-          [
-            "rules_cc+",
-            "rules_cc",
-            "rules_cc+"
-          ],
-          [
-            "rules_cc++compatibility_proxy+cc_compatibility_proxy",
-            "rules_cc",
-            "rules_cc+"
-          ],
-          [
-            "rules_rust+",
-            "bazel_features",
-            "bazel_features+"
-          ],
-          [
-            "rules_rust+",
-            "bazel_skylib",
-            "bazel_skylib+"
-          ],
-          [
-            "rules_rust+",
-            "bazel_tools",
-            "bazel_tools"
-          ],
-          [
-            "rules_rust+",
-            "cui",
-            "rules_rust++cu+cui"
-          ],
-          [
-            "rules_rust+",
-            "rrc",
-            "rules_rust++i2+rrc"
-          ],
-          [
-            "rules_rust+",
-            "rules_cc",
-            "rules_cc+"
-          ],
-          [
-            "rules_rust+",
-            "rules_rust",
-            "rules_rust+"
-          ]
-        ]
+        }
       }
     },
     "@@tar.bzl+//tar:extensions.bzl%toolchains": {
       "general": {
         "bzlTransitiveDigest": "/2afh6fPjq/rcyE/jztQDK3ierehmFFngfvmqyRv72M=",
         "usagesDigest": "maF8qsAIqeH1ey8pxP0gNZbvJt34kLZvTFeQ0ntrJVA=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
+        "recordedInputs": [],
         "generatedRepoSpecs": {
           "bsd_tar_toolchains": {
             "repoRuleId": "@@tar.bzl+//tar/toolchain:toolchain.bzl%tar_toolchains_repo",
@@ -1892,8 +1497,7 @@
               "platform": "windows_arm64"
             }
           }
-        },
-        "recordedRepoMappingEntries": []
+        }
       }
     }
   },
