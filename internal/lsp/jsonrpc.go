@@ -64,6 +64,8 @@ type Conn struct {
 	writeMu sync.Mutex
 
 	handler Handler
+
+	wg sync.WaitGroup // tracks in-flight request goroutines
 }
 
 // Handler processes incoming requests.
@@ -105,7 +107,11 @@ func (c *Conn) Run(ctx context.Context) error {
 		}
 
 		// Handle in goroutine to allow concurrent requests
-		go c.handleRequest(ctx, req)
+		c.wg.Add(1)
+		go func() {
+			defer c.wg.Done()
+			c.handleRequest(ctx, req)
+		}()
 	}
 }
 
@@ -242,8 +248,10 @@ func (c *Conn) Notify(ctx context.Context, method string, params any) error {
 	return nil
 }
 
-// Close closes the underlying connection.
+// Close waits for in-flight request handlers to finish, then closes the
+// underlying connection.
 func (c *Conn) Close() error {
+	c.wg.Wait()
 	return c.rwc.Close()
 }
 

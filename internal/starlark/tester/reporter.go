@@ -10,8 +10,8 @@ import (
 
 // Reporter formats test results for output.
 type Reporter interface {
-	// ReportFile reports results for a single file.
-	ReportFile(w io.Writer, result *FileResult)
+	// Report reports results for a single file.
+	Report(w io.Writer, result *FileResult) error
 
 	// ReportSummary reports the final summary.
 	ReportSummary(w io.Writer, result *RunResult)
@@ -26,11 +26,13 @@ type TextReporter struct {
 	ShowDuration bool
 }
 
-// ReportFile implements Reporter.
-func (r *TextReporter) ReportFile(w io.Writer, result *FileResult) {
+// Report implements Reporter.
+func (r *TextReporter) Report(w io.Writer, result *FileResult) error {
 	if result.SetupError != nil {
-		_, _ = fmt.Fprintf(w, "SETUP FAILED: %s\n  %v\n", result.File, result.SetupError)
-		return
+		if _, err := fmt.Fprintf(w, "SETUP FAILED: %s\n  %v\n", result.File, result.SetupError); err != nil {
+			return err
+		}
+		return nil
 	}
 
 	for _, t := range result.Tests {
@@ -50,40 +52,58 @@ func (r *TextReporter) ReportFile(w io.Writer, result *FileResult) {
 		}
 
 		if r.ShowDuration {
-			_, _ = fmt.Fprintf(w, "%s  %s  (%s)\n", status, t.Name, t.Duration.Round(time.Millisecond))
+			if _, err := fmt.Fprintf(w, "%s  %s  (%s)\n", status, t.Name, t.Duration.Round(time.Millisecond)); err != nil {
+				return err
+			}
 		} else {
-			_, _ = fmt.Fprintf(w, "%s  %s\n", status, t.Name)
+			if _, err := fmt.Fprintf(w, "%s  %s\n", status, t.Name); err != nil {
+				return err
+			}
 		}
 
 		// Show skip reason if present
 		if t.Skipped && t.SkipReason != "" {
-			_, _ = fmt.Fprintf(w, "      %s\n", t.SkipReason)
+			if _, err := fmt.Fprintf(w, "      %s\n", t.SkipReason); err != nil {
+				return err
+			}
 		}
 
 		// Show xfail reason if present
 		if t.XFail && t.XFailReason != "" {
-			_, _ = fmt.Fprintf(w, "      %s\n", t.XFailReason)
+			if _, err := fmt.Fprintf(w, "      %s\n", t.XFailReason); err != nil {
+				return err
+			}
 		}
 
 		if !t.Passed && t.Error != nil && !t.XFail {
 			// Indent error message
 			errStr := t.Error.Error()
 			for _, line := range strings.Split(errStr, "\n") {
-				_, _ = fmt.Fprintf(w, "      %s\n", line)
+				if _, err := fmt.Fprintf(w, "      %s\n", line); err != nil {
+					return err
+				}
 			}
 		}
 
 		if r.Verbose && t.Output != "" {
-			_, _ = fmt.Fprintf(w, "      Output:\n")
+			if _, err := fmt.Fprintf(w, "      Output:\n"); err != nil {
+				return err
+			}
 			for _, line := range strings.Split(t.Output, "\n") {
-				_, _ = fmt.Fprintf(w, "        %s\n", line)
+				if _, err := fmt.Fprintf(w, "        %s\n", line); err != nil {
+					return err
+				}
 			}
 		}
 	}
 
 	if result.TeardownError != nil {
-		_, _ = fmt.Fprintf(w, "TEARDOWN FAILED: %s\n  %v\n", result.File, result.TeardownError)
+		if _, err := fmt.Fprintf(w, "TEARDOWN FAILED: %s\n  %v\n", result.File, result.TeardownError); err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 // ReportSummary implements Reporter.
@@ -141,9 +161,10 @@ type junitError struct {
 	Content string `xml:",chardata"`
 }
 
-// ReportFile implements Reporter (no-op for JUnit, all output in summary).
-func (r *JUnitReporter) ReportFile(w io.Writer, result *FileResult) {
+// Report implements Reporter (no-op for JUnit, all output in summary).
+func (r *JUnitReporter) Report(_ io.Writer, _ *FileResult) error {
 	// JUnit outputs everything in summary
+	return nil
 }
 
 // ReportSummary implements Reporter.
@@ -223,10 +244,11 @@ type MarkdownReporter struct {
 	fileResults []*FileResult
 }
 
-// ReportFile implements Reporter (accumulates for summary).
-func (r *MarkdownReporter) ReportFile(_ io.Writer, result *FileResult) {
+// Report implements Reporter (accumulates for summary).
+func (r *MarkdownReporter) Report(_ io.Writer, result *FileResult) error {
 	// Accumulate file results for the summary
 	r.fileResults = append(r.fileResults, result)
+	return nil
 }
 
 // ReportSummary implements Reporter.
@@ -313,9 +335,10 @@ func (r *MarkdownReporter) ReportSummary(w io.Writer, result *RunResult) {
 // JSONReporter outputs results in JSON format.
 type JSONReporter struct{}
 
-// ReportFile implements Reporter (no-op for JSON, all output in summary).
-func (r *JSONReporter) ReportFile(w io.Writer, result *FileResult) {
+// Report implements Reporter (no-op for JSON, all output in summary).
+func (r *JSONReporter) Report(_ io.Writer, _ *FileResult) error {
 	// JSON outputs everything in summary
+	return nil
 }
 
 // ReportSummary implements Reporter.
@@ -420,16 +443,20 @@ func (r *JSONReporter) ReportSummary(w io.Writer, result *RunResult) {
 // See: https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions
 type GitHubReporter struct{}
 
-// ReportFile implements Reporter.
-func (r *GitHubReporter) ReportFile(w io.Writer, result *FileResult) {
+// Report implements Reporter.
+func (r *GitHubReporter) Report(w io.Writer, result *FileResult) error {
 	// Start a collapsible group for this file
-	_, _ = fmt.Fprintf(w, "::group::📁 %s\n", result.File)
+	if _, err := fmt.Fprintf(w, "::group::\U0001F4C1 %s\n", result.File); err != nil {
+		return err
+	}
 
 	if result.SetupError != nil {
 		// Output setup error as an error annotation
-		_, _ = fmt.Fprintf(w, "::error file=%s,title=Setup Failed::%s\n",
+		if _, err := fmt.Fprintf(w, "::error file=%s,title=Setup Failed::%s\n",
 			escapeGitHubValue(result.File),
-			escapeGitHubMessage(result.SetupError.Error()))
+			escapeGitHubMessage(result.SetupError.Error())); err != nil {
+			return err
+		}
 	}
 
 	for _, t := range result.Tests {
@@ -437,30 +464,44 @@ func (r *GitHubReporter) ReportFile(w io.Writer, result *FileResult) {
 		case t.Skipped:
 			// Skipped tests as notices
 			if t.SkipReason != "" {
-				_, _ = fmt.Fprintf(w, "::notice file=%s,title=Skipped::%s - %s\n",
+				if _, err := fmt.Fprintf(w, "::notice file=%s,title=Skipped::%s - %s\n",
 					escapeGitHubValue(result.File),
 					escapeGitHubMessage(t.Name),
-					escapeGitHubMessage(t.SkipReason))
+					escapeGitHubMessage(t.SkipReason)); err != nil {
+					return err
+				}
 			} else {
-				_, _ = fmt.Fprintf(w, "::notice file=%s,title=Skipped::%s\n",
+				if _, err := fmt.Fprintf(w, "::notice file=%s,title=Skipped::%s\n",
 					escapeGitHubValue(result.File),
-					escapeGitHubMessage(t.Name))
+					escapeGitHubMessage(t.Name)); err != nil {
+					return err
+				}
 			}
-			_, _ = fmt.Fprintf(w, "SKIP  %s\n", t.Name)
+			if _, err := fmt.Fprintf(w, "SKIP  %s\n", t.Name); err != nil {
+				return err
+			}
 
 		case t.XPass:
 			// Unexpected pass is a failure
-			_, _ = fmt.Fprintf(w, "::error file=%s,title=Unexpected Pass::%s passed but was expected to fail\n",
+			if _, err := fmt.Fprintf(w, "::error file=%s,title=Unexpected Pass::%s passed but was expected to fail\n",
 				escapeGitHubValue(result.File),
-				escapeGitHubMessage(t.Name))
-			_, _ = fmt.Fprintf(w, "XPASS %s\n", t.Name)
+				escapeGitHubMessage(t.Name)); err != nil {
+				return err
+			}
+			if _, err := fmt.Fprintf(w, "XPASS %s\n", t.Name); err != nil {
+				return err
+			}
 
 		case t.XFail && t.Passed:
 			// Expected failure that failed (success)
-			_, _ = fmt.Fprintf(w, "XFAIL %s\n", t.Name)
+			if _, err := fmt.Fprintf(w, "XFAIL %s\n", t.Name); err != nil {
+				return err
+			}
 
 		case t.Passed:
-			_, _ = fmt.Fprintf(w, "PASS  %s\n", t.Name)
+			if _, err := fmt.Fprintf(w, "PASS  %s\n", t.Name); err != nil {
+				return err
+			}
 
 		default:
 			// Failed test - extract line number if possible
@@ -471,25 +512,37 @@ func (r *GitHubReporter) ReportFile(w io.Writer, result *FileResult) {
 			}
 
 			if line > 0 {
-				_, _ = fmt.Fprintf(w, "::error file=%s,line=%d,title=Test Failed::%s\n",
-					escapeGitHubValue(file), line, escapeGitHubMessage(errMsg))
+				if _, err := fmt.Fprintf(w, "::error file=%s,line=%d,title=Test Failed::%s\n",
+					escapeGitHubValue(file), line, escapeGitHubMessage(errMsg)); err != nil {
+					return err
+				}
 			} else {
-				_, _ = fmt.Fprintf(w, "::error file=%s,title=Test Failed::%s - %s\n",
+				if _, err := fmt.Fprintf(w, "::error file=%s,title=Test Failed::%s - %s\n",
 					escapeGitHubValue(file),
 					escapeGitHubMessage(t.Name),
-					escapeGitHubMessage(errMsg))
+					escapeGitHubMessage(errMsg)); err != nil {
+					return err
+				}
 			}
-			_, _ = fmt.Fprintf(w, "FAIL  %s\n", t.Name)
+			if _, err := fmt.Fprintf(w, "FAIL  %s\n", t.Name); err != nil {
+				return err
+			}
 		}
 	}
 
 	if result.TeardownError != nil {
-		_, _ = fmt.Fprintf(w, "::error file=%s,title=Teardown Failed::%s\n",
+		if _, err := fmt.Fprintf(w, "::error file=%s,title=Teardown Failed::%s\n",
 			escapeGitHubValue(result.File),
-			escapeGitHubMessage(result.TeardownError.Error()))
+			escapeGitHubMessage(result.TeardownError.Error())); err != nil {
+			return err
+		}
 	}
 
-	_, _ = fmt.Fprintln(w, "::endgroup::")
+	if _, err := fmt.Fprintln(w, "::endgroup::"); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ReportSummary implements Reporter.

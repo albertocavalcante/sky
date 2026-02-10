@@ -3,6 +3,7 @@ package index
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/albertocavalcante/sky/internal/starlark/filekind"
@@ -338,20 +339,18 @@ func TestIndex_Concurrent(t *testing.T) {
 	idx.AddPattern("//...")
 
 	// Concurrent reads should not panic
-	done := make(chan bool)
+	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			_ = idx.Files()
 			_ = idx.Count()
 			_ = idx.Get("test0.bzl")
 			_ = idx.MatchFiles("//...")
-			done <- true
 		}()
 	}
-
-	for i := 0; i < 10; i++ {
-		<-done
-	}
+	wg.Wait()
 }
 
 func BenchmarkIndex_Add(b *testing.B) {

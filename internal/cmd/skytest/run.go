@@ -591,7 +591,7 @@ func runTests(
 		// Report file immediately for text and GitHub reporters
 		switch reporter.(type) {
 		case *tester.TextReporter, *tester.GitHubReporter:
-			reporter.ReportFile(stdout, fileResult)
+			reporter.Report(stdout, fileResult)
 		}
 
 		// Fail-fast: stop processing more files after first failure
@@ -673,7 +673,7 @@ func runSequential(
 		// Report file immediately for text and GitHub reporters
 		switch reporter.(type) {
 		case *tester.TextReporter, *tester.GitHubReporter:
-			reporter.ReportFile(stdout, fileResult)
+			reporter.Report(stdout, fileResult)
 		}
 
 		// Fail-fast: stop processing more files after first failure
@@ -845,7 +845,7 @@ func runFileForParallel(
 	switch reporter.(type) {
 	case *tester.TextReporter, *tester.GitHubReporter:
 		var buf bytes.Buffer
-		reporter.ReportFile(&buf, fileResult)
+		reporter.Report(&buf, fileResult)
 		result.output = buf.Bytes()
 	}
 

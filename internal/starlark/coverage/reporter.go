@@ -13,8 +13,8 @@ import (
 
 // Reporter outputs coverage data in various formats.
 type Reporter interface {
-	// Write outputs the coverage report to the writer.
-	Write(w io.Writer, report *Report) error
+	// Report outputs the coverage report to the writer.
+	Report(w io.Writer, report *Report) error
 }
 
 // -----------------------------------------------------------------------------
@@ -30,8 +30,8 @@ type TextReporter struct {
 	ShowMissing bool
 }
 
-// Write implements Reporter.
-func (r *TextReporter) Write(w io.Writer, report *Report) error {
+// Report implements Reporter.
+func (r *TextReporter) Report(w io.Writer, report *Report) error {
 	report.Compute()
 
 	// Header
@@ -146,8 +146,8 @@ type JSONFileCov struct {
 	Lines        []int   `json:"missing_lines,omitempty"`
 }
 
-// Write implements Reporter.
-func (r *JSONReporter) Write(w io.Writer, report *Report) error {
+// Report implements Reporter.
+func (r *JSONReporter) Report(w io.Writer, report *Report) error {
 	report.Compute()
 
 	jr := JSONReport{
@@ -257,8 +257,8 @@ type coberturaLine struct {
 	Hits   int `xml:"hits,attr"`
 }
 
-// Write implements Reporter.
-func (r *CoberturaReporter) Write(w io.Writer, report *Report) error {
+// Report implements Reporter.
+func (r *CoberturaReporter) Report(w io.Writer, report *Report) error {
 	report.Compute()
 
 	cov := coberturaCoverage{
@@ -373,8 +373,8 @@ type htmlLineData struct {
 	Class  string
 }
 
-// Write implements Reporter.
-func (r *HTMLReporter) Write(w io.Writer, report *Report) error {
+// Report implements Reporter.
+func (r *HTMLReporter) Report(w io.Writer, report *Report) error {
 	report.Compute()
 
 	title := r.Title
@@ -594,8 +594,8 @@ h1 { margin-bottom: 0.5rem; }
 // This is compatible with genhtml and many IDE extensions.
 type LCOVReporter struct{}
 
-// Write implements Reporter.
-func (r *LCOVReporter) Write(w io.Writer, report *Report) error {
+// Report implements Reporter.
+func (r *LCOVReporter) Report(w io.Writer, report *Report) error {
 	report.Compute()
 
 	for _, path := range report.FilePaths() {

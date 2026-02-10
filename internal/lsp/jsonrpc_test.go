@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestReadRequest(t *testing.T) {
@@ -83,6 +85,40 @@ func TestHandlerFunc(t *testing.T) {
 	}
 	if result != "ok" {
 		t.Errorf("result = %v, want %q", result, "ok")
+	}
+}
+
+func TestCloseWaitsForInFlightHandlers(t *testing.T) {
+	// Build a single request message.
+	msg := `Content-Length: 52` + "\r\n\r\n" +
+		`{"jsonrpc":"2.0","id":1,"method":"slow","params":{}}`
+
+	var handlerDone atomic.Bool
+	var buf bytes.Buffer
+
+	handler := HandlerFunc(func(_ context.Context, _ *Request) (any, error) {
+		time.Sleep(50 * time.Millisecond)
+		handlerDone.Store(true)
+		return "ok", nil
+	})
+
+	conn := NewConn(&mockConn{
+		Reader: bytes.NewReader([]byte(msg)),
+		Writer: &buf,
+	}, handler)
+
+	// Run reads the one request then hits EOF and returns.
+	if err := conn.Run(context.Background()); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	// Close must block until the handler goroutine finishes.
+	if err := conn.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	if !handlerDone.Load() {
+		t.Error("Close returned before in-flight handler completed")
 	}
 }
 

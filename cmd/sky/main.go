@@ -530,7 +530,7 @@ var coreCommandDescriptions = map[string]string{
 
 // findSimilarCommands finds core commands similar to the input.
 func findSimilarCommands(input string) []commandSuggestion {
-	var suggestions []commandSuggestion
+	suggestions := make([]commandSuggestion, 0, len(coreCommands))
 	input = strings.ToLower(input)
 
 	for cmd := range coreCommands {

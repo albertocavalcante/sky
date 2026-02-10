@@ -2,7 +2,6 @@ package query
 
 import (
 	"fmt"
-	"regexp"
 )
 
 // evalFiles evaluates files(pattern) - returns files matching pattern.
@@ -156,7 +155,7 @@ func (e *Engine) evalFilter(args []Expr) (*Result, error) {
 		return nil, fmt.Errorf("filter() first argument must be a string pattern")
 	}
 
-	re, err := regexp.Compile(patternStr.Value)
+	re, err := e.cachedRegexp(patternStr.Value)
 	if err != nil {
 		return nil, fmt.Errorf("filter(): invalid regex pattern: %w", err)
 	}

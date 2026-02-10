@@ -83,11 +83,6 @@ type CallItem interface {
 	Function() string
 }
 
-// AssignItem represents an assignment result.
-type AssignItem interface {
-	Item
-}
-
 // Formatter formats query results for output.
 type Formatter struct {
 	format Format

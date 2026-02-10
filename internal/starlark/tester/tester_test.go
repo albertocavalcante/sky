@@ -329,7 +329,7 @@ func TestTextReporter(t *testing.T) {
 	reporter := &TextReporter{Verbose: false}
 	var buf strings.Builder
 
-	reporter.ReportFile(&buf, &result.Files[0])
+	reporter.Report(&buf, &result.Files[0])
 	output := buf.String()
 
 	if !strings.Contains(output, "PASS") {
@@ -358,8 +358,8 @@ func TestMarkdownReporter(t *testing.T) {
 	reporter := &MarkdownReporter{}
 	var buf strings.Builder
 
-	// ReportFile accumulates results
-	reporter.ReportFile(&buf, &result.Files[0])
+	// Report accumulates results
+	reporter.Report(&buf, &result.Files[0])
 
 	// ReportSummary generates the markdown
 	reporter.ReportSummary(&buf, result)
@@ -416,7 +416,7 @@ func TestMarkdownReporterNoFailures(t *testing.T) {
 	reporter := &MarkdownReporter{}
 	var buf strings.Builder
 
-	reporter.ReportFile(&buf, &result.Files[0])
+	reporter.Report(&buf, &result.Files[0])
 	reporter.ReportSummary(&buf, result)
 	output := buf.String()
 
@@ -457,8 +457,8 @@ func TestGitHubReporter(t *testing.T) {
 	reporter := &GitHubReporter{}
 	var buf strings.Builder
 
-	// ReportFile outputs workflow commands
-	reporter.ReportFile(&buf, &result.Files[0])
+	// Report outputs workflow commands
+	reporter.Report(&buf, &result.Files[0])
 	output := buf.String()
 
 	// Check group commands
@@ -545,7 +545,7 @@ func TestGitHubReporterXPass(t *testing.T) {
 	reporter := &GitHubReporter{}
 	var buf strings.Builder
 
-	reporter.ReportFile(&buf, &result.Files[0])
+	reporter.Report(&buf, &result.Files[0])
 	output := buf.String()
 
 	// XPASS should generate an error annotation

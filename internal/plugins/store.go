@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
+	"time"
 
 	"github.com/gofrs/flock"
 )
@@ -14,6 +16,12 @@ import (
 // Store manages the on-disk plugin catalog and marketplace list.
 type Store struct {
 	Root string
+
+	mu                  sync.Mutex
+	cachedPlugins       []Plugin
+	pluginsModTime      time.Time
+	cachedMarketplaces  []Marketplace
+	marketplacesModTime time.Time
 }
 
 // NewStore creates a store rooted at the provided path.
@@ -35,7 +43,7 @@ func DefaultStore() (*Store, error) {
 }
 
 // Ensure creates the config directories if needed.
-func (s Store) Ensure() error {
+func (s *Store) Ensure() error {
 	if err := os.MkdirAll(s.Root, 0o755); err != nil {
 		return fmt.Errorf("config dir: %w", err)
 	}
@@ -46,28 +54,28 @@ func (s Store) Ensure() error {
 }
 
 // PluginsDir returns the plugin binaries directory.
-func (s Store) PluginsDir() string {
+func (s *Store) PluginsDir() string {
 	return filepath.Join(s.Root, "plugins")
 }
 
 // PluginsFile returns the plugins catalog path.
-func (s Store) PluginsFile() string {
+func (s *Store) PluginsFile() string {
 	return filepath.Join(s.Root, "plugins.json")
 }
 
 // MarketplacesFile returns the marketplace catalog path.
-func (s Store) MarketplacesFile() string {
+func (s *Store) MarketplacesFile() string {
 	return filepath.Join(s.Root, "marketplaces.json")
 }
 
 // LockFile returns the path to the lock file.
-func (s Store) LockFile() string {
+func (s *Store) LockFile() string {
 	return filepath.Join(s.Root, "lock")
 }
 
 // withWriteLock executes the provided function while holding an exclusive write lock
 // on the store. It ensures the store's root directory exists before acquiring the lock.
-func (s Store) withWriteLock(fn func() error) error {
+func (s *Store) withWriteLock(fn func() error) error {
 	if err := s.Ensure(); err != nil {
 		return err
 	}
@@ -83,7 +91,7 @@ func (s Store) withWriteLock(fn func() error) error {
 
 // withReadLock executes the provided function while holding a shared read lock
 // on the store. It ensures the store's root directory exists before acquiring the lock.
-func (s Store) withReadLock(fn func() error) error {
+func (s *Store) withReadLock(fn func() error) error {
 	if err := s.Ensure(); err != nil {
 		return err
 	}
@@ -98,7 +106,7 @@ func (s Store) withReadLock(fn func() error) error {
 }
 
 // PluginPath returns the expected binary path for a plugin type.
-func (s Store) PluginPath(name string, pluginType PluginType) string {
+func (s *Store) PluginPath(name string, pluginType PluginType) string {
 	filename := name
 	if pluginType == TypeWasm {
 		filename = name + ".wasm"
@@ -107,7 +115,7 @@ func (s Store) PluginPath(name string, pluginType PluginType) string {
 }
 
 // LoadPlugins loads the installed plugins list, acquiring a read lock.
-func (s Store) LoadPlugins() ([]Plugin, error) {
+func (s *Store) LoadPlugins() ([]Plugin, error) {
 	var plugins []Plugin
 	err := s.withReadLock(func() error {
 		var loadErr error
@@ -121,7 +129,24 @@ func (s Store) LoadPlugins() ([]Plugin, error) {
 }
 
 // loadPluginsNL loads the installed plugins list without acquiring a lock.
-func (s Store) loadPluginsNL() ([]Plugin, error) {
+// It uses an in-memory cache keyed on the file's modification time to avoid
+// repeated file I/O and JSON parsing when the data has not changed.
+func (s *Store) loadPluginsNL() ([]Plugin, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	info, err := os.Stat(s.PluginsFile())
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return []Plugin{}, nil
+		}
+		return nil, fmt.Errorf("load plugins: %w", err)
+	}
+
+	if s.cachedPlugins != nil && info.ModTime().Equal(s.pluginsModTime) {
+		return s.cachedPlugins, nil
+	}
+
 	var plugins []Plugin
 	if err := readJSON(s.PluginsFile(), &plugins); err != nil {
 		return nil, fmt.Errorf("load plugins: %w", err)
@@ -137,19 +162,29 @@ func (s Store) loadPluginsNL() ([]Plugin, error) {
 	sort.Slice(plugins, func(i, j int) bool {
 		return plugins[i].Name < plugins[j].Name
 	})
+
+	s.cachedPlugins = plugins
+	s.pluginsModTime = info.ModTime()
 	return plugins, nil
 }
 
-// savePlugins persists the plugin list.
-func (s Store) savePlugins(plugins []Plugin) error {
+// savePlugins persists the plugin list and invalidates the cache.
+func (s *Store) savePlugins(plugins []Plugin) error {
 	if err := s.Ensure(); err != nil {
 		return err
 	}
-	return writeJSON(s.PluginsFile(), plugins)
+	if err := writeJSON(s.PluginsFile(), plugins); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.cachedPlugins = nil
+	s.pluginsModTime = time.Time{}
+	s.mu.Unlock()
+	return nil
 }
 
 // UpsertPlugin inserts or replaces a plugin entry.
-func (s Store) UpsertPlugin(plugin Plugin) error {
+func (s *Store) UpsertPlugin(plugin Plugin) error {
 	return s.withWriteLock(func() error {
 		if err := ValidateName(plugin.Name); err != nil {
 			return err
@@ -176,7 +211,7 @@ func (s Store) UpsertPlugin(plugin Plugin) error {
 }
 
 // FindPlugin returns the plugin entry if installed.
-func (s Store) FindPlugin(name string) (*Plugin, error) {
+func (s *Store) FindPlugin(name string) (*Plugin, error) {
 	if err := ValidateName(name); err != nil {
 		return nil, err
 	}
@@ -198,7 +233,7 @@ func (s Store) FindPlugin(name string) (*Plugin, error) {
 }
 
 // RemovePlugin removes a plugin entry and its binary.
-func (s Store) RemovePlugin(name string) (*Plugin, error) {
+func (s *Store) RemovePlugin(name string) (*Plugin, error) {
 	var removed *Plugin
 	err := s.withWriteLock(func() error {
 		if err := ValidateName(name); err != nil {
@@ -237,7 +272,7 @@ func (s Store) RemovePlugin(name string) (*Plugin, error) {
 }
 
 // LoadMarketplaces loads the configured marketplaces, acquiring a read lock.
-func (s Store) LoadMarketplaces() ([]Marketplace, error) {
+func (s *Store) LoadMarketplaces() ([]Marketplace, error) {
 	var marketplaces []Marketplace
 	err := s.withReadLock(func() error {
 		var loadErr error
@@ -251,7 +286,24 @@ func (s Store) LoadMarketplaces() ([]Marketplace, error) {
 }
 
 // loadMarketplacesNL loads the configured marketplaces without acquiring a lock.
-func (s Store) loadMarketplacesNL() ([]Marketplace, error) {
+// It uses an in-memory cache keyed on the file's modification time to avoid
+// repeated file I/O and JSON parsing when the data has not changed.
+func (s *Store) loadMarketplacesNL() ([]Marketplace, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	info, err := os.Stat(s.MarketplacesFile())
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return []Marketplace{}, nil
+		}
+		return nil, fmt.Errorf("load marketplaces: %w", err)
+	}
+
+	if s.cachedMarketplaces != nil && info.ModTime().Equal(s.marketplacesModTime) {
+		return s.cachedMarketplaces, nil
+	}
+
 	var marketplaces []Marketplace
 	if err := readJSON(s.MarketplacesFile(), &marketplaces); err != nil {
 		return nil, fmt.Errorf("load marketplaces: %w", err)
@@ -262,19 +314,29 @@ func (s Store) loadMarketplacesNL() ([]Marketplace, error) {
 	sort.Slice(marketplaces, func(i, j int) bool {
 		return marketplaces[i].Name < marketplaces[j].Name
 	})
+
+	s.cachedMarketplaces = marketplaces
+	s.marketplacesModTime = info.ModTime()
 	return marketplaces, nil
 }
 
-// saveMarketplaces persists the marketplace list.
-func (s Store) saveMarketplaces(marketplaces []Marketplace) error {
+// saveMarketplaces persists the marketplace list and invalidates the cache.
+func (s *Store) saveMarketplaces(marketplaces []Marketplace) error {
 	if err := s.Ensure(); err != nil {
 		return err
 	}
-	return writeJSON(s.MarketplacesFile(), marketplaces)
+	if err := writeJSON(s.MarketplacesFile(), marketplaces); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.cachedMarketplaces = nil
+	s.marketplacesModTime = time.Time{}
+	s.mu.Unlock()
+	return nil
 }
 
 // UpsertMarketplace inserts or replaces a marketplace entry.
-func (s Store) UpsertMarketplace(marketplace Marketplace) error {
+func (s *Store) UpsertMarketplace(marketplace Marketplace) error {
 	return s.withWriteLock(func() error {
 		if err := ValidateName(marketplace.Name); err != nil {
 			return err
@@ -304,7 +366,7 @@ func (s Store) UpsertMarketplace(marketplace Marketplace) error {
 }
 
 // RemoveMarketplace removes a marketplace entry.
-func (s Store) RemoveMarketplace(name string) (*Marketplace, error) {
+func (s *Store) RemoveMarketplace(name string) (*Marketplace, error) {
 	var removed *Marketplace
 	err := s.withWriteLock(func() error {
 		if err := ValidateName(name); err != nil {
@@ -336,17 +398,15 @@ func (s Store) RemoveMarketplace(name string) (*Marketplace, error) {
 }
 
 func readJSON(path string, target any) error {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
 		return err
 	}
-	if len(data) == 0 {
-		return nil
-	}
-	return json.Unmarshal(data, target)
+	defer f.Close()
+	return json.NewDecoder(f).Decode(target)
 }
 
 func writeJSON(path string, value any) error {

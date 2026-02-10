@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/albertocavalcante/sky/internal/starlark/query/index"
 )
@@ -36,13 +37,17 @@ func (i Item) key() string {
 
 // Engine evaluates queries against an index.
 type Engine struct {
-	index     *index.Index
-	loadGraph *index.LoadGraph // lazily built
+	index       *index.Index
+	loadGraph   *index.LoadGraph          // lazily built
+	regexpCache map[string]*regexp.Regexp // compiled regexp cache
 }
 
 // NewEngine creates a query engine with the given index.
 func NewEngine(idx *index.Index) *Engine {
-	return &Engine{index: idx}
+	return &Engine{
+		index:       idx,
+		regexpCache: make(map[string]*regexp.Regexp),
+	}
 }
 
 // getLoadGraph returns the load graph, building it lazily if needed.
@@ -51,6 +56,20 @@ func (e *Engine) getLoadGraph() *index.LoadGraph {
 		e.loadGraph = e.index.BuildLoadGraph()
 	}
 	return e.loadGraph
+}
+
+// cachedRegexp returns a compiled regexp for the given pattern, reusing
+// a previously compiled instance when the same pattern is requested again.
+func (e *Engine) cachedRegexp(pattern string) (*regexp.Regexp, error) {
+	if re, ok := e.regexpCache[pattern]; ok {
+		return re, nil
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, err
+	}
+	e.regexpCache[pattern] = re
+	return re, nil
 }
 
 // Eval evaluates a query expression and returns results.

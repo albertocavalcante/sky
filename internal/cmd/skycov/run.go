@@ -148,7 +148,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	}
 
 	// Generate report
-	if err := reporter.Write(w, report); err != nil {
+	if err := reporter.Report(w, report); err != nil {
 		writef(stderr, "skycov: %v\n", err)
 		return exitError
 	}

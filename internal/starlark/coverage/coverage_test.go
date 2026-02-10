@@ -206,7 +206,7 @@ func TestTextReporter(t *testing.T) {
 
 	var buf bytes.Buffer
 	r := &TextReporter{Verbose: true, ShowMissing: true}
-	if err := r.Write(&buf, report); err != nil {
+	if err := r.Report(&buf, report); err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
 
@@ -230,7 +230,7 @@ func TestJSONReporter(t *testing.T) {
 
 	var buf bytes.Buffer
 	r := &JSONReporter{Pretty: true}
-	if err := r.Write(&buf, report); err != nil {
+	if err := r.Report(&buf, report); err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
 
@@ -261,7 +261,7 @@ func TestCoberturaReporter(t *testing.T) {
 
 	var buf bytes.Buffer
 	r := &CoberturaReporter{SourceDir: "/workspace"}
-	if err := r.Write(&buf, report); err != nil {
+	if err := r.Report(&buf, report); err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
 
@@ -290,7 +290,7 @@ func TestLCOVReporter(t *testing.T) {
 
 	var buf bytes.Buffer
 	r := &LCOVReporter{}
-	if err := r.Write(&buf, report); err != nil {
+	if err := r.Report(&buf, report); err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
 
@@ -318,7 +318,7 @@ func TestHTMLReporter(t *testing.T) {
 
 	var buf bytes.Buffer
 	r := &HTMLReporter{Title: "Test Coverage"}
-	if err := r.Write(&buf, report); err != nil {
+	if err := r.Report(&buf, report); err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
 
@@ -350,7 +350,7 @@ func TestHTMLReporterEscaping(t *testing.T) {
 
 	var buf bytes.Buffer
 	r := &HTMLReporter{}
-	if err := r.Write(&buf, report); err != nil {
+	if err := r.Report(&buf, report); err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
 

@@ -11,7 +11,7 @@ import (
 )
 
 // SearchMarketplaces returns plugins matching the query across marketplaces.
-func (s Store) SearchMarketplaces(ctx context.Context, query, marketplaceName string) ([]SearchResult, error) {
+func (s *Store) SearchMarketplaces(ctx context.Context, query, marketplaceName string) ([]SearchResult, error) {
 	marketplaces, err := s.LoadMarketplaces()
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func (s Store) SearchMarketplaces(ctx context.Context, query, marketplaceName st
 }
 
 // ResolveMarketplacePlugin finds a plugin entry by name.
-func (s Store) ResolveMarketplacePlugin(ctx context.Context, name, marketplaceName string) (Marketplace, MarketplacePlugin, error) {
+func (s *Store) ResolveMarketplacePlugin(ctx context.Context, name, marketplaceName string) (Marketplace, MarketplacePlugin, error) {
 	if err := ValidateName(name); err != nil {
 		return Marketplace{}, MarketplacePlugin{}, err
 	}

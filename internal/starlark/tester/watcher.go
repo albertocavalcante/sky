@@ -216,7 +216,10 @@ func (w *Watcher) resolveLoadPath(fromFile, loadPath string) string {
 		return ""
 	}
 
-	absPath, _ := filepath.Abs(resolved)
+	absPath, err := filepath.Abs(resolved)
+	if err != nil {
+		return ""
+	}
 	return absPath
 }
 
@@ -281,7 +284,11 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	absPath, _ := filepath.Abs(event.Name)
+	absPath, err := filepath.Abs(event.Name)
+	if err != nil {
+		w.Errors <- fmt.Errorf("resolve absolute path for event %s: %w", event.Name, err)
+		return
+	}
 
 	var affected []string
 
@@ -333,7 +340,11 @@ func (w *Watcher) AffectedTestFiles(file string) []string {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	absPath, _ := filepath.Abs(file)
+	absPath, err := filepath.Abs(file)
+	if err != nil {
+		w.Errors <- fmt.Errorf("resolve absolute path for %s: %w", file, err)
+		return nil
+	}
 
 	var affected []string
 

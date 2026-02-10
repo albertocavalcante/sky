@@ -14,7 +14,7 @@ import (
 )
 
 // InstallFromPath installs a plugin binary from a local path.
-func (s Store) InstallFromPath(name, path, version string, pluginType PluginType) (Plugin, error) {
+func (s *Store) InstallFromPath(name, path, version string, pluginType PluginType) (Plugin, error) {
 	if err := ValidateName(name); err != nil {
 		return Plugin{}, err
 	}
@@ -56,7 +56,7 @@ func (s Store) InstallFromPath(name, path, version string, pluginType PluginType
 }
 
 // InstallFromURL installs a plugin binary from a URL.
-func (s Store) InstallFromURL(ctx context.Context, name, url, expectedSHA, version, description string, pluginType PluginType) (Plugin, error) {
+func (s *Store) InstallFromURL(ctx context.Context, name, url, expectedSHA, version, description string, pluginType PluginType) (Plugin, error) {
 	if err := ValidateName(name); err != nil {
 		return Plugin{}, err
 	}
@@ -151,7 +151,7 @@ func (s Store) InstallFromURL(ctx context.Context, name, url, expectedSHA, versi
 }
 
 // InstallFromMarketplace installs a plugin using configured marketplaces.
-func (s Store) InstallFromMarketplace(ctx context.Context, name, marketplaceName string) (Plugin, error) {
+func (s *Store) InstallFromMarketplace(ctx context.Context, name, marketplaceName string) (Plugin, error) {
 	marketplace, entry, err := s.ResolveMarketplacePlugin(ctx, name, marketplaceName)
 	if err != nil {
 		return Plugin{}, err
