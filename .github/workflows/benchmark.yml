@@ -87,7 +87,7 @@ jobs:
       # ----------------------------------------------------------------------
       # actions/upload-artifact v4.6.0
       - name: Upload benchmark results
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: benchmark-results
           path: |
@@ -182,7 +182,7 @@ jobs:
             ${{ runner.temp }}/benchmark-report.md
 
       - name: Upload comparison results
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: benchmark-comparison
           path: |
