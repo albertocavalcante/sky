@@ -5,6 +5,13 @@ go_library(
     srcs = [
         "codeaction.go",
         "folding.go",
+        "handle_completion.go",
+        "handle_definition.go",
+        "handle_diagnostics.go",
+        "handle_formatting.go",
+        "handle_hover.go",
+        "handle_symbols.go",
+        "handle_textdocument.go",
         "inlayhints.go",
         "jsonrpc.go",
         "links.go",
