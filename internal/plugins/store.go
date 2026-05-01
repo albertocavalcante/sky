@@ -405,7 +405,7 @@ func readJSON(path string, target any) error {
 		}
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return json.NewDecoder(f).Decode(target)
 }
 
