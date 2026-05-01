@@ -591,7 +591,9 @@ func runTests(
 		// Report file immediately for text and GitHub reporters
 		switch reporter.(type) {
 		case *tester.TextReporter, *tester.GitHubReporter:
-			reporter.Report(stdout, fileResult)
+			if err := reporter.Report(stdout, fileResult); err != nil {
+				writef(stderr, "skytest: reporting %s: %v\n", file, err)
+			}
 		}
 
 		// Fail-fast: stop processing more files after first failure
@@ -673,7 +675,9 @@ func runSequential(
 		// Report file immediately for text and GitHub reporters
 		switch reporter.(type) {
 		case *tester.TextReporter, *tester.GitHubReporter:
-			reporter.Report(stdout, fileResult)
+			if err := reporter.Report(stdout, fileResult); err != nil {
+				return nil, fmt.Errorf("reporting %s: %w", file, err)
+			}
 		}
 
 		// Fail-fast: stop processing more files after first failure
@@ -845,7 +849,10 @@ func runFileForParallel(
 	switch reporter.(type) {
 	case *tester.TextReporter, *tester.GitHubReporter:
 		var buf bytes.Buffer
-		reporter.Report(&buf, fileResult)
+		if err := reporter.Report(&buf, fileResult); err != nil {
+			result.err = fmt.Errorf("reporting %s: %w", file, err)
+			return result
+		}
 		result.output = buf.Bytes()
 	}
 
