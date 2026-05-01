@@ -5,42 +5,52 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/albertocavalcante/sky)](go.mod)
 
-A comprehensive Go toolchain for Starlark, the configuration language used by
-Bazel, Buck, and other build systems.
+A Go toolchain for Starlark, the configuration language used by Bazel, Buck,
+and other build systems.
 
 ## Tools
 
-| Tool       | Description                            | Status    |
-| ---------- | -------------------------------------- | --------- |
-| `sky`      | Plugin-first CLI and unified interface | ✅ Stable |
-| `skyfmt`   | Code formatter (buildifier-based)      | ✅ Stable |
-| `skylint`  | Linter with configurable rules         | ✅ Stable |
-| `skycheck` | Static analyzer (type checking)        | ✅ Stable |
-| `skyquery` | Query tool for Starlark sources        | ✅ Stable |
-| `skydoc`   | Documentation generator                | ✅ Stable |
-| `skytest`  | Test runner for Starlark tests         | ✅ Stable |
-| `skyrepl`  | Interactive REPL                       | ✅ Stable |
-| `skycov`   | Code coverage reporter                 | ✅ Stable |
-| `skyls`    | Language Server Protocol (LSP)         | ✅ Stable |
+| Tool       | Description                             | Status       |
+| ---------- | --------------------------------------- | ------------ |
+| `sky`      | Plugin-first CLI and unified interface  | Beta         |
+| `skyfmt`   | Code formatter (buildifier-based)       | Beta         |
+| `skylint`  | Linter with configurable rules          | Beta         |
+| `skytest`  | Test runner for Starlark tests          | Beta         |
+| `skydoc`   | Documentation generator                 | Alpha        |
+| `skyquery` | Query tool for Starlark sources         | Alpha        |
+| `skycheck` | Static analyzer for semantic checks     | Experimental |
+| `skyrepl`  | Interactive REPL                        | Experimental |
+| `skycov`   | Code coverage reporter                  | Experimental |
+| `skyls`    | Language Server Protocol (LSP)          | Experimental |
 
 ## Installation
 
 ### From source (Go)
 
 ```bash
-# Install individual tools
-go install github.com/albertocavalcante/sky/cmd/sky@latest
-go install github.com/albertocavalcante/sky/cmd/skylint@latest
-go install github.com/albertocavalcante/sky/cmd/skyfmt@latest
+# Install individual tools from a branch or commit
+go install github.com/albertocavalcante/sky/cmd/sky@main
+go install github.com/albertocavalcante/sky/cmd/skylint@main
+go install github.com/albertocavalcante/sky/cmd/skyfmt@main
 # ... etc
 
 # Or build the fat binary with all tools embedded
-go install -tags=sky_full github.com/albertocavalcante/sky/cmd/sky@latest
+go install -tags=sky_full github.com/albertocavalcante/sky/cmd/sky@main
 ```
 
-### From releases
+For reproducible installs, replace `main` with a full commit hash.
 
-Download pre-built binaries from the [releases page](https://github.com/albertocavalcante/sky/releases).
+### Snapshots
+
+No tags yet. Snapshot builds use this form:
+
+```text
+v0.0.0-YYYYMMDDHHMMSS-<commit12>
+```
+
+The timestamp is the UTC commit time. The suffix is the commit hash. Snapshot
+binaries are attached to Snapshot workflow runs. See
+[docs/RELEASES.md](docs/RELEASES.md).
 
 ## Usage
 
@@ -85,6 +95,8 @@ skydoc -format json file.star  # Generate JSON docs
 - Go to definition
 - Document symbols
 - Code formatting
+
+Rename, references, and code actions are experimental.
 
 **VS Code:**
 
@@ -194,7 +206,7 @@ Hooks check: formatting, go.mod tidy, build, and tests.
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

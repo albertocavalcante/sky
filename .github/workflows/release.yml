@@ -1,33 +1,26 @@
-name: Release
+name: Snapshot
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Tag to release (e.g., v1.0.0)"
-        required: true
-        type: string
-      dry_run:
-        description: "Dry run (don't create release)"
+      ref:
+        description: "Branch, commit, or ref to build"
         required: false
-        type: boolean
-        default: false
+        type: string
+        default: "main"
+  push:
+    branches:
+      - main
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   GO_VERSION: "1.25"
 
 jobs:
-  # ===========================================================================
-  # Job 1: Build binaries for all platforms
-  # ===========================================================================
   build:
-    name: Build
+    name: Build Snapshot
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -36,65 +29,78 @@ jobs:
     strategy:
       matrix:
         include:
-          # Linux
           - goos: linux
             goarch: amd64
             suffix: ""
           - goos: linux
             goarch: arm64
             suffix: ""
-          # macOS
           - goos: darwin
             goarch: amd64
             suffix: ""
           - goos: darwin
             goarch: arm64
             suffix: ""
-          # Windows
           - goos: windows
             goarch: amd64
             suffix: ".exe"
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
+          ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Get version
+      - name: Compute immutable version
         id: version
         run: |
-          if [ -n "${{ inputs.tag }}" ]; then
-            VERSION="${{ inputs.tag }}"
-          else
-            VERSION="${GITHUB_REF#refs/tags/}"
-          fi
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Building version: ${VERSION}"
+          commit="$(git rev-parse HEAD)"
+          short_commit="$(git rev-parse --short=12 HEAD)"
+          commit_date="$(git show -s --format=%cI HEAD)"
+          timestamp="$(date -u -d "$commit_date" +%Y%m%d%H%M%S)"
+          version="v0.0.0-${timestamp}-${short_commit}"
 
-      - name: Build sky (minimal)
+          {
+            echo "commit=${commit}"
+            echo "short_commit=${short_commit}"
+            echo "date=${commit_date}"
+            echo "timestamp=${timestamp}"
+            echo "version=${version}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Building ${version}"
+
+      - name: Build sky minimal
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
           mkdir -p dist
-          go build -trimpath -ldflags="-s -w -X github.com/albertocavalcante/sky/internal/version.version=${{ steps.version.outputs.version }}" \
+          go build -trimpath -ldflags="-s -w \
+            -X github.com/albertocavalcante/sky/internal/version.version=${{ steps.version.outputs.version }} \
+            -X github.com/albertocavalcante/sky/internal/version.commit=${{ steps.version.outputs.commit }} \
+            -X github.com/albertocavalcante/sky/internal/version.date=${{ steps.version.outputs.date }}" \
             -o dist/sky-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} \
             ./cmd/sky
 
-      - name: Build sky_full (all tools embedded)
+      - name: Build sky full
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          go build -trimpath -tags=sky_full -ldflags="-s -w -X github.com/albertocavalcante/sky/internal/version.version=${{ steps.version.outputs.version }}" \
+          go build -trimpath -tags=sky_full -ldflags="-s -w \
+            -X github.com/albertocavalcante/sky/internal/version.version=${{ steps.version.outputs.version }} \
+            -X github.com/albertocavalcante/sky/internal/version.commit=${{ steps.version.outputs.commit }} \
+            -X github.com/albertocavalcante/sky/internal/version.date=${{ steps.version.outputs.date }}" \
             -o dist/sky_full-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} \
             ./cmd/sky
 
@@ -104,166 +110,54 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          for tool in skyfmt skylint skycheck skyquery skydoc skytest skyrepl skyls; do
-            go build -trimpath -ldflags="-s -w -X github.com/albertocavalcante/sky/internal/version.version=${{ steps.version.outputs.version }}" \
+          for tool in skyfmt skylint skycheck skyquery skydoc skytest skyrepl skyls skycov sky-ci; do
+            go build -trimpath -ldflags="-s -w \
+              -X github.com/albertocavalcante/sky/internal/version.version=${{ steps.version.outputs.version }} \
+              -X github.com/albertocavalcante/sky/internal/version.commit=${{ steps.version.outputs.commit }} \
+              -X github.com/albertocavalcante/sky/internal/version.date=${{ steps.version.outputs.date }}" \
               -o dist/${tool}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} \
               ./cmd/${tool}
           done
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v6
-        with:
-          name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/
-          retention-days: 1
-
-  # ===========================================================================
-  # Job 2: Create release with all binaries
-  # ===========================================================================
-  release:
-    name: Release
-    runs-on: ubuntu-24.04
-    needs: build
-    timeout-minutes: 10
-    if: ${{ !inputs.dry_run }}
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 1
-
-      - name: Get version
-        id: version
-        run: |
-          if [ -n "${{ inputs.tag }}" ]; then
-            VERSION="${{ inputs.tag }}"
-          else
-            VERSION="${GITHUB_REF#refs/tags/}"
-          fi
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v7
-        with:
-          path: artifacts
-          pattern: binaries-*
-          merge-multiple: true
-
-      - name: List artifacts
-        run: ls -la artifacts/
-
-      - name: Create tar.gz archives for Homebrew
-        working-directory: artifacts
-        run: |
-          # Create tar.gz archives for sky_full (Homebrew distribution)
-          for file in sky_full-darwin-* sky_full-linux-*; do
-            if [[ -f "$file" && ! "$file" == *.exe ]]; then
-              # Extract os-arch from filename (e.g., sky_full-darwin-arm64 -> darwin-arm64)
-              os_arch="${file#sky_full-}"
-              # Create archive with binary renamed to just "sky"
-              cp "$file" sky
-              chmod +x sky
-              tar -czf "sky-${os_arch}.tar.gz" sky
-              rm sky
-              # Create individual sha256 file for Homebrew action
-              sha256sum "sky-${os_arch}.tar.gz" | awk '{print $1}' > "sky-${os_arch}.tar.gz.sha256"
-            fi
-          done
-
       - name: Create checksums
-        working-directory: artifacts
-        run: |
-          sha256sum * > checksums.txt
-          cat checksums.txt
+        working-directory: dist
+        run: sha256sum ./* > checksums-${{ matrix.goos }}-${{ matrix.goarch }}.txt
 
-      - name: Create release
-        uses: softprops/action-gh-release@v2
+      - name: Upload snapshot artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: Sky ${{ steps.version.outputs.version }}
-          draft: false
-          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
-          generate_release_notes: true
-          files: |
-            artifacts/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: sky-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/
+          retention-days: 30
 
-      - name: Generate Eukia App Token
-        id: eukia
-        continue-on-error: true
-        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
-        with:
-          app-id: ${{ vars.EUKIA_APP_ID }}
-          private-key: ${{ secrets.EUKIA_APP_PRIVATE_KEY }}
-          owner: albertocavalcante
-          repositories: homebrew-tap
-          permission-contents: write
-
-      - name: Update Homebrew tap
-        if: steps.eukia.outcome == 'success' && !contains(steps.version.outputs.version, '-')
-        continue-on-error: true
-        uses: albertocavalcante/actions/update-homebrew-tap@main
-        with:
-          tap-repo: albertocavalcante/homebrew-tap
-          formula-name: sky
-          version: ${{ steps.version.outputs.version }}
-          github-token: ${{ steps.eukia.outputs.token }}
-          template: packaging/homebrew/sky.rb.in
-          description: "Starlark developer toolkit - formatter, linter, LSP, and more"
-          homepage: https://github.com/albertocavalcante/sky
-          license: Apache-2.0
-          commit-message: "Update sky to ${{ steps.version.outputs.version }}"
-          git-user-name: "Eukia[bot]"
-          git-user-email: "eukia[bot]@users.noreply.github.com"
-          assets: |
-            {
-              "darwin-arm64": {
-                "url": "https://github.com/albertocavalcante/sky/releases/download/${{ steps.version.outputs.version }}/sky-darwin-arm64.tar.gz"
-              },
-              "darwin-amd64": {
-                "url": "https://github.com/albertocavalcante/sky/releases/download/${{ steps.version.outputs.version }}/sky-darwin-amd64.tar.gz"
-              },
-              "linux-aarch64": {
-                "url": "https://github.com/albertocavalcante/sky/releases/download/${{ steps.version.outputs.version }}/sky-linux-arm64.tar.gz"
-              },
-              "linux-amd64": {
-                "url": "https://github.com/albertocavalcante/sky/releases/download/${{ steps.version.outputs.version }}/sky-linux-amd64.tar.gz"
-              }
-            }
-
-  # ===========================================================================
-  # Job 3: Dry run summary (when dry_run is true)
-  # ===========================================================================
-  dry-run-summary:
-    name: Dry Run Summary
+  summary:
+    name: Snapshot Summary
     runs-on: ubuntu-24.04
     needs: build
-    if: ${{ inputs.dry_run }}
-    timeout-minutes: 5
+    if: always()
+    permissions:
+      contents: read
 
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v7
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          path: artifacts
-          pattern: binaries-*
-          merge-multiple: true
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 1
+          persist-credentials: false
 
-      - name: Summary
+      - name: Summarize
         run: |
-          echo "## Dry Run Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Would release version: ${{ inputs.tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          ls -lh artifacts/ >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Checksums" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cd artifacts && sha256sum * >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          short_commit="$(git rev-parse --short=12 HEAD)"
+          commit_date="$(git show -s --format=%cI HEAD)"
+          timestamp="$(date -u -d "$commit_date" +%Y%m%d%H%M%S)"
+          version="v0.0.0-${timestamp}-${short_commit}"
+
+          {
+            echo "## Snapshot"
+            echo ""
+            echo "- Version: \`${version}\`"
+            echo "- Commit: \`$(git rev-parse HEAD)\`"
+            echo "- Commit date: \`${commit_date}\`"
+            echo ""
+            echo "No tag or GitHub Release was created. Artifacts are attached to this workflow run."
+          } >> "$GITHUB_STEP_SUMMARY"

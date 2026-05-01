@@ -20,7 +20,7 @@ inputs:
     required: false
     default: '0'
   annotations:
-    description: 'Enable GitHub PR annotations'
+    description: 'Enable GitHub annotations'
     required: false
     default: 'true'
   summary:
@@ -28,9 +28,9 @@ inputs:
     required: false
     default: 'true'
   version:
-    description: 'Sky version to install (e.g., latest, v0.1.0)'
+    description: 'Sky module version, branch, or commit hash to install. Defaults to the action ref.'
     required: false
-    default: 'latest'
+    default: ''
   fail-fast:
     description: 'Stop on first test failure'
     required: false
@@ -55,21 +55,20 @@ runs:
   using: 'composite'
   steps:
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
       with:
-        go-version: '1.22'
+        go-version: '1.25'
         cache: true
 
     - name: Install sky tools
       shell: bash
       run: |
-        if [ "${{ inputs.version }}" = "latest" ]; then
-          go install github.com/albertocavalcante/sky/cmd/skytest@latest
-          go install github.com/albertocavalcante/sky/cmd/sky-ci@latest
-        else
-          go install github.com/albertocavalcante/sky/cmd/skytest@${{ inputs.version }}
-          go install github.com/albertocavalcante/sky/cmd/sky-ci@${{ inputs.version }}
+        version="${{ inputs.version }}"
+        if [ -z "$version" ]; then
+          version="${GITHUB_ACTION_REF:-main}"
         fi
+        go install "github.com/albertocavalcante/sky/cmd/skytest@${version}"
+        go install "github.com/albertocavalcante/sky/cmd/sky-ci@${version}"
 
     # Pipeline pattern: skytest outputs JSON, sky-ci transforms to GitHub format
     # This is cross-platform - bash is available on all GitHub runners
