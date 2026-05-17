@@ -29,6 +29,7 @@ git_override(
 )
 
 go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
+
 # Tracks go.mod's `go` directive. Bumped to 1.26 alongside the
 # starlark-cst-go / bazel-cst-go / starlark-format-go deps whose go.mod
 # declares 1.26 — gazelle's go_repository fetch refuses to build
