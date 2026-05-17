@@ -2,18 +2,25 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "skyfmt",
-    srcs = ["run.go"],
+    srcs = [
+        "compare.go",
+        "run.go",
+    ],
     importpath = "github.com/albertocavalcante/sky/internal/cmd/skyfmt",
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/starlark/filekind",
         "//internal/starlark/formatter",
         "//internal/version",
+        "@com_github_pmezard_go_difflib//difflib",
     ],
 )
 
 go_test(
     name = "skyfmt_test",
-    srcs = ["run_test.go"],
+    srcs = [
+        "compare_test.go",
+        "run_test.go",
+    ],
     embed = [":skyfmt"],
 )

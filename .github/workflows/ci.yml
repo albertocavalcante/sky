@@ -79,22 +79,7 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-    # TEMPORARILY SKIPPED — see https://github.com/albertocavalcante/sky/issues/54.
-    #
-    # The 3 CST library siblings (starlark-cst-go, bazel-cst-go,
-    # starlark-format-go) are currently Go-only — they have no
-    # MODULE.bazel exposing themselves as Bazel modules, so sky's
-    # MODULE.bazel can't register them as `bazel_dep` and Gazelle
-    # can't regenerate internal/starlark/formatter/BUILD.bazel against
-    # the new engine.* files. Bazel build fails with `undefined: Engine`.
-    #
-    # Go-side CI fully validates the engine (go-build, lint, format,
-    # security, skyfmt -engine=compare). Bazel just hasn't been
-    # rewired for the new module graph yet — separate workstream
-    # (touches 4 repos: each lib + sky's MODULE.bazel + Gazelle regen).
-    #
-    # Remove this `if:` once #54 lands.
-    if: false
+      id-token: write   # OIDC federation for octo-sts (private module auth)
 
     steps:
       # actions/checkout v6.0.1
@@ -102,6 +87,14 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+
+      # Same composite as the Go jobs: configures GOPRIVATE and per-repo
+      # `git insteadOf` so gazelle's go_repository fetcher can pull the
+      # 3 private CST libs declared in go.mod via short-lived octo-sts
+      # tokens. Bazel reads go.mod via the go_deps extension, then
+      # invokes git internally for each module fetch — the same
+      # url.insteadOf rules transparently authenticate those fetches.
+      - uses: ./.github/actions/setup-cst-private-auth
 
       # bazel-contrib/setup-bazel v0.18.0
       - name: Setup Bazel
