@@ -1,9 +1,8 @@
 # PLAN — CST library versioning migration
 
-**Status:** in-progress — phase 1 (local replace + multi-checkout) shipped in PR #53.
+**Status:** Phase 2 shipped — Go pseudo-versions, octo-sts auth. Tagged releases (Phase 3) intentionally deferred.
 **Owner:** @albertocavalcante
-**Tracks:** the migration from `replace ../foo` to versioned `require` for the
-three private library repos that back the `formatter.CST` engine.
+**Tracks:** how sky depends on the three private CST library repos.
 
 ## Context
 
@@ -13,119 +12,85 @@ three private library repos that back the `formatter.CST` engine.
 - `github.com/albertocavalcante/bazel-cst-go` — Bazel dialect (BUILD/.bzl/MODULE)
 - `github.com/albertocavalcante/starlark-format-go` — neutral spec-only formatter
 
-All three are **private** GitHub repos. Sky pulls them in via `replace`
-directives in `go.mod`, and CI multi-checkouts them as siblings:
-
-```
-<workspace>/
-  sky/                  ← this repo
-  starlark-cst-go/      ← sibling (LIBRARIES_PAT-checkout in CI)
-  bazel-cst-go/         ← sibling
-  starlark-format-go/   ← sibling
-```
-
-This is the **simplest working setup** that lets:
-
-- local devs iterate on libs without publishing
-- CI build sky end-to-end against private libs (PAT secret)
-- the divergence-guard workflow (`format-compare.yml`) reproduce real numbers
-
-It is **not** the long-term steady state.
-
-## Why we want to move off it
-
-| Pain                  | Today                                       | Wanted                             |
-| --------------------- | ------------------------------------------- | ---------------------------------- |
-| Reproducibility       | every consumer must clone 3 siblings        | `go get` resolves a pinned version |
-| Cross-repo CI auth    | LIBRARIES_PAT secret in every consumer repo | GOPRIVATE + token works once       |
-| Version pinning       | implicit (whatever's on `main`)             | explicit (semver tag)              |
-| `go mod tidy` UX      | needs siblings on disk                      | works with module cache            |
-| External contributors | impossible (need access to 3 repos)         | possible once libs go public       |
+All three are **private** GitHub repos and intentionally **pre-1.0** — APIs are still evolving, so semver-tagged releases would be premature. Pinning happens via Go pseudo-versions (`v0.0.0-YYYYMMDDhhmmss-{12-char-hash}`), which give exact-commit reproducibility without making a stability promise.
 
 ## Migration phases
 
-### Phase 1 — local `replace` + multi-checkout CI ✅ (shipped)
+### Phase 1 — local `replace` + multi-checkout CI ✅ (PR #53, superseded)
 
-- `go.mod` has 3 relative `replace` directives (`../starlark-cst-go`, etc.)
-- CI workflows checkout sky into `./sky/` and siblings at workspace root
-- Uses `LIBRARIES_PAT` secret (PAT with `repo` scope on the 3 private repos);
-  falls back to `secrets.GITHUB_TOKEN` for the day the libs go public
-- See `.github/workflows/ci.yml` and `.github/workflows/format-compare.yml`
+`go.mod` had `replace github.com/.../foo => ../foo` for each lib; CI checked out sky and the 3 libs as siblings so the relative paths resolved.
 
-**Limitation:** the relative paths only work in the canonical layout.
-Anyone trying to use sky as a Go module gets `directory does not exist`.
+**Why we moved off it:** the relative paths only worked in one specific filesystem layout. Any consumer outside that layout (a fresh `go get`, a sky worktree at a different depth, an external developer) saw `directory does not exist`.
 
-### Phase 2 — tag library releases
+### Phase 2 — Go pseudo-versions + octo-sts module auth ✅ (current)
 
-Prerequisite: a stable surface in each library.
+- `go.mod` requires real pseudo-versions for each lib (`v0.0.0-{ts}-{hash}`)
+- `replace` directives gone from `go.mod`
+- `.github/actions/setup-cst-private-auth` composite mints 3 short-lived (1h) octo-sts tokens via OIDC and configures `GOPRIVATE` + per-repo `git insteadOf` so `go mod download` transparently authenticates
+- Single-checkout CI — no more `path: sky` shuffle
+- Local dev: gitignored `go.work` overrides the pseudo-versions with absolute paths to sibling clones (no `replace` in `go.mod`)
+- Each lib's `go.mod` likewise pins its sibling deps via pseudo-versions, with `replace` directives kept commented out for opt-in local iteration
 
-- `starlark-cst-go v0.1.0` — parser + dialect interface API frozen
-- `bazel-cst-go v0.1.0` — buildifier pipeline at current 99.76% parity
-- `starlark-format-go v0.1.0` — Neutral.Format signature frozen
+**Bumping a lib:** push to its `main`, then in sky run `go get github.com/.../foo@<new-hash>` (auth set up locally via `gh auth token` + `git config url.insteadOf`). Commit the `go.mod`/`go.sum` change.
 
-Each release goes out via `gh release create` with a changelog entry and the
-go.sum hash recorded in the consumer's `go.sum`.
+**What changes per lib bump:** if a lib has sibling deps (bazel-cst-go → starlark-cst-go + starlark-format-go), bump them in the lib's `go.mod` first, push, then bump sky to the new lib pseudo-version. Two pushes per lib, predictable.
 
-### Phase 3 — switch sky to versioned `require`
+### Phase 3 — tagged releases (deferred, on hold)
 
-In sky:
+Will happen when:
 
-```
-require (
-  github.com/albertocavalcante/starlark-cst-go v0.1.0
-  github.com/albertocavalcante/bazel-cst-go v0.1.0
-  github.com/albertocavalcante/starlark-format-go v0.1.0
-)
-// no more replace directives
-```
+- Each lib's surface stabilises enough to commit to semver
+- We want sky installable without GitHub auth (public modules + `go get` from proxy.golang.org)
+- External contributors arrive
 
-Sky's CI workflows drop the 3 sibling checkouts. The only auth surface
-becomes `GOPRIVATE` + `~/.netrc` (or GitHub App token) so `go mod download`
-can fetch private modules. One env var instead of 9 lines of checkout YAML.
+Migration to Phase 3 is a one-line `go.mod` change per lib (`v0.0.0-{ts}-{hash}` → `v0.1.0`) plus a `gh release create` per lib. The auth machinery from Phase 2 keeps working unchanged.
 
-Local devs who want to iterate on a library against sky use a **gitignored**
-`go.work`:
+### Phase 4 — libraries go public (optional, orthogonal)
+
+If/when the libs become public:
+
+- octo-sts setup becomes optional (only needed for write actions)
+- `GOPRIVATE` becomes unnecessary
+- The `setup-cst-private-auth` action can be deleted, sky CI drops to plain `actions/checkout` + `setup-go` + `go test`
+
+Independent of Phase 3 — can happen before or after.
+
+## Local dev workflow
+
+A `go.work` file at sky's root (gitignored) overrides the pseudo-versions with absolute paths to sibling clones. Mine:
 
 ```
 go 1.26
-use (
-  ./sky
-  ./starlark-cst-go     // optional, only if iterating
-  ./bazel-cst-go        // optional
-  ./starlark-format-go  // optional
-)
+
+use .
+
+replace github.com/albertocavalcante/starlark-cst-go    => /Volumes/T9/dev/ws/starlark-cst-go
+replace github.com/albertocavalcante/bazel-cst-go       => /Volumes/T9/dev/ws/bazel-cst-go
+replace github.com/albertocavalcante/starlark-format-go => /Volumes/T9/dev/ws/starlark-format-go
 ```
 
-`go.work` is already in `.gitignore`. No `replace` directives needed.
+Without `go.work`, sky builds against the pinned pseudo-versions (CI behaviour).
 
-### Phase 4 — libraries go public (optional)
+For local `go get` to pull updated pseudo-versions (when not using go.work overrides):
 
-If/when the libraries become public:
+```
+export GOPRIVATE=github.com/albertocavalcante/*
+git config --global url."https://x-access-token:$(gh auth token)@github.com/".insteadOf "https://github.com/"
+go get github.com/albertocavalcante/<lib>@main
+```
 
-- `LIBRARIES_PAT` secret is removed (the `secrets.GITHUB_TOKEN` fallback
-  starts working)
-- `GOPRIVATE` is unset
-- External contributors can build sky end-to-end
+(The `git config --global` change persists across shells. Unset with `git config --global --unset url.…@github.com/.insteadOf` when done.)
 
-This is reversible and orthogonal to the versioning move.
+## Why no tags yet
 
-## Open questions
+- Each lib is pre-1.0; tagging implies API stability we don't yet have
+- Pseudo-versions give the same reproducibility guarantee (exact commit pin in `go.sum`)
+- `go get …@<hash>` is just as ergonomic as `go get …@v0.1.0` for bumping
+- Avoids the bookkeeping of changelogs, release notes, and version negotiation across the 3 interdependent libs during rapid iteration
 
-- **Replace-directive sync.** During phase 2 (between cutting library
-  releases and switching sky's require), we'll briefly have BOTH versioned
-  requires and replace directives. The replace wins. Plan: do the cut
-  atomically in one PR per library.
-- **Pre-release iteration.** If we need to ship a feature in sky that
-  requires a library change, the options are: (a) tag a `-rc.N` release of
-  the library, (b) temporarily add a `replace` to a commit SHA, (c) hold
-  the sky change. Default to (a) for shippable features, (b) for plumbing.
-- **Cross-library version compat.** `bazel-cst-go` depends on
-  `starlark-cst-go`. We need a release order: cut `starlark-cst-go` first,
-  then `bazel-cst-go` bumps its require, then we cut `bazel-cst-go`.
+When stability lands, flip to tagged releases (Phase 3) without changing the auth or CI shape.
 
-## Out of scope here
+## Out of scope
 
-- Buck2 dialect (`buck2-cst-go`) — same pattern, deferred until there's
-  Buck2 demand
-- Bazel-side integration (`MODULE.bazel` `bazel_dep` for the 3 libs) —
-  tracked in PR #53's "Caveats" section
+- Bazel-side integration — tracked in #54
+- Buck2 dialect (`buck2-cst-go`) — deferred until there's Buck2 demand

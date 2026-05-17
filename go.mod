@@ -4,9 +4,9 @@ go 1.26
 
 require (
 	github.com/BurntSushi/toml v1.3.2
-	github.com/albertocavalcante/bazel-cst-go v0.0.0-00010101000000-000000000000
-	github.com/albertocavalcante/starlark-cst-go v0.0.0
-	github.com/albertocavalcante/starlark-format-go v0.0.0
+	github.com/albertocavalcante/bazel-cst-go v0.0.0-20260517140100-f6e178ca9fc7
+	github.com/albertocavalcante/starlark-cst-go v0.0.0-20260517131122-25acdf30f55b
+	github.com/albertocavalcante/starlark-format-go v0.0.0-20260517140007-0bfc21fdee12
 	github.com/bazelbuild/buildtools v0.0.0-20251231073631-eb7356da6895
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gofrs/flock v0.13.0
@@ -42,27 +42,16 @@ require (
 // TODO(upstream): Remove once hooks are merged to go.starlark.net
 replace go.starlark.net => github.com/albertocavalcante/starlark-go-x v0.0.0-20260203191202-da5a35fe16a6
 
-// Local replaces for the Roslyn-style CST library stack — the substrate
-// for the formatter.CST engine. Switch to tagged versions once those
-// libraries cut their first releases.
+// CST library stack — versioned via Go pseudo-versions (v0.0.0-{ts}-{hash}).
+// Libraries are intentionally pre-1.0 and untagged; we pin commits via the
+// pseudo-version mechanism so we can iterate without managing semver. Bump
+// by running `go get github.com/albertocavalcante/<repo>@<commit-or-main>`.
 //
-// Paths are RELATIVE to this repo. The expected layout is:
+// Local dev: gitignored go.work (see docs/PLAN-cst-library-versioning.md)
+// overrides these requires with relative paths into sibling clones, so you
+// can iterate across repos without publishing a new pseudo-version on every
+// change.
 //
-//   <some-dir>/
-//     sky/                  ← this repo
-//     starlark-cst-go/      ← sibling
-//     bazel-cst-go/         ← sibling
-//     starlark-format-go/   ← sibling
-//
-// CI workflows that test sky must check out these siblings at the same
-// level (see .github/workflows/ci.yml multi-checkout pattern). Local
-// devs iterating on the libraries clone them as siblings. The
-// MIGRATION goal: once libraries tag releases and sky's CI is wired
-// with a PAT to pull private repos via `go get`, drop these replaces
-// entirely and let go.work (gitignored) handle local-dev overrides.
-// See docs/PLAN-cst-library-versioning.md for the plan.
-replace github.com/albertocavalcante/starlark-cst-go => ../starlark-cst-go
-
-replace github.com/albertocavalcante/bazel-cst-go => ../bazel-cst-go
-
-replace github.com/albertocavalcante/starlark-format-go => ../starlark-format-go
+// CI auth: libraries are private, so `go mod download` needs GitHub creds.
+// .github/actions/setup-cst-private-auth mints a short-lived octo-sts token
+// and configures GOPRIVATE + git insteadOf — no PATs in sky's secrets.

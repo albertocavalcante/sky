@@ -1,0 +1,85 @@
+name: Setup CST private module auth
+description: |
+  Configure `go mod download` to fetch the 3 private CST library
+  dependencies (starlark-cst-go, bazel-cst-go, starlark-format-go)
+  via short-lived octo-sts tokens.
+
+  No PATs in sky's secrets. Each token is scoped to a single
+  repository, lasts 1 hour, and is delivered via `git insteadOf`
+  configuration for the Go module fetcher.
+
+  Prerequisites
+  -------------
+  - Caller workflow MUST declare:
+      permissions:
+        id-token: write   # required for OIDC token federation
+        contents: read
+  - octo-sts GitHub App must be installed on each of the 3 library
+    repos: https://github.com/apps/octo-sts
+  - Each library repo must have a trust policy at
+      .github/chainguard/sky.sts.yaml
+    authorising this caller (subject_pattern on repo:albertocavalcante/sky).
+
+  Side effects
+  ------------
+  - Sets GOPRIVATE for the current job (via $GITHUB_ENV)
+  - Adds 3 `git config --global url.<token>@github.com/<repo>.insteadOf`
+    entries — one per private CST repo — so plain `go mod download`
+    transparently authenticates.
+
+  Cleanup
+  -------
+  - Tokens auto-expire after 1h. The git config entries are scoped to
+    the runner's $HOME and disappear when the runner is recycled.
+
+runs:
+  using: composite
+  steps:
+    - name: STS token — starlark-cst-go
+      id: sts-starlark-cst-go
+      # octo-sts/action v1.1.1
+      uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05
+      with:
+        scope: albertocavalcante/starlark-cst-go
+        identity: sky
+
+    - name: STS token — bazel-cst-go
+      id: sts-bazel-cst-go
+      uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05
+      with:
+        scope: albertocavalcante/bazel-cst-go
+        identity: sky
+
+    - name: STS token — starlark-format-go
+      id: sts-starlark-format-go
+      uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05
+      with:
+        scope: albertocavalcante/starlark-format-go
+        identity: sky
+
+    - name: Configure GOPRIVATE + git insteadOf for private CST modules
+      shell: bash
+      env:
+        TOKEN_CST: ${{ steps.sts-starlark-cst-go.outputs.token }}
+        TOKEN_BAZEL: ${{ steps.sts-bazel-cst-go.outputs.token }}
+        TOKEN_FORMAT: ${{ steps.sts-starlark-format-go.outputs.token }}
+      run: |
+        set -euo pipefail
+        # Tell Go to bypass proxy.golang.org for the albertocavalcante org.
+        # Wildcard rather than explicit list: covers the 3 CST repos here
+        # plus any other private module from the same org without needing
+        # to maintain a list. The one public-ish dep currently under this
+        # prefix (starlark-go-x) still works — it's public, no auth
+        # needed — it just bypasses the module proxy on this runner.
+        echo "GOPRIVATE=github.com/albertocavalcante/*" >> "$GITHUB_ENV"
+
+        # Per-repo URL rewrite so each fetch uses its scoped token.
+        # `x-access-token` is the conventional username for GitHub App tokens.
+        git config --global url."https://x-access-token:${TOKEN_CST}@github.com/albertocavalcante/starlark-cst-go".insteadOf \
+          "https://github.com/albertocavalcante/starlark-cst-go"
+        git config --global url."https://x-access-token:${TOKEN_BAZEL}@github.com/albertocavalcante/bazel-cst-go".insteadOf \
+          "https://github.com/albertocavalcante/bazel-cst-go"
+        git config --global url."https://x-access-token:${TOKEN_FORMAT}@github.com/albertocavalcante/starlark-format-go".insteadOf \
+          "https://github.com/albertocavalcante/starlark-format-go"
+
+        echo "GOPRIVATE and git insteadOf configured for 3 private CST repos."
