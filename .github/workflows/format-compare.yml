@@ -37,11 +37,11 @@ env:
   # diverge between Buildtools and CST. Set to the current actual count
   # so any regression triggers a CI fail. Lower it as CST improves.
   #
-  # Current divergence ledger (as of 2026-05-16):
-  #   1 — root BUILD.bazel (copybara_validate `tags = [...]` with
-  #       inline comments that need comment-attached-to-element sort;
-  #       tracked in DIFFERENCES.md "v0 bails on comments in lists")
-  COMPARE_BASELINE: "1"
+  # Current divergence ledger (as of 2026-05-17):
+  #   0 — clean. Root BUILD.bazel's copybara_validate `tags = [...]`
+  #       case closed by bazel-cst-go@6d1633b (inline-comment-attached
+  #       sort shipped). Any new divergence now fails CI immediately.
+  COMPARE_BASELINE: "0"
 
 jobs:
   compare:
