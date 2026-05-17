@@ -79,6 +79,29 @@ format-mod:
 # Run format + lint + test (CI check)
 check: format format-sh lint lint-sh test
 
+# ============================================================================
+# Format engine compare (migration safety net for CST adoption)
+# ============================================================================
+
+# Run the buildtools-vs-cst formatter compare across sky's own Bazel files.
+# Prints a summary to stderr (e.g. "76 agreed, 1 diverged"). Diffs go to
+# stdout. Always exits 0 — wrap with a threshold check in CI if needed.
+#
+# Used by CI (.github/workflows/format-compare.yml) as the regression
+# guard for the CST formatter migration.
+compare-corpus:
+    @go build -o /tmp/skyfmt-cmp ./cmd/skyfmt
+    @find . \( -name "BUILD.bazel" -o -name "BUILD" -o -name "MODULE.bazel" -o -name "WORKSPACE*" -o -name "*.bzl" \) \
+        -not -path "./node_modules/*" \
+        -not -path "./.git/*" \
+        -not -path "./bazel-*" \
+        -not -path "*/testdata/*" \
+        > /tmp/sky-corpus.txt
+    @echo "Comparing $(wc -l < /tmp/sky-corpus.txt | tr -d ' ') files..." >&2
+    @xargs /tmp/skyfmt-cmp -engine=compare < /tmp/sky-corpus.txt 1>/tmp/sky-corpus-diffs.txt 2>&1; true
+    @tail -1 /tmp/sky-corpus-diffs.txt
+    @echo "Full diffs (if any) in /tmp/sky-corpus-diffs.txt" >&2
+
 # Install git hooks via lefthook
 hooks:
     lefthook install

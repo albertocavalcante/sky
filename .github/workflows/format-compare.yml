@@ -1,0 +1,113 @@
+name: Format Engine Compare
+
+# Regression guard for the formatter.CST migration. Runs the buildtools
+# vs cst engine compare on sky's own Bazel files on every PR and on
+# pushes to main.
+#
+# Failure mode: fails when the divergence count EXCEEDS COMPARE_BASELINE.
+# This catches regressions (a PR that makes CST diverge from Buildtools
+# more than current baseline). It does NOT require absolute zero — the
+# baseline acknowledges known-divergent files that aren't yet closed.
+#
+# Updating the baseline: when CST improvements reduce divergences, bump
+# COMPARE_BASELINE down. When a known-good divergence is added (e.g. a
+# new file with a known-unsupported buildifier behavior), bump up with
+# a comment naming the file and the cause. Either way the change is
+# explicit and reviewable.
+#
+# Source-of-truth pointer for the migration plan:
+#   starlark-cst-go/docs/proposal-07-determinism-roadmap.md (P1).
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.26"
+  # COMPARE_BASELINE is the maximum number of sky-corpus files allowed to
+  # diverge between Buildtools and CST. Set to the current actual count
+  # so any regression triggers a CI fail. Lower it as CST improves.
+  #
+  # Current divergence ledger (as of 2026-05-16):
+  #   1 — root BUILD.bazel (copybara_validate `tags = [...]` with
+  #       inline comments that need comment-attached-to-element sort;
+  #       tracked in DIFFERENCES.md "v0 bails on comments in lists")
+  COMPARE_BASELINE: "1"
+
+jobs:
+  compare:
+    name: skyfmt -engine=compare on sky corpus
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      # actions/checkout v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      # actions/setup-go v6.2.0
+      - name: Setup Go
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install just
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Run formatter compare
+        run: just compare-corpus
+
+      - name: Check divergence against baseline
+        id: gate
+        run: |
+          # Pull the divergence count out of the summary line.
+          # Summary line shape: "skyfmt compare: N agreed, M diverged, ..."
+          summary=$(tail -1 /tmp/sky-corpus-diffs.txt 2>/dev/null || echo "")
+          diverged=$(echo "$summary" | sed -nE 's/.* ([0-9]+) diverged.*/\1/p')
+          if [ -z "$diverged" ]; then
+            echo "::error::could not parse divergence count from summary: $summary"
+            exit 2
+          fi
+          echo "diverged=$diverged" >> "$GITHUB_OUTPUT"
+          echo "baseline=$COMPARE_BASELINE" >> "$GITHUB_OUTPUT"
+          if [ "$diverged" -gt "$COMPARE_BASELINE" ]; then
+            echo "::error::Divergence regressed: $diverged > baseline $COMPARE_BASELINE"
+            echo "See /tmp/sky-corpus-diffs.txt for the unified diff per file."
+            exit 1
+          fi
+          if [ "$diverged" -lt "$COMPARE_BASELINE" ]; then
+            echo "::notice::Divergence improved: $diverged < baseline $COMPARE_BASELINE"
+            echo "Consider lowering COMPARE_BASELINE in .github/workflows/format-compare.yml"
+          fi
+
+      - name: Summary to PR check
+        if: always()
+        run: |
+          {
+            echo "## Formatter Engine Compare"
+            echo ""
+            echo "**Divergence: ${{ steps.gate.outputs.diverged }} (baseline ${{ steps.gate.outputs.baseline }})**"
+            echo ""
+            echo "Latest summary line from \`just compare-corpus\`:"
+            echo ""
+            echo '```'
+            tail -1 /tmp/sky-corpus-diffs.txt 2>/dev/null || echo "(no output)"
+            echo '```'
+            echo ""
+            echo "See \`bazel-cst-go/format/buildifier/DIFFERENCES.md\` for the"
+            echo "known divergence categories. Migration plan in"
+            echo "\`starlark-cst-go/docs/proposal-07-determinism-roadmap.md\`."
+          } >> "$GITHUB_STEP_SUMMARY"

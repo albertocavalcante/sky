@@ -1,9 +1,12 @@
 module github.com/albertocavalcante/sky
 
-go 1.24.6
+go 1.26
 
 require (
 	github.com/BurntSushi/toml v1.3.2
+	github.com/albertocavalcante/bazel-cst-go v0.0.0-00010101000000-000000000000
+	github.com/albertocavalcante/starlark-cst-go v0.0.0
+	github.com/albertocavalcante/starlark-format-go v0.0.0
 	github.com/bazelbuild/buildtools v0.0.0-20251231073631-eb7356da6895
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gofrs/flock v0.13.0
@@ -38,3 +41,12 @@ require (
 // - OnIteration: loop coverage
 // TODO(upstream): Remove once hooks are merged to go.starlark.net
 replace go.starlark.net => github.com/albertocavalcante/starlark-go-x v0.0.0-20260203191202-da5a35fe16a6
+
+// Local replaces for the Roslyn-style CST library stack — the substrate
+// for the formatter.CST engine. Switch to tagged versions once those
+// libraries cut their first releases.
+replace github.com/albertocavalcante/starlark-cst-go => /Volumes/T9/dev/ws/starlark-cst-go
+
+replace github.com/albertocavalcante/bazel-cst-go => /Volumes/T9/dev/ws/bazel-cst-go
+
+replace github.com/albertocavalcante/starlark-format-go => /Volumes/T9/dev/ws/starlark-format-go

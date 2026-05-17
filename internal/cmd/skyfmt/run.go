@@ -18,9 +18,15 @@ import (
 // Exit codes
 const (
 	exitOK          = 0
-	exitNeedsFormat = 1 // --check mode: files need formatting
+	exitNeedsFormat = 1 // --check mode: files need formatting; --engine=compare: engines disagree
 	exitError       = 2 // error occurred
 )
+
+// engineCompare is the special -engine value that triggers compare mode:
+// runs both buildtools and cst engines, reports divergence, writes neither
+// output to disk. Used to validate the cst migration against the stable
+// buildtools baseline without committing to either output.
+const engineCompare = "compare"
 
 // Run executes skyfmt with the given arguments.
 // Returns exit code.
@@ -36,6 +42,7 @@ func RunWithIO(_ context.Context, args []string, stdin io.Reader, stdout, stderr
 		checkFlag   bool
 		typeFlag    string
 		versionFlag bool
+		engineFlag  string
 	)
 
 	fs := flag.NewFlagSet("skyfmt", flag.ContinueOnError)
@@ -45,6 +52,7 @@ func RunWithIO(_ context.Context, args []string, stdin io.Reader, stdout, stderr
 	fs.BoolVar(&checkFlag, "check", false, "exit with non-zero status if files need formatting")
 	fs.StringVar(&typeFlag, "type", "", "file type: build, bzl, workspace, module, default")
 	fs.BoolVar(&versionFlag, "version", false, "print version and exit")
+	fs.StringVar(&engineFlag, "engine", "", "format engine: buildtools (default), cst, or compare")
 
 	fs.Usage = func() {
 		writeln(stderr, "Usage: skyfmt [flags] [path ...]")
@@ -60,6 +68,11 @@ func RunWithIO(_ context.Context, args []string, stdin io.Reader, stdout, stderr
 		writeln(stderr, "  workspace  WORKSPACE files")
 		writeln(stderr, "  module     MODULE.bazel files")
 		writeln(stderr, "  default    Generic Starlark files")
+		writeln(stderr)
+		writeln(stderr, "Engines:")
+		writeln(stderr, "  buildtools  Upstream bazelbuild/buildtools (default, stable)")
+		writeln(stderr, "  cst         Native Roslyn-style stack (opt-in, in migration)")
+		writeln(stderr, "  compare     Run both, report divergence, write neither (no -w)")
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -83,17 +96,56 @@ func RunWithIO(_ context.Context, args []string, stdin io.Reader, stdout, stderr
 		writeln(stderr, "skyfmt: cannot use -w and --check together")
 		return exitError
 	}
+	if engineFlag == engineCompare && writeFlag {
+		writeln(stderr, "skyfmt: -engine=compare cannot be combined with -w (compare writes neither output)")
+		return exitError
+	}
+
+	engine, isCompare, err := resolveEngine(engineFlag)
+	if err != nil {
+		writef(stderr, "skyfmt: %v\n", err)
+		return exitError
+	}
 
 	kind := parseTypeFlag(typeFlag)
 	paths := fs.Args()
 
+	// Compare mode runs both engines and reports divergence regardless of
+	// the other flags; it never writes formatted output to stdout (the
+	// divergence report goes to stdout instead).
+	if isCompare {
+		if len(paths) == 0 {
+			return compareStdin(stdin, stdout, stderr, kind)
+		}
+		return comparePaths(paths, stdout, stderr, kind)
+	}
+
 	// No paths: read from stdin
 	if len(paths) == 0 {
-		return formatStdin(stdin, stdout, stderr, kind, checkFlag, diffFlag)
+		return formatStdinWith(engine, stdin, stdout, stderr, kind, checkFlag, diffFlag)
 	}
 
 	// Format files
-	return formatPaths(paths, stdout, stderr, kind, writeFlag, diffFlag, checkFlag)
+	return formatPathsWith(engine, paths, stdout, stderr, kind, writeFlag, diffFlag, checkFlag)
+}
+
+// resolveEngine maps the -engine flag value to an Engine. Returns
+// (engine, isCompare, error). isCompare is true only when the user
+// explicitly asked for compare mode; the returned Engine is nil in that
+// case because compare runs both engines internally.
+func resolveEngine(name string) (formatter.Engine, bool, error) {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "":
+		return formatter.Default, false, nil
+	case engineCompare:
+		return nil, true, nil
+	}
+	engines := formatter.Engines()
+	if e, ok := engines[strings.ToLower(name)]; ok {
+		return e, false, nil
+	}
+	known := []string{"buildtools", "cst", "compare"}
+	return nil, false, fmt.Errorf("unknown engine %q (known: %s)", name, strings.Join(known, ", "))
 }
 
 func parseTypeFlag(t string) filekind.Kind {
@@ -113,7 +165,7 @@ func parseTypeFlag(t string) filekind.Kind {
 	}
 }
 
-func formatStdin(stdin io.Reader, stdout, stderr io.Writer, kind filekind.Kind, checkFlag, diffFlag bool) int {
+func formatStdinWith(engine formatter.Engine, stdin io.Reader, stdout, stderr io.Writer, kind filekind.Kind, checkFlag, diffFlag bool) int {
 	src, err := io.ReadAll(stdin)
 	if err != nil {
 		writef(stderr, "skyfmt: reading stdin: %v\n", err)
@@ -125,7 +177,7 @@ func formatStdin(stdin io.Reader, stdout, stderr io.Writer, kind filekind.Kind, 
 		kind = filekind.KindStarlark
 	}
 
-	formatted, err := formatter.Format(src, "<stdin>", kind)
+	formatted, err := engine.Format(src, "<stdin>", kind)
 	if err != nil {
 		writef(stderr, "skyfmt: %v\n", err)
 		return exitError
@@ -151,7 +203,7 @@ func formatStdin(stdin io.Reader, stdout, stderr io.Writer, kind filekind.Kind, 
 	return exitOK
 }
 
-func formatPaths(paths []string, stdout, stderr io.Writer, kind filekind.Kind, writeFlag, diffFlag, checkFlag bool) int {
+func formatPathsWith(engine formatter.Engine, paths []string, stdout, stderr io.Writer, kind filekind.Kind, writeFlag, diffFlag, checkFlag bool) int {
 	var files []string
 
 	// Expand paths (including directories)
@@ -173,12 +225,7 @@ func formatPaths(paths []string, stdout, stderr io.Writer, kind filekind.Kind, w
 	hasError := false
 
 	for _, path := range files {
-		var result *formatter.Result
-		if kind != "" {
-			result = formatter.FormatFileWithKind(path, kind)
-		} else {
-			result = formatter.FormatFile(path)
-		}
+		result := formatter.FormatFileWith(engine, path, kind)
 
 		if result.Err != nil {
 			writef(stderr, "skyfmt: %s: %v\n", path, result.Err)
