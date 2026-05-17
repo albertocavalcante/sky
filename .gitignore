@@ -44,3 +44,6 @@ bazel-*
 .bazelrc.local
 .cache/
 dist/
+
+# Local build artifacts (e.g. `just compare-corpus`)
+/build/
