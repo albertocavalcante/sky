@@ -1,0 +1,100 @@
+name: Checkout CST library siblings
+description: |
+  Multi-checkout helper for sky workflows that depend on the private
+  starlark-cst-go / bazel-cst-go / starlark-format-go library siblings.
+
+  Auth: uses octo-sts (https://github.com/octo-sts/app) to mint short-lived
+  (1-hour) GitHub tokens via OIDC federation from the workflow's identity.
+  No PATs in sky's secrets — zero long-lived credentials.
+
+  Prerequisites
+  -------------
+  - Caller workflow MUST declare:
+      permissions:
+        id-token: write   # required for OIDC token federation
+        contents: read
+  - octo-sts GitHub App must be installed on each of the 3 library repos:
+      https://github.com/apps/octo-sts
+  - Each library repo must have a trust policy at
+      .github/chainguard/sky.sts.yaml
+    that authorises this caller (subject_pattern on repo:albertocavalcante/sky).
+
+  Side effect
+  -----------
+  - Checks out the 3 library repos as workspace-root siblings
+    (../starlark-cst-go etc.) so sky/go.mod's relative `replace`
+    directives resolve from sky/.
+
+  Notes
+  -----
+  - Each library needs its own STS exchange because octo-sts policies are
+    per-repo (albertocavalcante is a user, not an org — org-scope tokens
+    would need an org-level installation).
+  - The 3 checkouts intentionally use `persist-credentials: false` so the
+    federated token isn't written to .git/config; it lives in the
+    `actions/checkout` invocation only.
+
+runs:
+  using: composite
+  steps:
+    # ------------------------------------------------------------------
+    # starlark-cst-go
+    # ------------------------------------------------------------------
+    - name: STS token for starlark-cst-go
+      id: sts-starlark-cst-go
+      # octo-sts/action v1.1.1
+      uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05
+      with:
+        scope: albertocavalcante/starlark-cst-go
+        identity: sky
+
+    - name: Checkout starlark-cst-go
+      # actions/checkout v6.0.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        repository: albertocavalcante/starlark-cst-go
+        token: ${{ steps.sts-starlark-cst-go.outputs.token }}
+        ref: main
+        fetch-depth: 1
+        persist-credentials: false
+        path: starlark-cst-go
+
+    # ------------------------------------------------------------------
+    # bazel-cst-go
+    # ------------------------------------------------------------------
+    - name: STS token for bazel-cst-go
+      id: sts-bazel-cst-go
+      uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05
+      with:
+        scope: albertocavalcante/bazel-cst-go
+        identity: sky
+
+    - name: Checkout bazel-cst-go
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        repository: albertocavalcante/bazel-cst-go
+        token: ${{ steps.sts-bazel-cst-go.outputs.token }}
+        ref: main
+        fetch-depth: 1
+        persist-credentials: false
+        path: bazel-cst-go
+
+    # ------------------------------------------------------------------
+    # starlark-format-go
+    # ------------------------------------------------------------------
+    - name: STS token for starlark-format-go
+      id: sts-starlark-format-go
+      uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05
+      with:
+        scope: albertocavalcante/starlark-format-go
+        identity: sky
+
+    - name: Checkout starlark-format-go
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        repository: albertocavalcante/starlark-format-go
+        token: ${{ steps.sts-starlark-format-go.outputs.token }}
+        ref: main
+        fetch-depth: 1
+        persist-credentials: false
+        path: starlark-format-go

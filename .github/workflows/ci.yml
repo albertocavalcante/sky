@@ -31,6 +31,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      id-token: write   # OIDC federation for octo-sts (sibling checkouts)
 
     steps:
       # Checkout sky into ./sky/ so the sibling library repos can sit
@@ -43,37 +44,9 @@ jobs:
           persist-credentials: false
           path: sky
 
-      # Sibling library repos for the formatter.CST engine's local
-      # replace directives. Private — requires LIBRARIES_PAT secret with
-      # `repo` scope on each. The fallback `${{ secrets.GITHUB_TOKEN }}`
-      # ONLY works if the libraries become public; for private repos the
-      # PAT is required and this checkout will fail without it.
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: albertocavalcante/starlark-cst-go
-          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-          path: starlark-cst-go
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: albertocavalcante/bazel-cst-go
-          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-          path: bazel-cst-go
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: albertocavalcante/starlark-format-go
-          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-          path: starlark-format-go
+      # Mint short-lived (1h) tokens via octo-sts OIDC federation and
+      # checkout the 3 sibling library repos. No PATs.
+      - uses: ./sky/.github/actions/checkout-cst-siblings
 
       # actions/setup-go v6.2.0
       - name: Setup Go
@@ -147,6 +120,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      id-token: write   # OIDC federation for octo-sts (sibling checkouts)
 
     steps:
       # Multi-checkout to satisfy go.mod relative `replace` directives.
@@ -157,32 +131,7 @@ jobs:
           persist-credentials: false
           path: sky
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: albertocavalcante/starlark-cst-go
-          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-          path: starlark-cst-go
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: albertocavalcante/bazel-cst-go
-          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-          path: bazel-cst-go
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: albertocavalcante/starlark-format-go
-          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-          path: starlark-format-go
+      - uses: ./sky/.github/actions/checkout-cst-siblings
 
       # actions/setup-go v6.2.0
       - name: Setup Go
@@ -209,6 +158,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      id-token: write   # OIDC federation for octo-sts (sibling checkouts)
 
     steps:
       # Multi-checkout to satisfy go.mod relative `replace` directives.
@@ -219,32 +169,7 @@ jobs:
           persist-credentials: false
           path: sky
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: albertocavalcante/starlark-cst-go
-          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-          path: starlark-cst-go
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: albertocavalcante/bazel-cst-go
-          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-          path: bazel-cst-go
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: albertocavalcante/starlark-format-go
-          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-          path: starlark-format-go
+      - uses: ./sky/.github/actions/checkout-cst-siblings
 
       # actions/setup-go v6.2.0
       - name: Setup Go
@@ -316,6 +241,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      id-token: write   # OIDC federation for octo-sts (sibling checkouts)
 
     steps:
       # Multi-checkout to satisfy go.mod relative `replace` directives.
@@ -326,32 +252,7 @@ jobs:
           persist-credentials: false
           path: sky
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: albertocavalcante/starlark-cst-go
-          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-          path: starlark-cst-go
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: albertocavalcante/bazel-cst-go
-          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-          path: bazel-cst-go
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: albertocavalcante/starlark-format-go
-          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-          path: starlark-format-go
+      - uses: ./sky/.github/actions/checkout-cst-siblings
 
       # actions/setup-go v6.2.0
       - name: Setup Go

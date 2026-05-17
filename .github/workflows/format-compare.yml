@@ -29,6 +29,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write   # OIDC federation for octo-sts (sibling checkouts)
 
 env:
   GO_VERSION: "1.26"
@@ -49,6 +50,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      id-token: write   # OIDC federation for octo-sts (sibling checkouts)
     steps:
       # Multi-checkout to satisfy go.mod relative `replace` directives.
       # skyfmt's CST engine depends on the three sibling library repos;
@@ -59,32 +61,7 @@ jobs:
           persist-credentials: false
           path: sky
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: albertocavalcante/starlark-cst-go
-          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-          path: starlark-cst-go
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: albertocavalcante/bazel-cst-go
-          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-          path: bazel-cst-go
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: albertocavalcante/starlark-format-go
-          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-          path: starlark-format-go
+      - uses: ./sky/.github/actions/checkout-cst-siblings
 
       # actions/setup-go v6.2.0
       - name: Setup Go
