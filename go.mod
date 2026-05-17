@@ -45,8 +45,24 @@ replace go.starlark.net => github.com/albertocavalcante/starlark-go-x v0.0.0-202
 // Local replaces for the Roslyn-style CST library stack — the substrate
 // for the formatter.CST engine. Switch to tagged versions once those
 // libraries cut their first releases.
-replace github.com/albertocavalcante/starlark-cst-go => /Volumes/T9/dev/ws/starlark-cst-go
+//
+// Paths are RELATIVE to this repo. The expected layout is:
+//
+//   <some-dir>/
+//     sky/                  ← this repo
+//     starlark-cst-go/      ← sibling
+//     bazel-cst-go/         ← sibling
+//     starlark-format-go/   ← sibling
+//
+// CI workflows that test sky must check out these siblings at the same
+// level (see .github/workflows/ci.yml multi-checkout pattern). Local
+// devs iterating on the libraries clone them as siblings. The
+// MIGRATION goal: once libraries tag releases and sky's CI is wired
+// with a PAT to pull private repos via `go get`, drop these replaces
+// entirely and let go.work (gitignored) handle local-dev overrides.
+// See docs/PLAN-cst-library-versioning.md for the plan.
+replace github.com/albertocavalcante/starlark-cst-go => ../starlark-cst-go
 
-replace github.com/albertocavalcante/bazel-cst-go => /Volumes/T9/dev/ws/bazel-cst-go
+replace github.com/albertocavalcante/bazel-cst-go => ../bazel-cst-go
 
-replace github.com/albertocavalcante/starlark-format-go => /Volumes/T9/dev/ws/starlark-format-go
+replace github.com/albertocavalcante/starlark-format-go => ../starlark-format-go

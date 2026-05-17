@@ -134,14 +134,15 @@ func RunWithIO(_ context.Context, args []string, stdin io.Reader, stdout, stderr
 // explicitly asked for compare mode; the returned Engine is nil in that
 // case because compare runs both engines internally.
 func resolveEngine(name string) (formatter.Engine, bool, error) {
-	switch strings.ToLower(strings.TrimSpace(name)) {
+	norm := strings.ToLower(strings.TrimSpace(name))
+	switch norm {
 	case "":
 		return formatter.Default, false, nil
 	case engineCompare:
 		return nil, true, nil
 	}
 	engines := formatter.Engines()
-	if e, ok := engines[strings.ToLower(name)]; ok {
+	if e, ok := engines[norm]; ok {
 		return e, false, nil
 	}
 	known := []string{"buildtools", "cst", "compare"}

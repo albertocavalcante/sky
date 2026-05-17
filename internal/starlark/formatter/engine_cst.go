@@ -74,6 +74,14 @@ func (cstEngine) Format(src []byte, path string, kind filekind.Kind) ([]byte, er
 
 	default:
 		// KindStarlark, KindSkyI, KindUnknown — use neutral mode.
+		//
+		// parser.ParseFile is error-tolerant by design: it always returns
+		// a usable SyntaxTree (with error markers) instead of refusing
+		// to produce a tree on lex/parse errors. We deliberately don't
+		// surface parse diagnostics here — the formatter's contract is
+		// best-effort on partial input, mirroring how IDEs format
+		// in-progress code. Hard failures still come from Neutral.Format
+		// (e.g. encoding errors).
 		parsed := parser.ParseFile(src)
 		out, err := (neutral.Neutral{}).Format(parsed.SyntaxTree(), src)
 		if err != nil {

@@ -50,17 +50,49 @@ jobs:
     permissions:
       contents: read
     steps:
-      # actions/checkout v6.0.1
+      # Multi-checkout to satisfy go.mod relative `replace` directives.
+      # skyfmt's CST engine depends on the three sibling library repos;
+      # see .github/workflows/ci.yml go-build job for full rationale.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 1
           persist-credentials: false
+          path: sky
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: albertocavalcante/starlark-cst-go
+          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+          path: starlark-cst-go
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: albertocavalcante/bazel-cst-go
+          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+          path: bazel-cst-go
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: albertocavalcante/starlark-format-go
+          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+          path: starlark-format-go
 
       # actions/setup-go v6.2.0
       - name: Setup Go
         uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: sky/go.sum
 
       - name: Install just
         run: |
@@ -68,14 +100,16 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
 
       - name: Run formatter compare
+        working-directory: sky
         run: just compare-corpus
 
       - name: Check divergence against baseline
         id: gate
+        working-directory: sky
         run: |
           # Pull the divergence count out of the summary line.
           # Summary line shape: "skyfmt compare: N agreed, M diverged, ..."
-          summary=$(tail -1 /tmp/sky-corpus-diffs.txt 2>/dev/null || echo "")
+          summary=$(tail -1 build/compare/diffs.txt 2>/dev/null || echo "")
           diverged=$(echo "$summary" | sed -nE 's/.* ([0-9]+) diverged.*/\1/p')
           if [ -z "$diverged" ]; then
             echo "::error::could not parse divergence count from summary: $summary"
@@ -85,7 +119,7 @@ jobs:
           echo "baseline=$COMPARE_BASELINE" >> "$GITHUB_OUTPUT"
           if [ "$diverged" -gt "$COMPARE_BASELINE" ]; then
             echo "::error::Divergence regressed: $diverged > baseline $COMPARE_BASELINE"
-            echo "See /tmp/sky-corpus-diffs.txt for the unified diff per file."
+            echo "See build/compare/diffs.txt for the unified diff per file."
             exit 1
           fi
           if [ "$diverged" -lt "$COMPARE_BASELINE" ]; then
@@ -95,6 +129,7 @@ jobs:
 
       - name: Summary to PR check
         if: always()
+        working-directory: sky
         run: |
           {
             echo "## Formatter Engine Compare"
@@ -104,7 +139,7 @@ jobs:
             echo "Latest summary line from \`just compare-corpus\`:"
             echo ""
             echo '```'
-            tail -1 /tmp/sky-corpus-diffs.txt 2>/dev/null || echo "(no output)"
+            tail -1 build/compare/diffs.txt 2>/dev/null || echo "(no output)"
             echo '```'
             echo ""
             echo "See \`bazel-cst-go/format/buildifier/DIFFERENCES.md\` for the"

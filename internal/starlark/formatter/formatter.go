@@ -22,10 +22,26 @@ package formatter
 
 import (
 	"os"
+	"sync"
 
 	"github.com/albertocavalcante/sky/internal/starlark/classifier"
 	"github.com/albertocavalcante/sky/internal/starlark/filekind"
 )
+
+// defaultClassifier is constructed once and reused across DetectKind calls.
+// The compare-mode loop hits this on every file in the corpus; allocating
+// a fresh classifier per call was wasteful.
+var (
+	defaultClassifierOnce sync.Once
+	defaultClassifier     *classifier.DefaultClassifier
+)
+
+func sharedClassifier() *classifier.DefaultClassifier {
+	defaultClassifierOnce.Do(func() {
+		defaultClassifier = classifier.NewDefaultClassifier()
+	})
+	return defaultClassifier
+}
 
 // Result represents the outcome of formatting a file.
 type Result struct {
@@ -116,8 +132,7 @@ func FormatFileWith(engine Engine, path string, kind filekind.Kind) *Result {
 // Exported so CLIs and tools can do kind-aware dispatch without
 // duplicating the classifier wiring.
 func DetectKind(path string) filekind.Kind {
-	c := classifier.NewDefaultClassifier()
-	classification, err := c.Classify(path)
+	classification, err := sharedClassifier().Classify(path)
 	if err != nil {
 		return filekind.KindUnknown
 	}

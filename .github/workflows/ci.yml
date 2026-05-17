@@ -27,11 +27,47 @@ jobs:
       contents: read
 
     steps:
-      # actions/checkout v6.0.1
+      # Checkout sky into ./sky/ so the sibling library repos can sit
+      # alongside at ../starlark-cst-go etc., matching the relative
+      # `replace` directives in go.mod. See docs/PLAN-cst-library-
+      # versioning.md for the migration to versioned `require`.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 1
           persist-credentials: false
+          path: sky
+
+      # Sibling library repos for the formatter.CST engine's local
+      # replace directives. Private — requires LIBRARIES_PAT secret with
+      # `repo` scope on each. The fallback `${{ secrets.GITHUB_TOKEN }}`
+      # ONLY works if the libraries become public; for private repos the
+      # PAT is required and this checkout will fail without it.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: albertocavalcante/starlark-cst-go
+          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+          path: starlark-cst-go
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: albertocavalcante/bazel-cst-go
+          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+          path: bazel-cst-go
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: albertocavalcante/starlark-format-go
+          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+          path: starlark-format-go
 
       # actions/setup-go v6.2.0
       - name: Setup Go
@@ -39,23 +75,27 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-          cache-dependency-path: go.sum
+          cache-dependency-path: sky/go.sum
 
       - name: Verify Go version
         run: go version
 
       - name: Download dependencies
+        working-directory: sky
         run: go mod download
 
       - name: Verify go.mod is tidy
+        working-directory: sky
         run: |
           go mod tidy
           git diff --exit-code go.mod go.sum || (echo "go.mod/go.sum not tidy" && exit 1)
 
       - name: Build
+        working-directory: sky
         run: go build -v ./...
 
       - name: Test
+        working-directory: sky
         run: go tool -modfile=tools/testsum/go.mod gotestsum --format pkgname-and-test-fails --jsonfile test-output.json -- -race -timeout 10m ./...
 
   # ===========================================================================
@@ -103,11 +143,40 @@ jobs:
       contents: read
 
     steps:
-      # actions/checkout v6.0.1
+      # Multi-checkout to satisfy go.mod relative `replace` directives.
+      # See go-build job above for full rationale.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 1
           persist-credentials: false
+          path: sky
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: albertocavalcante/starlark-cst-go
+          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+          path: starlark-cst-go
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: albertocavalcante/bazel-cst-go
+          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+          path: bazel-cst-go
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: albertocavalcante/starlark-format-go
+          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+          path: starlark-format-go
 
       # actions/setup-go v6.2.0
       - name: Setup Go
@@ -115,7 +184,7 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-          cache-dependency-path: go.sum
+          cache-dependency-path: sky/go.sum
 
       # golangci/golangci-lint-action v9.2.0
       - name: golangci-lint
@@ -123,6 +192,7 @@ jobs:
         with:
           version: latest
           args: --timeout=5m
+          working-directory: sky
 
   # ===========================================================================
   # Job 4: Format Check
@@ -135,11 +205,40 @@ jobs:
       contents: read
 
     steps:
-      # actions/checkout v6.0.1
+      # Multi-checkout to satisfy go.mod relative `replace` directives.
+      # See go-build job above for full rationale.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 1
           persist-credentials: false
+          path: sky
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: albertocavalcante/starlark-cst-go
+          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+          path: starlark-cst-go
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: albertocavalcante/bazel-cst-go
+          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+          path: bazel-cst-go
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: albertocavalcante/starlark-format-go
+          token: ${{ secrets.LIBRARIES_PAT || secrets.GITHUB_TOKEN }}
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+          path: starlark-format-go
 
       # actions/setup-go v6.2.0
       - name: Setup Go
@@ -149,6 +248,7 @@ jobs:
           cache: false  # Don't need cache for format check
 
       - name: Check Go formatting
+        working-directory: sky
         run: |
           unformatted=$(gofmt -l $(find . -name '*.go' -not -path './vendor/*' -not -path './bazel-*'))
           if [ -n "$unformatted" ]; then
@@ -161,6 +261,7 @@ jobs:
           echo "All Go files are properly formatted"
 
       - name: Check go.mod formatting
+        working-directory: sky
         run: |
           go mod tidy
           if ! git diff --quiet go.mod go.sum; then
