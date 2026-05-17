@@ -52,16 +52,12 @@ jobs:
       contents: read
       id-token: write   # OIDC federation for octo-sts (sibling checkouts)
     steps:
-      # Multi-checkout to satisfy go.mod relative `replace` directives.
-      # skyfmt's CST engine depends on the three sibling library repos;
-      # see .github/workflows/ci.yml go-build job for full rationale.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 1
           persist-credentials: false
-          path: sky
 
-      - uses: ./sky/.github/actions/checkout-cst-siblings
+      - uses: ./.github/actions/setup-cst-private-auth
 
       # actions/setup-go v6.2.0
       - name: Setup Go
@@ -69,7 +65,7 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-          cache-dependency-path: sky/go.sum
+          cache-dependency-path: go.sum
 
       - name: Install just
         run: |
@@ -77,12 +73,10 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
 
       - name: Run formatter compare
-        working-directory: sky
         run: just compare-corpus
 
       - name: Check divergence against baseline
         id: gate
-        working-directory: sky
         run: |
           # Pull the divergence count out of the summary line.
           # Summary line shape: "skyfmt compare: N agreed, M diverged, ..."
@@ -106,7 +100,6 @@ jobs:
 
       - name: Summary to PR check
         if: always()
-        working-directory: sky
         run: |
           {
             echo "## Formatter Engine Compare"
