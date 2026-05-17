@@ -65,8 +65,13 @@ runs:
         TOKEN_FORMAT: ${{ steps.sts-starlark-format-go.outputs.token }}
       run: |
         set -euo pipefail
-        # Tell Go to bypass proxy.golang.org for our private modules.
-        echo "GOPRIVATE=github.com/albertocavalcante/starlark-cst-go,github.com/albertocavalcante/bazel-cst-go,github.com/albertocavalcante/starlark-format-go" >> "$GITHUB_ENV"
+        # Tell Go to bypass proxy.golang.org for the albertocavalcante org.
+        # Wildcard rather than explicit list: covers the 3 CST repos here
+        # plus any other private module from the same org without needing
+        # to maintain a list. The one public-ish dep currently under this
+        # prefix (starlark-go-x) still works — it's public, no auth
+        # needed — it just bypasses the module proxy on this runner.
+        echo "GOPRIVATE=github.com/albertocavalcante/*" >> "$GITHUB_ENV"
 
         # Per-repo URL rewrite so each fetch uses its scoped token.
         # `x-access-token` is the conventional username for GitHub App tokens.
