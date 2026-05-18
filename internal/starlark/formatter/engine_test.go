@@ -1,7 +1,6 @@
 package formatter_test
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
@@ -63,12 +62,20 @@ func TestCSTEngine_FormatsStarlarkFile(t *testing.T) {
 	}
 }
 
-func TestCSTEngine_ReturnsUnsupportedForBUCK(t *testing.T) {
+func TestCSTEngine_FormatsBUCKThroughNeutral(t *testing.T) {
+	// Buck2 files route through starlark-format-go/Neutral (trivia
+	// normalisation only — Buck2's ecosystem has no buildifier-style
+	// opinionated pipeline). The buck2-cst-go library exists for LSP
+	// / refactor annotations but deliberately doesn't ship a Format
+	// pipeline.
 	src := []byte(`cxx_library(name = "foo")
 `)
-	_, err := formatter.CST.Format(src, "BUCK", filekind.KindBUCK)
-	if !errors.Is(err, formatter.ErrEngineDoesNotSupport) {
-		t.Errorf("CST.Format(BUCK) err = %v, want ErrEngineDoesNotSupport", err)
+	out, err := formatter.CST.Format(src, "BUCK", filekind.KindBUCK)
+	if err != nil {
+		t.Fatalf("CST.Format(BUCK) err = %v", err)
+	}
+	if string(out) != string(src) {
+		t.Errorf("cst neutral changed canonical BUCK file: got %q, want %q", out, src)
 	}
 }
 
