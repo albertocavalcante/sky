@@ -1,7 +1,7 @@
 github.com/BurntSushi/toml v1.3.2 h1:o7IhLm0Msx3BaB+n3Ag7L8EVlByGnpq14C4YWiu/gL8=
 github.com/BurntSushi/toml v1.3.2/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
-github.com/albertocavalcante/bazel-cst-go v0.0.0-20260518134328-31570c25df54 h1:o5ZpJq3lyg+7Yj5GveNGP3Umal7e8/Q4YSlNwIy4RSs=
-github.com/albertocavalcante/bazel-cst-go v0.0.0-20260518134328-31570c25df54/go.mod h1:lohjzR3jYd9OiKCAclzsDhYumI0hOID6lregOgaVuyY=
+github.com/albertocavalcante/bazel-cst-go v0.0.0-20260518142840-37b1fd26d617 h1:zTfONZ8Lqzr24AuOyD0OWfUFaYx91wWRN2/z+XC/8SE=
+github.com/albertocavalcante/bazel-cst-go v0.0.0-20260518142840-37b1fd26d617/go.mod h1:lohjzR3jYd9OiKCAclzsDhYumI0hOID6lregOgaVuyY=
 github.com/albertocavalcante/starlark-cst-go v0.0.0-20260517131122-25acdf30f55b h1:prohjZd1iflsokofSp20F91GdXdy6ZM5ZciV9ckDKZc=
 github.com/albertocavalcante/starlark-cst-go v0.0.0-20260517131122-25acdf30f55b/go.mod h1:b3UcTfTOH7LcH7Nc5wUNzuWRQI6r5Bz6rjByzMKOMqM=
 github.com/albertocavalcante/starlark-format-go v0.0.0-20260517140007-0bfc21fdee12 h1:v4jaW7Llzfho4QrKO5F9Kj59nTGrnrTTVv9hbfGBSfA=
