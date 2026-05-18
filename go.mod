@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/BurntSushi/toml v1.3.2
-	github.com/albertocavalcante/bazel-cst-go v0.0.0-20260518142840-37b1fd26d617
+	github.com/albertocavalcante/bazel-cst-go v0.0.0-20260518153803-61b1d053687a
 	github.com/albertocavalcante/starlark-cst-go v0.0.0-20260517131122-25acdf30f55b
 	github.com/albertocavalcante/starlark-format-go v0.0.0-20260517140007-0bfc21fdee12
 	github.com/bazelbuild/buildtools v0.0.0-20251231073631-eb7356da6895
