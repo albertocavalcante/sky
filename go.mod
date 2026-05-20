@@ -4,10 +4,10 @@ go 1.26.2
 
 require (
 	github.com/BurntSushi/toml v1.3.2
-	github.com/albertocavalcante/bazel-cst-go v0.0.0-20260518153803-61b1d053687a
-	github.com/albertocavalcante/buck2-cst-go v0.0.0-20260518220630-ad34465dfc97
-	github.com/albertocavalcante/starlark-cst-go v0.0.0-20260518172600-ea0a92ecbf49
-	github.com/albertocavalcante/starlark-format-go v0.0.0-20260518172719-67d5fc74d85c
+	github.com/albertocavalcante/bazel-cst-go v0.0.0-20260520180544-300e5d85397a
+	github.com/albertocavalcante/buck2-cst-go v0.0.0-20260520174222-f14050af237d
+	github.com/albertocavalcante/starlark-cst-go v0.0.0-20260520165855-a1752e1c3209
+	github.com/albertocavalcante/starlark-format-go v0.0.0-20260518174104-d77df1101dbe
 	github.com/bazelbuild/buildtools v0.0.0-20251231073631-eb7356da6895
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gofrs/flock v0.13.0
@@ -24,7 +24,7 @@ require (
 )
 
 require (
-	github.com/albertocavalcante/starlark-refactor-go v0.0.0-20260518220042-c8c6100e6f0f // indirect
+	github.com/albertocavalcante/starlark-refactor-go v0.0.0-20260520180454-652ef7cf402e // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/golang/protobuf v1.5.0 // indirect
 	github.com/gostaticanalysis/analysisutil v0.7.1 // indirect

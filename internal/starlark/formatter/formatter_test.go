@@ -356,3 +356,18 @@ func BenchmarkFormat(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkFormatCST exercises the CST engine specifically — needed
+// to track perf wins coming from the starlark-cst-go / -refactor-go /
+// bazel-cst-go stack independent of the buildtools default engine.
+func BenchmarkFormatCST(b *testing.B) {
+	src := []byte(`cc_library(name="foo",srcs=["foo.cc"],deps=[":bar",":baz"])`)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, err := FormatWith(CST, src, "BUILD", filekind.KindBUILD)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
