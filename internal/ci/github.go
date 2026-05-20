@@ -1,7 +1,6 @@
 package ci
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -23,13 +22,13 @@ func (h *GitHubHandler) Handle(results *TestResults, stdout, stderr io.Writer) e
 	// Write job summary to $GITHUB_STEP_SUMMARY
 	if h.Config.Summary {
 		if err := h.writeSummary(results); err != nil {
-			_, _ = fmt.Fprintf(stderr, "sky-ci: warning: writing summary: %v\n", err)
+			printf(stderr, "sky-ci: warning: writing summary: %v\n", err)
 		}
 	}
 
 	// Write outputs to $GITHUB_OUTPUT
 	if err := h.writeOutputs(results); err != nil {
-		_, _ = fmt.Fprintf(stderr, "sky-ci: warning: writing outputs: %v\n", err)
+		printf(stderr, "sky-ci: warning: writing outputs: %v\n", err)
 	}
 
 	return nil
@@ -50,10 +49,10 @@ func (h *GitHubHandler) writeAnnotations(results *TestResults, w io.Writer) {
 			if test.Skipped {
 				// Notice for skipped tests
 				if test.Line > 0 {
-					_, _ = fmt.Fprintf(w, "::notice file=%s,line=%d::%s skipped\n",
+					printf(w, "::notice file=%s,line=%d::%s skipped\n",
 						relPath, test.Line, test.Name)
 				} else {
-					_, _ = fmt.Fprintf(w, "::notice file=%s::%s skipped\n",
+					printf(w, "::notice file=%s::%s skipped\n",
 						relPath, test.Name)
 				}
 			} else if !test.Passed {
@@ -66,10 +65,10 @@ func (h *GitHubHandler) writeAnnotations(results *TestResults, w io.Writer) {
 				errMsg = escapeAnnotation(errMsg)
 
 				if test.Line > 0 {
-					_, _ = fmt.Fprintf(w, "::error file=%s,line=%d::%s: %s\n",
+					printf(w, "::error file=%s,line=%d::%s: %s\n",
 						relPath, test.Line, test.Name, errMsg)
 				} else {
-					_, _ = fmt.Fprintf(w, "::error file=%s::%s: %s\n",
+					printf(w, "::error file=%s::%s: %s\n",
 						relPath, test.Name, errMsg)
 				}
 			}
@@ -93,44 +92,44 @@ func (h *GitHubHandler) writeSummary(results *TestResults) error {
 	passed, failed, skipped, total := results.Summary()
 
 	// Header
-	_, _ = fmt.Fprintln(f, "## 🧪 Starlark Test Results")
-	_, _ = fmt.Fprintln(f)
+	println(f, "## 🧪 Starlark Test Results")
+	println(f)
 
 	// Summary table
-	_, _ = fmt.Fprintln(f, "| Status | Count |")
-	_, _ = fmt.Fprintln(f, "|--------|-------|")
-	_, _ = fmt.Fprintf(f, "| ✅ Passed | %d |\n", passed)
-	_, _ = fmt.Fprintf(f, "| ❌ Failed | %d |\n", failed)
+	println(f, "| Status | Count |")
+	println(f, "|--------|-------|")
+	printf(f, "| ✅ Passed | %d |\n", passed)
+	printf(f, "| ❌ Failed | %d |\n", failed)
 	if skipped > 0 {
-		_, _ = fmt.Fprintf(f, "| ⏭️ Skipped | %d |\n", skipped)
+		printf(f, "| ⏭️ Skipped | %d |\n", skipped)
 	}
-	_, _ = fmt.Fprintf(f, "| **Total** | **%d** |\n", total)
-	_, _ = fmt.Fprintln(f)
+	printf(f, "| **Total** | **%d** |\n", total)
+	println(f)
 
 	// Duration
 	if results.Duration != "" {
-		_, _ = fmt.Fprintf(f, "⏱️ Duration: %s\n", results.Duration)
-		_, _ = fmt.Fprintln(f)
+		printf(f, "⏱️ Duration: %s\n", results.Duration)
+		println(f)
 	}
 
 	// Failed tests details
 	if failed > 0 {
-		_, _ = fmt.Fprintln(f, "<details>")
-		_, _ = fmt.Fprintln(f, "<summary>❌ Failed Tests</summary>")
-		_, _ = fmt.Fprintln(f)
-		_, _ = fmt.Fprintln(f, "```")
+		println(f, "<details>")
+		println(f, "<summary>❌ Failed Tests</summary>")
+		println(f)
+		println(f, "```")
 		for _, file := range results.Files {
 			for _, test := range file.Tests {
 				if !test.Passed && !test.Skipped {
-					_, _ = fmt.Fprintf(f, "%s::%s\n", filepath.Base(file.Path), test.Name)
+					printf(f, "%s::%s\n", filepath.Base(file.Path), test.Name)
 					if test.Error != "" {
-						_, _ = fmt.Fprintf(f, "  %s\n", test.Error)
+						printf(f, "  %s\n", test.Error)
 					}
 				}
 			}
 		}
-		_, _ = fmt.Fprintln(f, "```")
-		_, _ = fmt.Fprintln(f, "</details>")
+		println(f, "```")
+		println(f, "</details>")
 	}
 
 	return nil
@@ -154,9 +153,9 @@ func (h *GitHubHandler) writeOutputs(results *TestResults) error {
 	// GITHUB_OUTPUT is opened for the lifetime of the action and
 	// writes can't be meaningfully recovered from here, so explicitly
 	// discard the (n, err) returns.
-	_, _ = fmt.Fprintf(f, "passed=%d\n", passed)
-	_, _ = fmt.Fprintf(f, "failed=%d\n", failed)
-	_, _ = fmt.Fprintf(f, "coverage=0\n") // TODO: Pass coverage from skytest
+	printf(f, "passed=%d\n", passed)
+	printf(f, "failed=%d\n", failed)
+	printf(f, "coverage=0\n") // TODO: Pass coverage from skytest
 
 	return nil
 }

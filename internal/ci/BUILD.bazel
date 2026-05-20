@@ -7,6 +7,7 @@ go_library(
         "generic.go",
         "github.go",
         "types.go",
+        "write.go",
     ],
     importpath = "github.com/albertocavalcante/sky/internal/ci",
     visibility = ["//:__subpackages__"],
