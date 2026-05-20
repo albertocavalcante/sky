@@ -23,13 +23,13 @@ func (h *GitHubHandler) Handle(results *TestResults, stdout, stderr io.Writer) e
 	// Write job summary to $GITHUB_STEP_SUMMARY
 	if h.Config.Summary {
 		if err := h.writeSummary(results); err != nil {
-			fmt.Fprintf(stderr, "sky-ci: warning: writing summary: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "sky-ci: warning: writing summary: %v\n", err)
 		}
 	}
 
 	// Write outputs to $GITHUB_OUTPUT
 	if err := h.writeOutputs(results); err != nil {
-		fmt.Fprintf(stderr, "sky-ci: warning: writing outputs: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "sky-ci: warning: writing outputs: %v\n", err)
 	}
 
 	return nil
@@ -50,10 +50,10 @@ func (h *GitHubHandler) writeAnnotations(results *TestResults, w io.Writer) {
 			if test.Skipped {
 				// Notice for skipped tests
 				if test.Line > 0 {
-					fmt.Fprintf(w, "::notice file=%s,line=%d::%s skipped\n",
+					_, _ = fmt.Fprintf(w, "::notice file=%s,line=%d::%s skipped\n",
 						relPath, test.Line, test.Name)
 				} else {
-					fmt.Fprintf(w, "::notice file=%s::%s skipped\n",
+					_, _ = fmt.Fprintf(w, "::notice file=%s::%s skipped\n",
 						relPath, test.Name)
 				}
 			} else if !test.Passed {
@@ -66,10 +66,10 @@ func (h *GitHubHandler) writeAnnotations(results *TestResults, w io.Writer) {
 				errMsg = escapeAnnotation(errMsg)
 
 				if test.Line > 0 {
-					fmt.Fprintf(w, "::error file=%s,line=%d::%s: %s\n",
+					_, _ = fmt.Fprintf(w, "::error file=%s,line=%d::%s: %s\n",
 						relPath, test.Line, test.Name, errMsg)
 				} else {
-					fmt.Fprintf(w, "::error file=%s::%s: %s\n",
+					_, _ = fmt.Fprintf(w, "::error file=%s::%s: %s\n",
 						relPath, test.Name, errMsg)
 				}
 			}
@@ -88,49 +88,49 @@ func (h *GitHubHandler) writeSummary(results *TestResults) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	passed, failed, skipped, total := results.Summary()
 
 	// Header
-	fmt.Fprintln(f, "## 🧪 Starlark Test Results")
-	fmt.Fprintln(f)
+	_, _ = fmt.Fprintln(f, "## 🧪 Starlark Test Results")
+	_, _ = fmt.Fprintln(f)
 
 	// Summary table
-	fmt.Fprintln(f, "| Status | Count |")
-	fmt.Fprintln(f, "|--------|-------|")
-	fmt.Fprintf(f, "| ✅ Passed | %d |\n", passed)
-	fmt.Fprintf(f, "| ❌ Failed | %d |\n", failed)
+	_, _ = fmt.Fprintln(f, "| Status | Count |")
+	_, _ = fmt.Fprintln(f, "|--------|-------|")
+	_, _ = fmt.Fprintf(f, "| ✅ Passed | %d |\n", passed)
+	_, _ = fmt.Fprintf(f, "| ❌ Failed | %d |\n", failed)
 	if skipped > 0 {
-		fmt.Fprintf(f, "| ⏭️ Skipped | %d |\n", skipped)
+		_, _ = fmt.Fprintf(f, "| ⏭️ Skipped | %d |\n", skipped)
 	}
-	fmt.Fprintf(f, "| **Total** | **%d** |\n", total)
-	fmt.Fprintln(f)
+	_, _ = fmt.Fprintf(f, "| **Total** | **%d** |\n", total)
+	_, _ = fmt.Fprintln(f)
 
 	// Duration
 	if results.Duration != "" {
-		fmt.Fprintf(f, "⏱️ Duration: %s\n", results.Duration)
-		fmt.Fprintln(f)
+		_, _ = fmt.Fprintf(f, "⏱️ Duration: %s\n", results.Duration)
+		_, _ = fmt.Fprintln(f)
 	}
 
 	// Failed tests details
 	if failed > 0 {
-		fmt.Fprintln(f, "<details>")
-		fmt.Fprintln(f, "<summary>❌ Failed Tests</summary>")
-		fmt.Fprintln(f)
-		fmt.Fprintln(f, "```")
+		_, _ = fmt.Fprintln(f, "<details>")
+		_, _ = fmt.Fprintln(f, "<summary>❌ Failed Tests</summary>")
+		_, _ = fmt.Fprintln(f)
+		_, _ = fmt.Fprintln(f, "```")
 		for _, file := range results.Files {
 			for _, test := range file.Tests {
 				if !test.Passed && !test.Skipped {
-					fmt.Fprintf(f, "%s::%s\n", filepath.Base(file.Path), test.Name)
+					_, _ = fmt.Fprintf(f, "%s::%s\n", filepath.Base(file.Path), test.Name)
 					if test.Error != "" {
-						fmt.Fprintf(f, "  %s\n", test.Error)
+						_, _ = fmt.Fprintf(f, "  %s\n", test.Error)
 					}
 				}
 			}
 		}
-		fmt.Fprintln(f, "```")
-		fmt.Fprintln(f, "</details>")
+		_, _ = fmt.Fprintln(f, "```")
+		_, _ = fmt.Fprintln(f, "</details>")
 	}
 
 	return nil
@@ -147,13 +147,16 @@ func (h *GitHubHandler) writeOutputs(results *TestResults) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	passed, failed, _, _ := results.Summary()
 
-	fmt.Fprintf(f, "passed=%d\n", passed)
-	fmt.Fprintf(f, "failed=%d\n", failed)
-	fmt.Fprintf(f, "coverage=0\n") // TODO: Pass coverage from skytest
+	// GITHUB_OUTPUT is opened for the lifetime of the action and
+	// writes can't be meaningfully recovered from here, so explicitly
+	// discard the (n, err) returns.
+	_, _ = fmt.Fprintf(f, "passed=%d\n", passed)
+	_, _ = fmt.Fprintf(f, "failed=%d\n", failed)
+	_, _ = fmt.Fprintf(f, "coverage=0\n") // TODO: Pass coverage from skytest
 
 	return nil
 }

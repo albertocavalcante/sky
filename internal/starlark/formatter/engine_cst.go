@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	bzlbuildifier "github.com/albertocavalcante/bazel-cst-go/format/buildifier"
+	buck2buildifier "github.com/albertocavalcante/buck2-cst-go/format/buildifier"
 	"github.com/albertocavalcante/starlark-cst-go/parser"
 	neutral "github.com/albertocavalcante/starlark-format-go"
 
@@ -11,36 +12,42 @@ import (
 )
 
 // CST is the formatter built on the native Roslyn-style starlark-cst-go +
-// bazel-cst-go + starlark-format-go (+ buck2-cst-go for the dialect side)
+// bazel-cst-go + buck2-cst-go + starlark-format-go + starlark-refactor-go
 // stack.
 //
 // HEURISTIC — file-kind dispatch table.
 //
-//	What it does: maps sky's filekind.Kind to one of two formatter handlers:
-//	  - bazel-cst-go/format/buildifier (Bazel-flavored — opinionated 11-step
-//	    pipeline matching buildifier's output)
-//	  - starlark-format-go/Neutral (spec-only — trivia normalisation, no
-//	    opinionated reformats)
+//	What it does: maps sky's filekind.Kind to one of three formatter
+//	handlers:
+//	  - bazel-cst-go/format/buildifier (Bazel-flavored opinionated
+//	    pipeline matching buildifier's output for BUILD/MODULE/.bzl)
+//	  - buck2-cst-go/format/buildifier (Buck2-flavored opinionated
+//	    pipeline — same 7 dialect-agnostic passes as Bazel, sans the
+//	    MODULE.bazel-specific ones)
+//	  - starlark-format-go/Neutral (spec-only — trivia normalisation,
+//	    no opinionated reformats)
 //
-//	Why this particular dispatch: in sky's usage, *.bzl files in a
-//	Bazel-dominant codebase get Bazel formatting. Buck2 files
-//	(KindBUCK, KindBzlBuck) route to Neutral — Buck2 has no
-//	buildifier-equivalent opinionated pipeline and most teams prefer
-//	keep-my-formatting semantics. The buck2-cst-go library is loaded
-//	by other tools (LSP, hover, refactor) for Buck2-specific
-//	annotations; it deliberately doesn't ship a Format pipeline for v0.
+//	Why this particular dispatch: both Bazel and Buck2 files now get
+//	full buildifier-style formatting. The two dialects share the same
+//	dialect-agnostic refactor passes (load sorting, quote
+//	normalization, attribute ordering, trailing-comma insertion,
+//	line reflow at 79 cols, comment-block spacing) via
+//	starlark-refactor-go; only MODULE.bazel-specific passes live in
+//	bazel-cst-go. Files outside both dialects (generic .star,
+//	skylark-internal, unknown) get Neutral.
 //
 //	Why deferred (no per-path inference for *.bzl ambiguity): we
-//	could try harder to detect Buck2-ness from file content
-//	(presence of `prelude_rules` calls, etc.). Not worth the
-//	complexity for v0; sky's classifier already does the Bazel-vs-
-//	Buck2 distinction by file location.
+//	could try harder to detect Buck2-ness from .bzl content
+//	(presence of `prelude_rules` calls, `bxl_main`, etc.). Not worth
+//	the complexity for v0; sky's classifier already does the Bazel-
+//	vs-Buck2 distinction by file location.
 //
 //	Source-of-truth pointer: engine_test.go pins each dispatch case
-//	(BUILD → buildifier, .star → neutral, BUCK → neutral).
+//	(BUILD → buildifier, BUCK → buildifier (Buck2), .star → neutral).
 //
 // See bazel-cst-go/format/buildifier/DIFFERENCES.md for what the Bazel
-// path does NOT yet do relative to upstream buildifier.
+// path does NOT yet do relative to upstream buildifier; Buck2 inherits
+// the same gaps via the shared starlark-refactor-go pipeline.
 var CST Engine = cstEngine{}
 
 type cstEngine struct{}
@@ -56,20 +63,19 @@ func (cstEngine) Format(src []byte, path string, kind filekind.Kind) ([]byte, er
 		filekind.KindBzlmod:
 		out, err := bzlbuildifier.FormatBytes(src)
 		if err != nil {
-			return nil, fmt.Errorf("cst/buildifier: %w", err)
+			return nil, fmt.Errorf("cst/bazel-buildifier: %w", err)
 		}
 		return out, nil
 
 	case filekind.KindBUCK, filekind.KindBzlBuck:
-		// Buck2 files: trivia normalisation only. Buck2's ecosystem has
-		// no buildifier-equivalent opinionated pipeline; the
-		// buck2-cst-go library exists for LSP / refactor annotations
-		// (see github.com/albertocavalcante/buck2-cst-go) but
-		// deliberately doesn't ship a Format pipeline.
-		parsed := parser.ParseFile(src)
-		out, err := (neutral.Neutral{}).Format(parsed.SyntaxTree(), src)
+		// Buck2 files: full buildifier-style pipeline via buck2-cst-go.
+		// Same 7 dialect-agnostic passes as the Bazel path (sourced
+		// from starlark-refactor-go), minus the MODULE.bazel-specific
+		// passes (use_repo sorting, bazel_dep separators, MODULE-
+		// specific top-level blank insertion, MODULE call expansion).
+		out, err := buck2buildifier.FormatBytes(src)
 		if err != nil {
-			return nil, fmt.Errorf("cst/neutral (BUCK): %w", err)
+			return nil, fmt.Errorf("cst/buck2-buildifier: %w", err)
 		}
 		return out, nil
 

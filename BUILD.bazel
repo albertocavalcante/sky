@@ -30,8 +30,8 @@ copybara_validate(
     name = "copybara_validate",
     config = "copy.bara.sky",
     tags = [
-        "manual",            # Exclude from //... wildcards
+        "manual",  # Exclude from //... wildcards
+        "no-sandbox",  # Disable sandbox for git access
         "requires-network",  # Needs network for git origin resolution
-        "no-sandbox",        # Disable sandbox for git access
     ],
 )

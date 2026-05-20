@@ -63,24 +63,24 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs.BoolVar(&cfg.Quiet, "quiet", false, "suppress stdout output")
 
 	fs.Usage = func() {
-		fmt.Fprintln(stderr, "Usage: sky ci [flags]")
-		fmt.Fprintln(stderr)
-		fmt.Fprintln(stderr, "CI reporter plugin for Sky. Reads JSON test results from stdin")
-		fmt.Fprintln(stderr, "and outputs CI-specific formats (annotations, summaries, outputs).")
-		fmt.Fprintln(stderr)
-		fmt.Fprintln(stderr, "Auto-detects CI system from environment variables:")
-		fmt.Fprintln(stderr, "  GitHub Actions:  GITHUB_ACTIONS=true")
-		fmt.Fprintln(stderr, "  GitLab CI:       GITLAB_CI=true")
-		fmt.Fprintln(stderr, "  CircleCI:        CIRCLECI=true")
-		fmt.Fprintln(stderr, "  Azure DevOps:    TF_BUILD=True")
-		fmt.Fprintln(stderr, "  Jenkins:         JENKINS_URL set")
-		fmt.Fprintln(stderr)
-		fmt.Fprintln(stderr, "Examples:")
-		fmt.Fprintln(stderr, "  skytest -json . | sky ci")
-		fmt.Fprintln(stderr, "  skytest -json . | sky ci --system=github")
-		fmt.Fprintln(stderr, "  skytest -json . | sky ci --coverage-threshold=80")
-		fmt.Fprintln(stderr)
-		fmt.Fprintln(stderr, "Flags:")
+		_, _ = fmt.Fprintln(stderr, "Usage: sky ci [flags]")
+		_, _ = fmt.Fprintln(stderr)
+		_, _ = fmt.Fprintln(stderr, "CI reporter plugin for Sky. Reads JSON test results from stdin")
+		_, _ = fmt.Fprintln(stderr, "and outputs CI-specific formats (annotations, summaries, outputs).")
+		_, _ = fmt.Fprintln(stderr)
+		_, _ = fmt.Fprintln(stderr, "Auto-detects CI system from environment variables:")
+		_, _ = fmt.Fprintln(stderr, "  GitHub Actions:  GITHUB_ACTIONS=true")
+		_, _ = fmt.Fprintln(stderr, "  GitLab CI:       GITLAB_CI=true")
+		_, _ = fmt.Fprintln(stderr, "  CircleCI:        CIRCLECI=true")
+		_, _ = fmt.Fprintln(stderr, "  Azure DevOps:    TF_BUILD=True")
+		_, _ = fmt.Fprintln(stderr, "  Jenkins:         JENKINS_URL set")
+		_, _ = fmt.Fprintln(stderr)
+		_, _ = fmt.Fprintln(stderr, "Examples:")
+		_, _ = fmt.Fprintln(stderr, "  skytest -json . | sky ci")
+		_, _ = fmt.Fprintln(stderr, "  skytest -json . | sky ci --system=github")
+		_, _ = fmt.Fprintln(stderr, "  skytest -json . | sky ci --coverage-threshold=80")
+		_, _ = fmt.Fprintln(stderr)
+		_, _ = fmt.Fprintln(stderr, "Flags:")
 		fs.PrintDefaults()
 	}
 
@@ -101,7 +101,7 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	// Read JSON from stdin
 	results, err := readResults(stdin)
 	if err != nil {
-		fmt.Fprintf(stderr, "sky-ci: reading input: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "sky-ci: reading input: %v\n", err)
 		return exitError
 	}
 
@@ -110,7 +110,7 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 	// Process results
 	if err := handler.Handle(results, stdout, stderr); err != nil {
-		fmt.Fprintf(stderr, "sky-ci: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "sky-ci: %v\n", err)
 		return exitError
 	}
 

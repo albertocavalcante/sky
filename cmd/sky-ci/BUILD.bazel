@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "sky-ci_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/albertocavalcante/sky/cmd/sky-ci",
+    visibility = ["//visibility:private"],
+    deps = ["//internal/ci"],
+)
+
+go_binary(
+    name = "sky-ci",
+    embed = [":sky-ci_lib"],
+    visibility = ["//visibility:public"],
+)

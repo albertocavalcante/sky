@@ -23,30 +23,30 @@ func (h *GenericHandler) Handle(results *TestResults, stdout, stderr io.Writer) 
 	passed, failed, skipped, total := results.Summary()
 
 	// Print summary
-	fmt.Fprintf(stdout, "Test Results (%s)\n", h.Name)
-	fmt.Fprintln(stdout, strings.Repeat("=", 40))
-	fmt.Fprintf(stdout, "Passed:  %d\n", passed)
-	fmt.Fprintf(stdout, "Failed:  %d\n", failed)
+	_, _ = fmt.Fprintf(stdout, "Test Results (%s)\n", h.Name)
+	_, _ = fmt.Fprintln(stdout, strings.Repeat("=", 40))
+	_, _ = fmt.Fprintf(stdout, "Passed:  %d\n", passed)
+	_, _ = fmt.Fprintf(stdout, "Failed:  %d\n", failed)
 	if skipped > 0 {
-		fmt.Fprintf(stdout, "Skipped: %d\n", skipped)
+		_, _ = fmt.Fprintf(stdout, "Skipped: %d\n", skipped)
 	}
-	fmt.Fprintf(stdout, "Total:   %d\n", total)
+	_, _ = fmt.Fprintf(stdout, "Total:   %d\n", total)
 
 	if results.Duration != "" {
-		fmt.Fprintf(stdout, "Duration: %s\n", results.Duration)
+		_, _ = fmt.Fprintf(stdout, "Duration: %s\n", results.Duration)
 	}
-	fmt.Fprintln(stdout)
+	_, _ = fmt.Fprintln(stdout)
 
 	// Print failed tests
 	if failed > 0 {
-		fmt.Fprintln(stdout, "Failed Tests:")
-		fmt.Fprintln(stdout, strings.Repeat("-", 40))
+		_, _ = fmt.Fprintln(stdout, "Failed Tests:")
+		_, _ = fmt.Fprintln(stdout, strings.Repeat("-", 40))
 		for _, file := range results.Files {
 			for _, test := range file.Tests {
 				if !test.Passed && !test.Skipped {
-					fmt.Fprintf(stdout, "  %s::%s\n", filepath.Base(file.Path), test.Name)
+					_, _ = fmt.Fprintf(stdout, "  %s::%s\n", filepath.Base(file.Path), test.Name)
 					if test.Error != "" {
-						fmt.Fprintf(stdout, "    %s\n", test.Error)
+						_, _ = fmt.Fprintf(stdout, "    %s\n", test.Error)
 					}
 				}
 			}
