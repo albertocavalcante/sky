@@ -1,0 +1,13 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "ci",
+    srcs = [
+        "ci.go",
+        "generic.go",
+        "github.go",
+        "types.go",
+    ],
+    importpath = "github.com/albertocavalcante/sky/internal/ci",
+    visibility = ["//:__subpackages__"],
+)

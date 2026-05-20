@@ -14,6 +14,7 @@ go_library(
         "//internal/starlark/classifier",
         "//internal/starlark/filekind",
         "@com_github_albertocavalcante_bazel_cst_go//format/buildifier",
+        "@com_github_albertocavalcante_buck2_cst_go//format/buildifier",
         "@com_github_albertocavalcante_starlark_cst_go//parser",
         "@com_github_albertocavalcante_starlark_format_go//:starlark-format-go",
         "@com_github_bazelbuild_buildtools//build",

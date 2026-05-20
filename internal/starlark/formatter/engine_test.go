@@ -62,12 +62,12 @@ func TestCSTEngine_FormatsStarlarkFile(t *testing.T) {
 	}
 }
 
-func TestCSTEngine_FormatsBUCKThroughNeutral(t *testing.T) {
-	// Buck2 files route through starlark-format-go/Neutral (trivia
-	// normalisation only — Buck2's ecosystem has no buildifier-style
-	// opinionated pipeline). The buck2-cst-go library exists for LSP
-	// / refactor annotations but deliberately doesn't ship a Format
-	// pipeline.
+func TestCSTEngine_FormatsBUCKThroughBuildifier(t *testing.T) {
+	// Buck2 files route through buck2-cst-go/format/buildifier — the
+	// same 7 dialect-agnostic passes as the Bazel path, sourced from
+	// starlark-refactor-go.
+	//
+	// Canonical short call must round-trip unchanged.
 	src := []byte(`cxx_library(name = "foo")
 `)
 	out, err := formatter.CST.Format(src, "BUCK", filekind.KindBUCK)
@@ -75,7 +75,43 @@ func TestCSTEngine_FormatsBUCKThroughNeutral(t *testing.T) {
 		t.Fatalf("CST.Format(BUCK) err = %v", err)
 	}
 	if string(out) != string(src) {
-		t.Errorf("cst neutral changed canonical BUCK file: got %q, want %q", out, src)
+		t.Errorf("buck2 buildifier mutated canonical BUCK file: got %q, want %q", out, src)
+	}
+}
+
+func TestCSTEngine_FormatsBUCKAppliesDialectAgnosticPasses(t *testing.T) {
+	// A BUCK file that has multiple buildifier-detectable issues
+	// should be cleaned up: load symbols sorted, attribute kwargs
+	// reordered (name first), trailing comma added on the multi-line
+	// list. Proves the pipeline (not just Neutral) ran.
+	src := []byte(`load("@prelude//:rules.bzl", "cxx_library", "cxx_binary")
+
+cxx_binary(
+    deps = [
+        ":bar",
+        ":foo"
+    ],
+    name = "main",
+    srcs = ["main.cpp"],
+)
+`)
+	want := []byte(`load("@prelude//:rules.bzl", "cxx_binary", "cxx_library")
+
+cxx_binary(
+    name = "main",
+    srcs = ["main.cpp"],
+    deps = [
+        ":bar",
+        ":foo",
+    ],
+)
+`)
+	out, err := formatter.CST.Format(src, "BUCK", filekind.KindBUCK)
+	if err != nil {
+		t.Fatalf("CST.Format(BUCK) err = %v", err)
+	}
+	if string(out) != string(want) {
+		t.Errorf("buck2 buildifier didn't apply expected refactors.\n--- got:\n%s\n--- want:\n%s", out, want)
 	}
 }
 
