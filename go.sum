@@ -1,7 +1,7 @@
 github.com/BurntSushi/toml v1.3.2 h1:o7IhLm0Msx3BaB+n3Ag7L8EVlByGnpq14C4YWiu/gL8=
 github.com/BurntSushi/toml v1.3.2/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
-github.com/albertocavalcante/bazel-cst-go v0.0.0-20260520174205-c397fb09905e h1:wUQBAhXoPz3TXAnwFN35VhhmoXVcbmr7GKH7Ffg2Gjc=
-github.com/albertocavalcante/bazel-cst-go v0.0.0-20260520174205-c397fb09905e/go.mod h1:T48co9zn1FT4QzNzcfBJ7WtvkBPCwliG0Swt4t8Mw4o=
+github.com/albertocavalcante/bazel-cst-go v0.0.0-20260520180544-300e5d85397a h1:r32k+J0vVpw4iikL56IQHru/veLbbTBivqYoaEvCX74=
+github.com/albertocavalcante/bazel-cst-go v0.0.0-20260520180544-300e5d85397a/go.mod h1:iyi8AQBaaph+foNFu5u5YDmsY5XY6Uh3q/L5X0yLJQE=
 github.com/albertocavalcante/buck2-cst-go v0.0.0-20260520174222-f14050af237d h1:UepuhybQBiYmaNtQHjyhg5aqbyaE/4Ssz185/KVf7NE=
 github.com/albertocavalcante/buck2-cst-go v0.0.0-20260520174222-f14050af237d/go.mod h1:uJ3qekmKtmBfyunHcEK/NqJmZDt9gQjHm9SlPd6Oht8=
 github.com/albertocavalcante/starlark-cst-go v0.0.0-20260520165855-a1752e1c3209 h1:vs4ns55HOTFhsqmbDFWKBbUGvOKoKuKOWnJ5N3HRXto=
@@ -10,8 +10,8 @@ github.com/albertocavalcante/starlark-format-go v0.0.0-20260518174104-d77df1101d
 github.com/albertocavalcante/starlark-format-go v0.0.0-20260518174104-d77df1101dbe/go.mod h1:Dqyo3BWO7el87PCs/vBdBMAnna9gTFItGMAck6QIC20=
 github.com/albertocavalcante/starlark-go-x v0.0.0-20260203191202-da5a35fe16a6 h1:lF2lZ4qSJu7+Sx99bP5fH1DPD7NHcUU8AkmgaRqXRsw=
 github.com/albertocavalcante/starlark-go-x v0.0.0-20260203191202-da5a35fe16a6/go.mod h1:YKMCv9b1WrfWmeqdV5MAuEHWsu5iC+fe6kYl2sQjdI8=
-github.com/albertocavalcante/starlark-refactor-go v0.0.0-20260520173921-9e8f5e600938 h1:3EmZMAAWJICVd2k4U88BAEAQuMGBVwHXtXpsFewzY1c=
-github.com/albertocavalcante/starlark-refactor-go v0.0.0-20260520173921-9e8f5e600938/go.mod h1:/IMmGXylUIghRHNSIYMo7RnNf4M+P8vJNs5TG9OLciE=
+github.com/albertocavalcante/starlark-refactor-go v0.0.0-20260520180454-652ef7cf402e h1:V+8Q23BCjIfFgOTuHpoow0cvwO2WPMmRlorKQyc7SJ8=
+github.com/albertocavalcante/starlark-refactor-go v0.0.0-20260520180454-652ef7cf402e/go.mod h1:/IMmGXylUIghRHNSIYMo7RnNf4M+P8vJNs5TG9OLciE=
 github.com/bazelbuild/buildtools v0.0.0-20251231073631-eb7356da6895 h1:EWOZOFbxzZX5jTNN+ddRKOyrhVzEaUHyTHl8/2LHXkw=
 github.com/bazelbuild/buildtools v0.0.0-20251231073631-eb7356da6895/go.mod h1:PLNUetjLa77TCCziPsz0EI8a6CUxgC+1jgmWv0H25tg=
 github.com/chzyer/logex v1.2.1 h1:XHDu3E6q+gdHgsdTPH6ImJMIp436vR6MPtH8gP05QzM=
