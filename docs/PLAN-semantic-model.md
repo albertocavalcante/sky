@@ -13,16 +13,16 @@ production-grade LSPs like starpls.
 A starpls survey (`~/dev/refs/starpls/crates/`) maps almost
 1:1 onto our architecture, with **one major exception**:
 
-| starpls crate | Our equivalent |
-|---|---|
-| `starpls_lexer` | `starlark-cst-go/lexer` |
-| `starpls_parser` | `starlark-cst-go/parser` |
-| `starpls_syntax` (rowan red/green) | `starlark-cst-go/syntax` |
-| `starpls_intern` | `syntax.TokenInterner` / `TriviaInterner` |
-| `starpls_bazel` | `bazel-cst-go` (builtins, labels, etc.) |
-| `starpls_hir` (High-level IR) | **❌ MISSING** |
+| starpls crate                           | Our equivalent                                                 |
+| --------------------------------------- | -------------------------------------------------------------- |
+| `starpls_lexer`                         | `starlark-cst-go/lexer`                                        |
+| `starpls_parser`                        | `starlark-cst-go/parser`                                       |
+| `starpls_syntax` (rowan red/green)      | `starlark-cst-go/syntax`                                       |
+| `starpls_intern`                        | `syntax.TokenInterner` / `TriviaInterner`                      |
+| `starpls_bazel`                         | `bazel-cst-go` (builtins, labels, etc.)                        |
+| `starpls_hir` (High-level IR)           | **❌ MISSING**                                                 |
 | `starpls_ide` (LSP features as library) | partial: sky's `internal/lsp` is server-coupled, not a library |
-| `starpls` (LSP binary) | sky's `skyls` |
+| `starpls` (LSP binary)                  | sky's `skyls`                                                  |
 
 Without HIR, we have:
 
@@ -46,6 +46,74 @@ Without HIR, we have:
 
 This plan documents what HIR is, why it's separate from the CST,
 and a multi-phase build-out.
+
+## Design principles (cross-ecosystem survey)
+
+Before designing this, I surveyed how other ecosystems solve the
+semantic-layer problem. Full survey in
+`RESEARCH-semantic-model-survey.md`; six principles emerge from
+Roslyn, rust-analyzer, TypeScript's LanguageService, Scala
+SemanticDB, and Sourcegraph SCIP:
+
+1. **Symbol-centric API.** Every successful semantic model has
+   `Symbol` as the core noun. Roslyn's `ISymbol`,
+   rust-analyzer's `hir::Symbol`, TS's `Symbol`, SemanticDB's
+   string IDs, SCIP's string IDs. Operations are
+   `SymbolAt(position)`, `Definition(symbol)`,
+   `References(symbol)`, `TypeOf(symbol)`. We adopt this shape.
+
+2. **Position-based queries.** LSP is position-driven; the public
+   API takes positions, resolves to symbols. Roslyn's
+   `GetSymbolInfo(position)` is the model.
+
+3. **Lazy evaluation.** TypeScript: "do the absolute minimum work."
+   Roslyn: per-question caching. rust-analyzer: salsa queries
+   are lazy by default. We implement memoization keyed on
+   `*GreenNode` identity (which our `Arena.WithInterner` makes
+   stable across reparses).
+
+4. **Layered IR with locality.** rust-analyzer's key insight:
+   split the IR so editing one region doesn't invalidate
+   everything. `ItemTree` (function signatures) stays valid
+   when `Body` (implementations) changes. For Starlark we
+   mirror this: **Module IR** (top-level signatures, loads,
+   global bindings) separate from **Body IR** (function-body
+   details).
+
+5. **In-memory primary, on-disk optional.** Two distinct
+   categories exist: in-memory semantic models (Roslyn,
+   rust-analyzer, TSGo, starpls) and on-disk indexes
+   (SemanticDB, SCIP). They're complementary, not
+   alternatives. We pick in-memory primary; defer SCIP export
+   until cross-tool reuse (Sourcegraph integration, GitHub
+   code search) becomes a need.
+
+6. **Dialect / host pluggability.** TS abstracts filesystem via
+   `LanguageServiceHost`. starpls injects Bazel builtins via
+   `starpls_bazel`. We plug in dialect-specific builtins from
+   `starlark-cst-go/dialect.Builtins`.
+
+These six principles shape the API design and phasing below.
+
+## In-memory vs on-disk — the explicit choice
+
+There are two categories of semantic-info systems, often
+confused:
+
+| Category                     | Examples                                               | Persistence                  | Primary consumer                                                 |
+| ---------------------------- | ------------------------------------------------------ | ---------------------------- | ---------------------------------------------------------------- |
+| **In-memory semantic model** | Roslyn `SemanticModel`, rust-analyzer HIR, starpls HIR | Server-resident, incremental | LSP / IDE (this process)                                         |
+| **On-disk index**            | Scala SemanticDB, SCIP, LSIF                           | Persistent files             | Cross-tool consumers (Sourcegraph, GitHub Code Search, Scalafix) |
+
+**These are complementary, not alternatives.** rust-analyzer
+keeps an in-memory HIR for the LSP AND exports SCIP for
+Sourcegraph. We start in-memory; add SCIP export later as a
+separate optional artifact.
+
+For sky's LSP today: in-memory is the only thing needed.
+The SCIP question is a v2+ artifact when there's a concrete
+consumer (Sourcegraph indexing your private Bazel repos, for
+example).
 
 ## What is HIR
 
@@ -105,6 +173,99 @@ Recommend **Option A** — same architecture as the rest of the
 stack. starpls keeps HIR in a separate crate; same reasoning
 applies.
 
+## Public API shape — Roslyn-influenced facade
+
+Per principle (1) Symbol-centric and (2) position-based queries,
+the PUBLIC surface is a small `Model` facade — not a sprawling
+collection of types. Internal IRs (Module/Body/Scope/SymbolTable)
+are implementation detail, NOT API boundary (rust-analyzer
+principle).
+
+```go
+package hir
+
+// Symbol is the core noun. Every semantic operation returns
+// or accepts a Symbol. Stable across reparses when the binding
+// hasn't moved.
+type Symbol struct {
+    ID   SymbolID
+    Name string
+    Kind SymbolKind
+}
+
+// SymbolID is a stable string identifier. Path-shaped per
+// rust-analyzer / SemanticDB convention. Example:
+//
+//   "file:///foo.bzl/helper/x"
+//   "file:///BUILD/<top-level>/cc_library@line5"
+//   "builtin:print"          (dialect-provided)
+//   "load:@rules_cc//cc:defs.bzl#cc_test"  (cross-file)
+//
+// Stable enough to use as a map key in annotation caches.
+type SymbolID string
+
+type SymbolKind uint8
+
+const (
+    SymbolFunction SymbolKind = iota
+    SymbolParam
+    SymbolLocal
+    SymbolGlobal
+    SymbolLoaded    // imported via load()
+    SymbolBuiltin   // from dialect.Builtins registry
+)
+
+// Dialect is what the host injects. Provides builtin
+// registrations and (later) known-callable type info.
+type Dialect interface {
+    Builtins() map[string]Symbol
+    // future: KnownCallable(name string) (*Signature, bool)
+}
+
+// Model is the per-file semantic facade. Stateful — caches
+// queries. Implements the Roslyn SemanticModel shape.
+//
+// Construction is cheap (no eager analysis). Each query lazily
+// builds what it needs and memoizes the result. Editing the
+// underlying file invalidates the Model; callers re-construct
+// (or use the incremental driver to share unchanged subtrees).
+type Model struct {
+    file    ast.File
+    dialect Dialect
+    // ... lazy caches (scopes, symbols, resolved refs, types)
+}
+
+func New(file ast.File, dialect Dialect) *Model
+
+// --- Core Symbol-centric queries (Roslyn shape) ---
+
+// SymbolAt returns the symbol at position, if any. Mirrors
+// Roslyn's GetSymbolInfo(node).
+func (m *Model) SymbolAt(pos syntax.Span) (Symbol, bool)
+
+// Definition returns the IdentifierReference where Symbol was
+// declared. Mirrors Roslyn's GetDeclaredSymbol's inverse.
+func (m *Model) Definition(s Symbol) (analysis.IdentifierReference, bool)
+
+// References returns every use of Symbol in this file, in
+// source order. Cross-file uses live in the workspace layer.
+func (m *Model) References(s Symbol) []analysis.IdentifierReference
+
+// --- Position-based queries (LSP-shaped) ---
+
+// NamesInScope returns the symbols visible at position.
+// Drives `textDocument/completion`.
+func (m *Model) NamesInScope(pos syntax.Span) []Symbol
+
+// Diagnose returns semantic diagnostics: undefined identifiers,
+// shadowed bindings, etc. Empty until Phase 3.
+func (m *Model) Diagnose() []syntax.Diagnostic
+```
+
+This shape mirrors Roslyn's `SemanticModel`. Implementations of
+each method lazily build the IR layers they need; consumers see
+only the facade.
+
 ## Phasing
 
 Six phases over multiple sessions. Each phase is independently
@@ -112,86 +273,100 @@ useful; the LSP becomes more capable at each step.
 
 ### Phase 1 — scopes (~2 sessions)
 
-The simplest semantic primitive: **what's in scope at a position**.
+Build the lazy infrastructure: scope tree + memoization. Public
+API gets `Model.NamesInScope(pos)`.
 
-API sketch:
+Internal IRs (NOT exported):
 
 ```go
-package hir
+// Per principle (4): Module IR / Body IR split for locality.
+// Edits inside a function body should NOT invalidate
+// module-level scopes.
 
-type Scope struct {
-    Parent *Scope         // outer scope, or nil for module-level
-    Kind   ScopeKind      // Module / Function / Comprehension / If
-    Span   syntax.Span
-    Names  map[string]Binding  // bindings introduced in this scope
+// moduleIR — top-level signatures, loads, global bindings.
+// Survives function-body edits.
+type moduleIR struct {
+    defs    map[string]*funcSig  // def name → signature only
+    globals map[string]*global   // top-level assigns
+    loads   []*loadStmt          // load() statements
 }
 
-type Binding struct {
-    Name     string
-    Decl     IdentifierReference  // where it's bound
-    Scope    *Scope               // owning scope
+// bodyIR — per-function-body semantic info. Rebuilt only when
+// the owning function's body changes.
+type bodyIR struct {
+    fn     *funcSig
+    scope  *scope          // root scope of the body
 }
 
-// BuildScopes walks the AST and returns the scope tree.
-func BuildScopes(file ast.File) *Scope { ... }
+// scope is the lexical-region primitive.
+type scope struct {
+    parent *scope         // outer scope, nil for module-level
+    kind   scopeKind      // Module / Function / Comprehension / If
+    span   syntax.Span
+    names  map[string]*binding
+}
 
-// ScopeAt returns the innermost scope containing position offset.
-func (s *Scope) ScopeAt(offset int) *Scope { ... }
-
-// Lookup walks up the scope chain looking for name.
-func (s *Scope) Lookup(name string) (Binding, bool) { ... }
+type binding struct {
+    name   string
+    decl   analysis.IdentifierReference
+    kind   SymbolKind  // promotes to public Symbol
+    scope  *scope
+}
 ```
 
-**Consumes:** `FindIdentifierDeclarations` (which spans introduce
-new names) and AST node kinds (DefStmt, AssignmentExpr,
-LoadStmt, comprehension clauses).
+`Model.NamesInScope(pos)` walks the scope chain from innermost
+to outermost, accumulating visible names + dialect builtins.
+
+**Why the Module IR / Body IR split matters NOW (Phase 1):**
+even though we're only building scopes, the split must be
+designed in. Without it, every keystroke inside a `def` body
+rebuilds the module-level scope, which doesn't change. Mirror
+the rust-analyzer invariant from day one.
 
 **Unlocks:**
 
-- Scope-aware textual rename (sky's RenameSymbol gains a
-  `RenameInScope(start, end, name)` variant).
-- The LSP's `definition` handler can answer "which decl does this
-  use refer to?" — walk up the scope chain.
-- The lint rule `SKY-shadowed-binding` (from
-  `PLAN-skylint-cst-rules.md`) gains a true implementation.
+- LSP `textDocument/completion` gets in-scope-symbol grounding
+  (was textual-prefix matching only).
+- The lint rule `SKY-shadowed-binding` from
+  `PLAN-skylint-cst-rules.md` gains a real implementation.
+- Sky's `RenameSymbol` gains `RenameInScope` variant for
+  scope-correct rename (was scope-blind).
 
 **Out of scope for Phase 1:** type inference, cross-file
-resolution, comprehension-clause subtleties (defer to Phase 3).
+resolution, comprehension-clause edge cases (defer to Phase 3),
+SCIP export (defer indefinitely).
 
-### Phase 2 — symbol table (~1 session)
+### Phase 2 — Symbol identity + reference resolution (~2 sessions)
 
-Build on Phase 1 to give every binding a stable identity.
+Promote scope's `*binding` to public `Symbol` with stable
+SymbolID. Wire `Model.SymbolAt(pos)`, `Definition(s)`,
+`References(s)`.
 
 ```go
-type SymbolID uint32
-type SymbolTable struct {
-    bindings []Binding   // index = SymbolID
-    byScope  map[*Scope][]SymbolID
-}
+// SymbolID generation rules (path-shaped, deterministic):
+//
+//   "file://" + filepath + "/" + scope-path + "/" + name
+//
+// Where scope-path concatenates enclosing function names
+// joined by "/". Anonymous comprehension scopes get
+// "<comp@line:col>" to disambiguate. Global symbols use
+// "<top-level>" as their scope-path.
+//
+// Built-in symbols from dialect.Builtins use a distinct prefix:
+// "builtin:print", "builtin:len", etc. These IDs are STABLE
+// across files (every reference to `print` resolves to the
+// same SymbolID), which is what enables cross-file features.
 
-func BuildSymbolTable(file ast.File, scopes *Scope) *SymbolTable
+func buildSymbolID(file string, scope *scope, name string) SymbolID
 ```
 
-Each binding gets a stable `SymbolID`. References become
-`(span, SymbolID)` pairs.
-
-**Unlocks:** LSP can present "all references to THIS symbol" by
-matching SymbolID, not name. Renames are now structurally safe
-within a file.
-
-### Phase 3 — resolved references (~2 sessions)
-
-Walk every identifier use and resolve to its binding:
-
-```go
-type ResolvedReference struct {
-    Use     IdentifierReference  // the use site
-    Target  SymbolID             // which binding it refers to
-}
+`References(s)` works by finding every IdentifierReference where
+the use's scope chain finds the SAME binding as Symbol's
+declaration. This is where scope-aware rename comes from.
 
 func ResolveReferences(file ast.File, scopes *Scope, syms *SymbolTable) []ResolvedReference
-```
 
+````
 For unresolved references (use of unbound name, no matching scope
 walk), produce a diagnostic via `SKY-undefined-identifier`.
 
@@ -242,7 +417,7 @@ type Workspace struct {
 }
 
 func (w *Workspace) Resolve(load LoadedSymbol, fromPath string) (*Binding, bool)
-```
+````
 
 Path resolution rules are Bazel-flavored
 (`@repo//pkg:label.bzl` → filesystem path). Lives in
