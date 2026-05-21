@@ -171,6 +171,68 @@ out.
 - Build a wasm-binary-fetcher integration in VS Code extension.
   Out of scope until Phase 2 lands.
 
+## Microsoft's official LSP-over-WASM stack (research notes, 2026-05-21)
+
+The official path exists and is more mature than I credited in the
+first draft of this plan:
+
+- **`ms-vscode.wasm-wasi-core`** extension — the runtime engine that
+  executes WebAssemblies compiled to WASI Preview 1. Extensions
+  declare `extensionDependencies` on this.
+  ([Marketplace listing](https://marketplace.visualstudio.com/items?itemName=ms-vscode.wasm-wasi-core))
+- **`@vscode/wasm-wasi-lsp`** npm package — exposes
+  `createStdioOptions`, `createUriConverters`, `startServer`. The
+  TypeScript activation code wires the WASM language server to
+  VS Code's LanguageClient with one factory call.
+- **URI translation is automatic.** `vscode-vfs://github/.../foo.txt`
+  ↔ `file:///workspace/foo.txt` happens transparently in both
+  directions. This is the killer feature — without it, every LSP
+  message would need URI rewriting on both sides.
+- **Official example is Rust.** Uses `tower_lsp` + `lsp_server` crate.
+  See [VS Code blog "WebAssembly for Extension Development — Part
+  Two"](https://code.visualstudio.com/blogs/2024/06/07/wasm-part2).
+- **No public Go-LSP-via-WASM example exists** as of 2026-05.
+  Microsoft/vscode-wasm#44 asked for one, only Rust shipped.
+
+### What this means for sky
+
+If skyls shipped as WASM, it would be **the first public Go LSP
+distributed via `@vscode/wasm-wasi-lsp`**. Implications:
+
+- **Trailblazing risk.** No template to copy. Every edge case
+  (URI handling, threading model, stdio buffering) is yours to
+  discover.
+- **Community leadership upside.** A working Go example would be
+  contribution-quality material — likely accepted into
+  `microsoft/vscode-extension-samples` if it works cleanly.
+- **TinyGo vs standard Go.** Standard Go's `GOOS=wasip1` works but
+  produces large binaries and has known GC / 32-bit-pointer
+  quirks. [TinyGo's WASI Preview 1 support](https://tinygo.org/docs/guides/webassembly/wasm/)
+  is more mature for embedded / WASI use cases and produces
+  significantly smaller binaries — but TinyGo lacks some stdlib
+  surface (notably `reflect` is limited, which may affect JSON
+  encoding paths). Decision deferred until prototype.
+
+### Updated phasing
+
+Phase 0 unchanged (defer).
+
+Phase 2 (WASM as experimental secondary) — now structured as a
+prototype:
+
+- Compile skyls with `GOOS=wasip1 GOARCH=wasm` (standard Go first).
+- Build a minimal VS Code extension using
+  `@vscode/wasm-wasi-lsp` based on Microsoft's Rust sample
+  pattern.
+- Run sky's existing LSP integration tests through the WASM path
+  and measure perf delta + bug surface.
+- Document findings in a `docs/wasm-prototype-RESULTS.md`.
+- If perf is acceptable (<3x slowdown on the typical-file
+  workload), and bug surface is small, promote from experimental
+  → "supported alternative".
+
+Phase 3 (WASI Preview 2) — still future.
+
 ## Open questions
 
 1. Does the `vscode-wasm` extension API expose a stdio-style LSP
