@@ -31,6 +31,8 @@ var coreCommands = map[string]string{
 	"test":  "skytest",
 	"doc":   "skydoc",
 	"ls":    "skyls",
+	"cov":   "skycov",
+	"ci":    "sky-ci",
 }
 
 func main() {
