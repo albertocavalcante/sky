@@ -492,3 +492,19 @@ func TestSuppressionParser_LeadingCommaAndMalformedList(t *testing.T) {
 		}
 	}
 }
+
+func TestSuppressionParser_DisableAllTrailingComma(t *testing.T) {
+	tests := []struct {
+		src  string
+		line int
+	}{
+		{"# skylint: disable=all,\ncode()\n", 1},
+		{"# skylint: disable-next-line=all,\ncode()\n", 2},
+	}
+	for _, tt := range tests {
+		parser := NewSuppressionParser([]byte(tt.src))
+		if !parser.IsSuppressed(Finding{FilePath: "t.star", Line: tt.line, Rule: "any-rule"}) {
+			t.Errorf("%q should suppress every rule", tt.src)
+		}
+	}
+}

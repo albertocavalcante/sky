@@ -68,3 +68,29 @@ func TestLoadGraph_RelativeLabelUsesEnclosingBuildPackage(t *testing.T) {
 		t.Errorf("LoadedBy(//pkg/sub:base.bzl) = %v, want none", got)
 	}
 }
+
+func TestLoadGraph_EnclosingPackageReverseLookup(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, "pkg/BUILD", "pkg/sub/base.bzl")
+	if err := writeContent(root, "pkg/x.bzl", `load(":sub/base.bzl", "x")`+"\n"); err != nil {
+		t.Fatal(err)
+	}
+	idx := New(root)
+	if _, errs := idx.AddPattern("//..."); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	g := idx.BuildLoadGraph()
+	for _, q := range []string{"pkg/sub/base.bzl", "//pkg/sub/base.bzl", "//pkg/sub:base.bzl", "//pkg:sub/base.bzl"} {
+		if got := g.LoadedBy(q); len(got) != 1 || got[0] != "pkg/x.bzl" {
+			t.Errorf("LoadedBy(%q) = %v", q, got)
+		}
+	}
+}
+
+func TestLookupNormalizesBackslashes(t *testing.T) {
+	// Real Windows separators cannot occur on this OS; exercise the helper
+	// with an explicit separator.
+	if got := toSlashSep(`lib\a.bzl`, '\\'); got != "lib/a.bzl" {
+		t.Errorf("toSlashSep = %q", got)
+	}
+}

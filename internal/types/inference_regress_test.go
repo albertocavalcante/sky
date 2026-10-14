@@ -29,3 +29,12 @@ func TestInferExprType_Regressions(t *testing.T) {
 		}
 	}
 }
+
+func TestInferSliceTupleUnspecialized(t *testing.T) {
+	for _, code := range []string{"(1, 2)[:]", "tuple((1, 2)[:])"} {
+		got := InferExprType(parseExpr(t, code)).String()
+		if got == "tuple[Unknown]" {
+			t.Errorf("InferExprType(%q) = %q, invented singleton tuple", code, got)
+		}
+	}
+}

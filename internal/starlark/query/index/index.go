@@ -151,6 +151,7 @@ func (idx *Index) Clear() {
 //   - "*.star"         - glob in current directory
 //   - "**/*.bzl"       - recursive glob
 func (idx *Index) MatchFiles(pattern string) []*File {
+	pattern = normalizeLookup(pattern)
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
 
@@ -258,4 +259,18 @@ func parseFile(content []byte, path string, kind filekind.Kind) (*build.File, er
 		// KindStarlark, KindSkyI, KindUnknown, or any other
 		return build.ParseDefault(path, content)
 	}
+}
+
+// normalizeLookup converts a caller-supplied path to the slash-separated form
+// used for stored keys.
+func normalizeLookup(p string) string {
+	return toSlashSep(p, filepath.Separator)
+}
+
+// toSlashSep replaces sep with '/'.
+func toSlashSep(p string, sep rune) string {
+	if sep == '/' {
+		return p
+	}
+	return strings.ReplaceAll(p, string(sep), "/")
 }
