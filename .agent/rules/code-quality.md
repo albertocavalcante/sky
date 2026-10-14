@@ -17,8 +17,9 @@ description: Go code quality, tests, and style
 - A regression test must fail without the fix. Confirm it, do not assume it.
 - Cover both success and failure paths, and malformed or hostile input for
   anything that parses protocol, config or files.
-- Run `go test -race ./...` before commit; concurrency code needs a test that
-  exercises the shared state.
+- Run `go test -race ./...` and `just test` (Bazel) before commit. They are not
+  equivalent: Go tests can pass while a missing Bazel fixture fails CI.
+- Concurrency code needs a test that exercises the shared state.
 - Do not leave dead helpers or unused test scaffolding behind.
 
 ## Correctness traps in this codebase

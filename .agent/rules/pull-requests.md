@@ -24,10 +24,12 @@ A change is ready only when all of these hold. Do not open the PR before they do
 4. **Verification passes locally**, in this order:
    ```bash
    just format && just format-sh
+   just gazelle         # first: BUILD files must match the Go files and imports
    go vet ./...
    go test -race ./...
    just lint            # bazel build //... (nogo)
-   just gazelle         # after adding/removing/renaming Go files or imports
+   just lint-sh         # shellcheck; CI fails on what format-sh lets through
+   just test            # bazel test //...; Go tests alone miss Bazel fixtures
    git diff --check
    ```
    CI also runs golangci-lint and `go mod tidy`. Run them if you touched
@@ -72,7 +74,8 @@ Body (the template in `.github/pull_request_template.md` has these headings):
 ```bash
 git branch --show-current          # never on main
 git status                         # nothing unexpected
-git diff --cached                  # review exactly what ships
+git diff main...HEAD               # review the complete diff the PR ships
+git log --oneline main..HEAD       # and every commit in it
 git push -u origin <branch>        # never --force; --force-with-lease if needed
 gh pr create --fill-first --web=false   # then edit title/body to the format above
 gh pr checks <PR_NUMBER> --watch
@@ -91,4 +94,5 @@ user has asked for it in the current task.
 ## After review
 
 Follow `.agent/workflows/review.md`: every thread gets a fix, a defer (with an
-issue link) or a reasoned rejection, then a reply and resolution.
+issue link) or a reasoned rejection, and a reply. Resolve fixed and deferred
+threads. Leave rejected threads unresolved so the reviewer can respond.
