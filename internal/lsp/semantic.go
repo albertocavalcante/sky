@@ -124,6 +124,27 @@ func tokenizeContent(content string) []SemanticToken {
 	// Sort tokens by position (line, then character)
 	sortTokens(tokens)
 
+	return tokensToUTF16(tokens, content)
+}
+
+// tokensToUTF16 converts token columns and lengths from rune counts (as
+// produced from buildtools positions) to UTF-16 code units, as LSP requires.
+func tokensToUTF16(tokens []SemanticToken, content string) []SemanticToken {
+	if len(tokens) == 0 {
+		return tokens
+	}
+	lines := strings.Split(content, "\n")
+	for i := range tokens {
+		t := &tokens[i]
+		if int(t.Line) >= len(lines) {
+			continue
+		}
+		text := strings.TrimSuffix(lines[t.Line], "\r")
+		start := runeColToUTF16(text, int(t.StartChar))
+		end := runeColToUTF16(text, int(t.StartChar+t.Length))
+		t.StartChar = uint32(start)
+		t.Length = uint32(max(end-start, 0))
+	}
 	return tokens
 }
 

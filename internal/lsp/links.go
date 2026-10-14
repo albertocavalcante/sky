@@ -45,17 +45,17 @@ func (s *Server) handleDocumentLink(ctx context.Context, params json.RawMessage)
 
 		// Get the range of the module string
 		start, end := load.Module.Span()
-		targetURI := string("file://" + targetPath)
+		targetURI := pathToURI(targetPath)
 
 		links = append(links, protocol.DocumentLink{
 			Range: protocol.Range{
 				Start: protocol.Position{
 					Line:      uint32(start.Line - 1),
-					Character: uint32(start.LineRune - 1),
+					Character: uint32(runeColToUTF16(lineOf(doc.Content, start.Line-1), start.LineRune-1)),
 				},
 				End: protocol.Position{
 					Line:      uint32(end.Line - 1),
-					Character: uint32(end.LineRune - 1),
+					Character: uint32(runeColToUTF16(lineOf(doc.Content, end.Line-1), end.LineRune-1)),
 				},
 			},
 			Target: targetURI,
@@ -74,7 +74,7 @@ func resolveLoadPath(module, fromPath, workspaceRoot string) string {
 	}
 
 	// Strip file:// prefix from workspace root
-	workspaceRoot = strings.TrimPrefix(workspaceRoot, "file://")
+	workspaceRoot = uriToPath(workspaceRoot)
 	if workspaceRoot == "" {
 		workspaceRoot = filepath.Dir(fromPath)
 	}

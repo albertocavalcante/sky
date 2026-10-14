@@ -261,6 +261,15 @@ func (c *inlayHintCollector) collectLoopVarsHint(vars build.Expr, elemType types
 	}
 }
 
+// utf16Col converts a buildtools position (1-based rune column) to a
+// 0-based UTF-16 column.
+func (c *inlayHintCollector) utf16Col(pos build.Position) int {
+	if pos.Line < 1 || pos.Line > len(c.lines) {
+		return max(pos.LineRune-1, 0)
+	}
+	return runeColToUTF16(c.lines[pos.Line-1], pos.LineRune-1)
+}
+
 // addTypeHint adds a type hint at the given position.
 func (c *inlayHintCollector) addTypeHint(pos build.Position, typeRef types.TypeRef) {
 	label := ": " + c.formatType(typeRef)
@@ -268,7 +277,7 @@ func (c *inlayHintCollector) addTypeHint(pos build.Position, typeRef types.TypeR
 	c.hints = append(c.hints, protocol.InlayHint{
 		Position: protocol.Position{
 			Line:      uint32(pos.Line - 1),
-			Character: uint32(pos.LineRune - 1),
+			Character: uint32(c.utf16Col(pos)),
 		},
 		Label:        protocol.Or_ArrInlayHintLabelPart_string{Value: label},
 		Kind:         protocol.InlayHintKindType,
