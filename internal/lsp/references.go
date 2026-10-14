@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/bazelbuild/buildtools/build"
 
@@ -194,11 +195,11 @@ func collectIdentRefs(content string, file *build.File, targetName string) []ide
 			Range: protocol.Range{
 				Start: protocol.Position{
 					Line:      uint32(start.Line - 1),
-					Character: uint32(runeColToUTF16(li.line(start.Line-1), start.LineRune-1)),
+					Character: uint32(li.utf16Col(start.Line-1, start.LineRune-1)),
 				},
 				End: protocol.Position{
 					Line:      uint32(end.Line - 1),
-					Character: uint32(runeColToUTF16(li.line(end.Line-1), end.LineRune-1)),
+					Character: uint32(li.utf16Col(end.Line-1, end.LineRune-1)),
 				},
 			},
 			IsDecl: isDecl,
@@ -224,12 +225,16 @@ func collectIdentRefs(content string, file *build.File, targetName string) []ide
 	return refs
 }
 
-// lineIndex splits content into lines once so position conversion is not
-// quadratic in the file size.
-type lineIndex struct{ lines []string }
+// lineIndex splits content into lines once and caches, per line, the
+// rune-column to UTF-16 mapping, so position conversion is linear in the
+// file size even when a single line holds many positions.
+type lineIndex struct {
+	lines []string
+	cols  map[int][]int // line -> UTF-16 offset of each rune index; nil entry = ASCII line
+}
 
 func newLineIndex(content string) *lineIndex {
-	return &lineIndex{lines: strings.Split(content, "\n")}
+	return &lineIndex{lines: strings.Split(content, "\n"), cols: map[int][]int{}}
 }
 
 // line returns the 0-based line without its "\r", or "" when out of range.
@@ -238,6 +243,42 @@ func (li *lineIndex) line(n int) string {
 		return ""
 	}
 	return strings.TrimSuffix(li.lines[n], "\r")
+}
+
+// utf16Col converts a 0-based rune column on the 0-based line n to a UTF-16
+// column. Columns past the end of the line count one unit per rune.
+func (li *lineIndex) utf16Col(n, runeCol int) int {
+	if runeCol <= 0 {
+		return 0
+	}
+	offs, ok := li.cols[n]
+	if !ok {
+		text := li.line(n)
+		ascii := true
+		for i := 0; i < len(text); i++ {
+			if text[i] >= utf8.RuneSelf {
+				ascii = false
+				break
+			}
+		}
+		if !ascii {
+			offs = make([]int, 0, len(text)+1)
+			units := 0
+			for _, r := range text {
+				offs = append(offs, units)
+				units += utf16Width(r)
+			}
+			offs = append(offs, units)
+		}
+		li.cols[n] = offs
+	}
+	if offs == nil {
+		return runeCol
+	}
+	if runeCol < len(offs) {
+		return offs[runeCol]
+	}
+	return offs[len(offs)-1] + (runeCol - (len(offs) - 1))
 }
 
 // bindingInfo describes every binding of a name in a file.
@@ -408,8 +449,8 @@ func collectRenameRefs(content string, file *build.File, targetName string) ([]i
 		}
 		for _, id := range labels {
 			start, end := id.Span()
-			sc := uint32(runeColToUTF16(li.line(start.Line-1), start.LineRune-1))
-			ec := uint32(runeColToUTF16(li.line(end.Line-1), end.LineRune-1))
+			sc := uint32(li.utf16Col(start.Line-1, start.LineRune-1))
+			ec := uint32(li.utf16Col(end.Line-1, end.LineRune-1))
 			key := [2]int{start.Line - 1, int(sc)}
 			if seen[key] {
 				continue

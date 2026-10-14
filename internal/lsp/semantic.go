@@ -133,15 +133,14 @@ func tokensToUTF16(tokens []SemanticToken, content string) []SemanticToken {
 	if len(tokens) == 0 {
 		return tokens
 	}
-	lines := strings.Split(content, "\n")
+	li := newLineIndex(content)
 	for i := range tokens {
 		t := &tokens[i]
-		if int(t.Line) >= len(lines) {
+		if int(t.Line) >= len(li.lines) {
 			continue
 		}
-		text := strings.TrimSuffix(lines[t.Line], "\r")
-		start := runeColToUTF16(text, int(t.StartChar))
-		end := runeColToUTF16(text, int(t.StartChar+t.Length))
+		start := li.utf16Col(int(t.Line), int(t.StartChar))
+		end := li.utf16Col(int(t.Line), int(t.StartChar+t.Length))
 		t.StartChar = uint32(start)
 		t.Length = uint32(max(end-start, 0))
 	}
