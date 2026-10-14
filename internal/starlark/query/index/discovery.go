@@ -96,8 +96,9 @@ func discoverBazelPattern(pattern string, root string) ([]string, error) {
 // Patterns are matched against root-relative, slash-separated paths; "**"
 // matches zero or more directories.
 func discoverGlobPattern(pattern string, root string) ([]string, error) {
-	if !strings.ContainsAny(pattern, "/") {
-		// Simple glob: *.bzl (root level only)
+	if !strings.Contains(pattern, "**") {
+		// Plain glob (*.bzl, lib/*.bzl): keep filepath.Glob semantics, which
+		// follow symlinks and allow explicitly named hidden directories.
 		matches, err := filepath.Glob(filepath.Join(root, pattern))
 		if err != nil {
 			return nil, err
