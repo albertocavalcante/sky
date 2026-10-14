@@ -123,7 +123,9 @@ func publishRecorder(t *testing.T) (*Server, *syncBuffer) {
 	t.Helper()
 	var out syncBuffer
 	s := NewServer(nil)
-	s.SetConn(NewConn(&mockConn{Reader: strings.NewReader(""), Writer: &out}, s))
+	conn := NewConn(&mockConn{Reader: strings.NewReader(""), Writer: &out}, s)
+	out.conn = conn
+	s.SetConn(conn)
 	return s, &out
 }
 

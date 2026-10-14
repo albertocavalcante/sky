@@ -32,11 +32,12 @@ func TestReadRequest(t *testing.T) {
 }
 
 func TestWriteResponse(t *testing.T) {
-	var buf bytes.Buffer
+	var buf syncBuffer
 	conn := NewConn(&mockConn{
 		Reader: bytes.NewReader(nil),
 		Writer: &buf,
 	}, nil)
+	buf.conn = conn
 
 	id := json.RawMessage(`1`)
 	resp := &Response{

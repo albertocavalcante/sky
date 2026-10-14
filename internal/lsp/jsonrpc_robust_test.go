@@ -18,8 +18,9 @@ func frame(body string) string {
 
 // syncBuffer is a goroutine-safe bytes.Buffer.
 type syncBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
+	mu   sync.Mutex
+	buf  bytes.Buffer
+	conn *Conn // when set, String waits for the outbound queue to drain
 }
 
 func (b *syncBuffer) Write(p []byte) (int, error) {
@@ -29,6 +30,9 @@ func (b *syncBuffer) Write(p []byte) (int, error) {
 }
 
 func (b *syncBuffer) String() string {
+	if b.conn != nil {
+		b.conn.flush(time.Second)
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.buf.String()
