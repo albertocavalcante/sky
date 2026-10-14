@@ -326,3 +326,26 @@ func TestDiscoverGlobKeepsFilepathGlobSemantics(t *testing.T) {
 		}
 	}
 }
+
+func TestDiscoverGlobExcludesDirectories(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, "lib/real.bzl")
+	if err := os.MkdirAll(filepath.Join(root, "lib/cache.bzl"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "lib/real.bzl"), filepath.Join(root, "lib/link.bzl")); err != nil {
+		t.Skip("symlinks unsupported")
+	}
+	got, err := Discover("lib/*.bzl", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, g := range got {
+		names = append(names, filepath.Base(g))
+	}
+	sort.Strings(names)
+	if len(names) != 2 || names[0] != "link.bzl" || names[1] != "real.bzl" {
+		t.Errorf("got %v", names)
+	}
+}

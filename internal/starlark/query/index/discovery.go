@@ -105,7 +105,14 @@ func discoverGlobPattern(pattern string, root string) ([]string, error) {
 		}
 		var result []string
 		for _, match := range matches {
-			if IsStarlarkFile(filepath.Base(match)) {
+			if !IsStarlarkFile(filepath.Base(match)) {
+				continue
+			}
+			// Follow symlinks but skip directories.
+			if st, err := os.Stat(match); err != nil || st.IsDir() {
+				continue
+			}
+			{
 				result = append(result, match)
 			}
 		}
