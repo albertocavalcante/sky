@@ -74,3 +74,19 @@ func TestRename_ForeignKeywordCallsDoNotBlockParamRename(t *testing.T) {
 		t.Errorf("value uses should be renamed: %v", lines)
 	}
 }
+
+func TestRename_SuccessiveUnicodeRenames(t *testing.T) {
+	// After renaming x to π the buffer holds π; it must be selectable again.
+	code := "π = 1\nprint(π)\n"
+	edit, err := doRename(t, code, 1, 7, "ω")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if edit == nil || len(edit.Changes["file:///rename.star"]) != 2 {
+		t.Fatalf("want 2 edits for π, got %+v", edit)
+	}
+	w, r := getWordAndRangeAtPosition("a = élan + 𝒙1\n", 0, 12)
+	if w != "𝒙1" || r.Start.Character != 11 || r.End.Character != 14 {
+		t.Errorf("astral word = %q %+v", w, r)
+	}
+}

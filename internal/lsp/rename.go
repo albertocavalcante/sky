@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/albertocavalcante/sky/internal/starlark/filekind"
@@ -152,14 +153,22 @@ func getWordAndRangeAtPosition(content string, line, char int) (string, protocol
 
 	// Find start of word
 	start := pos
-	for start > 0 && isIdentChar(lineContent[start-1]) {
-		start--
+	for start > 0 {
+		r, size := utf8.DecodeLastRuneInString(lineContent[:start])
+		if !isIdentRune(r) {
+			break
+		}
+		start -= size
 	}
 
 	// Find end of word
 	end := pos
-	for end < len(lineContent) && isIdentChar(lineContent[end]) {
-		end++
+	for end < len(lineContent) {
+		r, size := utf8.DecodeRuneInString(lineContent[end:])
+		if !isIdentRune(r) {
+			break
+		}
+		end += size
 	}
 
 	if start == end {
@@ -173,6 +182,12 @@ func getWordAndRangeAtPosition(content string, line, char int) (string, protocol
 	}
 
 	return word, wordRange
+}
+
+// isIdentRune reports whether r can appear in an identifier, using the same
+// rules as isValidIdentifier.
+func isIdentRune(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || (r >= '0' && r <= '9')
 }
 
 // starlarkReservedSet holds the words the Starlark scanner reserves (they
