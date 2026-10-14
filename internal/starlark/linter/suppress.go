@@ -221,6 +221,9 @@ func parseRuleList(s string) []string {
 			rules = append(rules, rule)
 		}
 	}
+	if len(rules) == 1 && rules[0] == "all" {
+		return []string{}
+	}
 	return rules
 }
 
