@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/albertocavalcante/sky/internal/starlark/coverage"
@@ -206,6 +207,9 @@ type Runner struct {
 	coverage *coverage.DefaultCollector
 	snapshot *SnapshotManager
 	mock     *MockManager
+
+	covMu   sync.Mutex
+	covSeen map[syntax.Position]bool
 }
 
 // New creates a new test runner.
@@ -274,15 +278,11 @@ func (r *Runner) RunFile(filename string, src []byte) (*FileResult, error) {
 	// TODO(upstream): Simplify once OnExec is merged upstream.
 	r.setupCoverageHook(thread)
 
-	// Register executable lines up front so unexecuted lines count as missing.
-	if r.coverage != nil {
-		_ = r.coverage.RegisterSource(filename, src)
-	}
-
 	globals, err := starlark.ExecFile(thread, filename, src, predeclared)
 	if err != nil {
 		return nil, fmt.Errorf("executing %s: %w", filename, err)
 	}
+	r.registerGlobalsCoverage(globals)
 
 	// Find test functions
 	testFuncs := r.findTestFunctions(globals)
@@ -444,10 +444,12 @@ func (r *Runner) loadConftestFixtures(filename string, predeclared starlark.Stri
 		}
 
 		thread := &starlark.Thread{Name: conftestPath}
+		r.setupCoverageHook(thread)
 		globals, err := starlark.ExecFile(thread, conftestPath, src, predeclared)
 		if err != nil {
 			return nil, fmt.Errorf("executing conftest %s: %w", conftestPath, err)
 		}
+		r.registerGlobalsCoverage(globals)
 
 		// Extract fixtures from conftest
 		conftestFixtures := FindFixtures(globals)
@@ -555,10 +557,12 @@ func (r *Runner) loadPreludes(basePredeclared starlark.StringDict) (starlark.Str
 		}
 
 		thread := &starlark.Thread{Name: preludePath}
+		r.setupCoverageHook(thread)
 		globals, err := starlark.ExecFile(thread, preludePath, src, combined)
 		if err != nil {
 			return nil, fmt.Errorf("executing prelude %s: %w", preludePath, err)
 		}
+		r.registerGlobalsCoverage(globals)
 
 		// Add prelude globals to combined (later preludes can shadow earlier ones)
 		for k, v := range globals {

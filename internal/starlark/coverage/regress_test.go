@@ -2,26 +2,18 @@ package coverage
 
 import (
 	"bytes"
-	"reflect"
 	"strings"
 	"testing"
 )
 
-func TestRegisterSourceCountsMissingLines(t *testing.T) {
-	src := []byte("\"\"\"doc\"\"\"\ndef f():\n    pass\n\ndef g(x):\n    if x:\n        return 1\n    return 2\n")
-	lines, err := ExecutableLines("a.star", src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := []int{2, 5, 6, 7, 8}; !reflect.DeepEqual(lines, want) {
-		t.Fatalf("lines = %v, want %v", lines, want)
-	}
-
+func TestRegisterLineCountsMissingLines(t *testing.T) {
 	c := NewCollector()
-	if err := c.RegisterSource("a.star", src); err != nil {
-		t.Fatal(err)
+	for _, l := range []int{2, 5, 6, 7, 8} {
+		c.RegisterLine("a.star", l)
 	}
+	c.RegisterLine("a.star", 2) // idempotent
 	c.BeforeExec("a.star", 2)
+	c.RegisterLine("a.star", 2) // must not reset hits
 	c.BeforeExec("a.star", 5)
 	rep := c.Report()
 	if rep.TotalLines != 5 || rep.CoveredLines != 2 {

@@ -80,7 +80,7 @@ func (sm *SnapshotManager) snapshotPath(name string) string {
 		"|", "_",
 	)
 	safeName := r.Replace(name)
-	return filepath.Join(sm.snapshotDir(), sm.testName+"__"+safeName+".snap")
+	return filepath.Join(sm.snapshotDir(), encodeFileComponent(sm.testName)+"__"+safeName+".snap")
 }
 
 // Compare compares a value against its snapshot.
@@ -335,4 +335,22 @@ func formatDiff(expected, actual string) string {
 		return fmt.Sprintf("--- Expected\n%s\n+++ Actual\n%s", expected, actual)
 	}
 	return result
+}
+
+// encodeFileComponent percent-encodes every byte that is not safe in a file
+// name (including path separators and '%' itself) so distinct names stay
+// distinct and cannot escape the snapshot directory.
+func encodeFileComponent(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9',
+			c == '_', c == '-', c == '.', c == '[', c == ']', c == '=', c == ',':
+			b.WriteByte(c)
+		default:
+			fmt.Fprintf(&b, "%%%02X", c)
+		}
+	}
+	return b.String()
 }

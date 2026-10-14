@@ -290,14 +290,28 @@ func (w *Watcher) run() {
 
 // handleEvent processes a file change event.
 func (w *Watcher) handleEvent(event fsnotify.Event) {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-
 	absPath, err := filepath.Abs(event.Name)
 	if err != nil {
 		w.sendErr(fmt.Errorf("resolve absolute path for event %s: %w", event.Name, err))
 		return
 	}
+
+	// Collect under the lock, but send after releasing it: a consumer that
+	// calls RefreshDependencies (write lock) must never wait on a producer
+	// that is itself blocked sending to the consumer.
+	affected := w.collectAffected(absPath)
+	if len(affected) > 0 {
+		select {
+		case w.Events <- WatchEvent{File: absPath, Op: event.Op, AffectedTests: affected}:
+		case <-w.done:
+		}
+	}
+}
+
+// collectAffected returns the test files affected by a change to absPath.
+func (w *Watcher) collectAffected(absPath string) []string {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 
 	var affected []string
 
@@ -323,12 +337,7 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 		}
 	}
 
-	if len(affected) > 0 {
-		select {
-		case w.Events <- WatchEvent{File: absPath, Op: event.Op, AffectedTests: affected}:
-		case <-w.done:
-		}
-	}
+	return affected
 }
 
 // WatchedFiles returns the list of files being watched.
