@@ -786,7 +786,7 @@ func TestFailUnderRejectsInvalid(t *testing.T) {
 			t.Errorf("toml fail_under=%s accepted", v)
 		}
 	}
-	for _, v := range []string{"float('nan')", "float('inf')", "-5", "150"} {
+	for _, v := range []string{"float('nan')", "float('inf')", "-5", "150", "9223372036854775808", "-9223372036854775809"} {
 		p := filepath.Join(dir, "c.sky")
 		src := "def configure():\n    return {'test': {'coverage': {'fail_under': " + v + "}}}\n"
 		if err := os.WriteFile(p, []byte(src), 0o644); err != nil {

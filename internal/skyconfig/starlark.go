@@ -269,7 +269,10 @@ func parseCoverageConfig(d *starlark.Dict, cfg *CoverageConfig) error {
 	if v, found, _ := d.Get(starlark.String("fail_under")); found {
 		switch val := v.(type) {
 		case starlark.Int:
-			i, _ := val.Int64()
+			i, ok := val.Int64()
+			if !ok {
+				return fmt.Errorf("fail_under: %s is out of range: must be between 0 and 100", val)
+			}
 			cfg.FailUnder = float64(i)
 		case starlark.Float:
 			cfg.FailUnder = float64(val)
