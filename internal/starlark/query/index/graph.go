@@ -17,6 +17,10 @@ type LoadGraph struct {
 
 	// Reverse maps a module to the files that load it.
 	Reverse map[string][]string
+
+	// reverseByPath indexes internal loads by normalized file path so any
+	// accepted spelling of a module finds them.
+	reverseByPath map[string][]string
 }
 
 // BuildLoadGraph builds the load graph from indexed files.
@@ -28,6 +32,8 @@ func (idx *Index) BuildLoadGraph() *LoadGraph {
 	g := &LoadGraph{
 		Forward: make(map[string][]string),
 		Reverse: make(map[string][]string),
+
+		reverseByPath: make(map[string][]string),
 	}
 
 	for _, f := range idx.files {
@@ -39,6 +45,9 @@ func (idx *Index) BuildLoadGraph() *LoadGraph {
 			modules = append(modules, module)
 			key := canonicalLabel(module)
 			g.Reverse[key] = append(g.Reverse[key], f.Path)
+			if p := moduleToPath(key); p != "" {
+				g.reverseByPath[p] = append(g.reverseByPath[p], f.Path)
+			}
 		}
 		if len(modules) > 0 {
 			g.Forward[f.Path] = modules
@@ -54,10 +63,19 @@ func (g *LoadGraph) LoadedBy(module string) []string {
 	if g == nil {
 		return nil
 	}
+	module = normalizeLookup(module)
 	if r, ok := g.Reverse[module]; ok {
 		return r
 	}
-	return g.Reverse[canonicalLabel(module)]
+	key := canonicalLabel(module)
+	if g.reverseByPath != nil {
+		if p := moduleToPath(key); p != "" {
+			if r, ok := g.reverseByPath[p]; ok {
+				return r
+			}
+		}
+	}
+	return g.Reverse[key]
 }
 
 // packageDir returns the slash-separated directory of the Bazel package that
@@ -124,6 +142,7 @@ func (g *LoadGraph) AllLoads(file string) []string {
 		return nil
 	}
 
+	file = normalizeLookup(file)
 	visited := make(map[string]bool)
 	var result []string
 
