@@ -84,16 +84,9 @@ type identRef struct {
 	IsDecl bool
 }
 
-// findReferences finds all references to a symbol name in a file.
-// If includeDeclaration is true, includes the definition site as well.
-// Columns are rune-based (no UTF-16 conversion); prefer findReferencesIn when
-// the source text is available.
-func findReferences(file *build.File, targetName string, uri string, includeDeclaration bool) []protocol.Location {
-	return findReferencesIn("", file, targetName, uri, includeDeclaration)
-}
-
-// findReferencesIn is like findReferences but converts columns to UTF-16
-// using content.
+// findReferencesIn finds all references to a symbol name in a file, with
+// columns converted to UTF-16 using content. If includeDeclaration is true,
+// the definition site is included as well.
 func findReferencesIn(content string, file *build.File, targetName string, uri string, includeDeclaration bool) []protocol.Location {
 	var refs []protocol.Location
 	for _, r := range collectIdentRefs(content, file, targetName) {
