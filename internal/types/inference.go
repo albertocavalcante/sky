@@ -474,8 +474,8 @@ func inferSlice(e *build.SliceExpr) TypeRef {
 		return baseType
 	}
 	if named, ok := baseType.(*NamedType); ok && named.Name == "tuple" {
-		// Tuple slice returns tuple (but we lose specific element types)
-		return Tuple(Unknown())
+		// Arity of the result is unknown: return an unspecialized tuple.
+		return Tuple()
 	}
 
 	return Unknown()
