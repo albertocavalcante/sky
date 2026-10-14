@@ -94,3 +94,22 @@ func TestCoverageThreshold(t *testing.T) {
 		t.Errorf("missing coverage: code=%d", c)
 	}
 }
+
+func TestCoverageFailUnderFromConfig(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "sky.toml"), []byte("[test.coverage]\nfail_under = 80\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "coverage.json"), []byte(`{"percentage": 50}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	const pass = `{"passed":1,"failed":0,"total":1,"files":1,"duration_ms":1,"results":[{"file":"a","duration_ms":1,"tests":[{"name":"t","passed":true,"duration_ms":1}]}]}`
+	var o, e bytes.Buffer
+	if c := Run([]string{"--system=generic"}, strings.NewReader(pass), &o, &e); c != exitFailed {
+		t.Errorf("fail_under from config: code=%d stderr=%s", c, e.String())
+	}
+	if c := Run([]string{"--system=generic", "--coverage-threshold=0"}, strings.NewReader(pass), &o, &e); c != exitOK {
+		t.Errorf("explicit 0 should disable: code=%d", c)
+	}
+}

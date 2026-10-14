@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/albertocavalcante/sky/internal/skyconfig"
 )
 
 // Exit codes
@@ -106,6 +108,24 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if err != nil {
 		printf(stderr, "sky-ci: reading input: %v\n", err)
 		return exitError
+	}
+
+	// Config file provides defaults for the threshold (coverage.fail_under)
+	// and coverage file (coverage.output); explicit flags win, including an
+	// explicit --coverage-threshold=0 which disables the check.
+	set := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
+	if !set["coverage-threshold"] || !set["coverage-file"] {
+		if skycfg, _, err := skyconfig.DiscoverConfig(""); err != nil {
+			printf(stderr, "sky-ci: warning: loading config: %v\n", err)
+		} else if skycfg != nil {
+			if !set["coverage-threshold"] {
+				cfg.CoverageThreshold = skycfg.Test.Coverage.FailUnder
+			}
+			if !set["coverage-file"] && skycfg.Test.Coverage.Output != "" {
+				cfg.CoverageFile = skycfg.Test.Coverage.Output
+			}
+		}
 	}
 
 	// Load coverage (required when a threshold is set, optional otherwise)

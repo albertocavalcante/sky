@@ -1,4 +1,4 @@
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "ci",
@@ -11,4 +11,12 @@ go_library(
     ],
     importpath = "github.com/albertocavalcante/sky/internal/ci",
     visibility = ["//:__subpackages__"],
+    deps = ["//internal/skyconfig"],
+)
+
+go_test(
+    name = "ci_test",
+    srcs = ["ci_test.go"],
+    embed = [":ci"],
+    deps = ["//internal/cmd/skytest"],
 )
