@@ -335,14 +335,9 @@ func runPluginInspect(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	if metadata.Version != "" {
-		plugin.Version = metadata.Version
-	}
-	if metadata.Summary != "" {
-		plugin.Description = metadata.Summary
-	}
-	plugin.Type = plugin.EffectiveType()
-	if err := store.UpsertPlugin(*plugin); err != nil {
+	// Only touch version/description, and only if the plugin was not
+	// reinstalled or removed while its metadata was being collected.
+	if _, err := store.UpdatePluginMetadata(plugin.Name, plugin.InstalledAt, metadata.Version, metadata.Summary); err != nil {
 		writef(stderr, "sky: %v\n", err)
 		return 1
 	}

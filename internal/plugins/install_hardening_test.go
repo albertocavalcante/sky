@@ -311,3 +311,30 @@ func TestInstallFromURL_ReusesConnections(t *testing.T) {
 		t.Fatalf("want 1 reused connection, got %d", n)
 	}
 }
+
+func TestUpdatePluginMetadata_SkipsReinstalledPlugin(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "bin")
+	writeTestFile(t, bin, "x")
+	s := NewStore(filepath.Join(dir, "root"))
+	old, err := s.InstallFromPath("foo", bin, "1", TypeExecutable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A concurrent reinstall replaces the entry after it was inspected.
+	time.Sleep(2 * time.Millisecond)
+	if _, err := s.InstallFromPath("foo", bin, "2", TypeWasm); err != nil {
+		t.Fatal(err)
+	}
+	ok, err := s.UpdatePluginMetadata("foo", old.InstalledAt, "9", "stale")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatal("stale metadata update must be skipped")
+	}
+	got, _ := s.FindPlugin("foo")
+	if got == nil || got.Type != TypeWasm || got.Version != "2" {
+		t.Fatalf("entry clobbered: %+v", got)
+	}
+}
