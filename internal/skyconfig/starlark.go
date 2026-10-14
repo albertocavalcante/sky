@@ -276,6 +276,9 @@ func parseCoverageConfig(d *starlark.Dict, cfg *CoverageConfig) error {
 		default:
 			return fmt.Errorf("fail_under must be a number, got %s", v.Type())
 		}
+		if err := ValidateCoverageThreshold(cfg.FailUnder); err != nil {
+			return fmt.Errorf("fail_under: %w", err)
+		}
 	}
 
 	// output

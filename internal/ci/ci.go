@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"os"
 
 	"github.com/albertocavalcante/sky/internal/skyconfig"
@@ -96,6 +97,13 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return exitError
 	}
 
+	set := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
+	if err := skyconfig.ValidateCoverageThreshold(cfg.CoverageThreshold); err != nil {
+		printf(stderr, "sky-ci: --coverage-threshold: %v\n", err)
+		return exitError
+	}
+
 	// Detect or validate CI system
 	if systemFlag != "" {
 		cfg.System = System(systemFlag)
@@ -113,10 +121,14 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	// Config file provides defaults for the threshold (coverage.fail_under)
 	// and coverage file (coverage.output); explicit flags win, including an
 	// explicit --coverage-threshold=0 which disables the check.
-	set := map[string]bool{}
-	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
 	if !set["coverage-threshold"] || !set["coverage-file"] {
 		if skycfg, _, err := skyconfig.DiscoverConfig(""); err != nil {
+			if !set["coverage-threshold"] {
+				// The config would have supplied the threshold; do not silently
+				// skip enforcement because it could not be loaded.
+				printf(stderr, "sky-ci: loading config: %v\n", err)
+				return exitError
+			}
 			printf(stderr, "sky-ci: warning: loading config: %v\n", err)
 		} else if skycfg != nil {
 			if !set["coverage-threshold"] {
@@ -207,6 +219,9 @@ func getHandler(cfg Config) Handler {
 }
 
 // readCoverage reads the total percentage from a skytest coverage JSON file.
+// It fails closed: a report without any measured lines (missing, empty or
+// zero-line data, which Report.Percentage would otherwise render as 100%) or
+// with inconsistent numbers is an error, never a passing coverage value.
 func readCoverage(path string) (float64, error) {
 	if path == "" {
 		return 0, fmt.Errorf("no coverage file specified")
@@ -216,13 +231,25 @@ func readCoverage(path string) (float64, error) {
 		return 0, err
 	}
 	var c struct {
-		Percentage *float64 `json:"percentage"`
+		TotalLines   int      `json:"total_lines"`
+		CoveredLines int      `json:"covered_lines"`
+		Percentage   *float64 `json:"percentage"`
 	}
 	if err := json.Unmarshal(data, &c); err != nil {
 		return 0, fmt.Errorf("parsing %s: %w", path, err)
 	}
+	if c.TotalLines <= 0 {
+		return 0, fmt.Errorf("no coverage data in %s (total_lines is 0; coverage collection may not be available)", path)
+	}
+	if c.CoveredLines < 0 || c.CoveredLines > c.TotalLines {
+		return 0, fmt.Errorf("inconsistent coverage data in %s: %d of %d lines covered", path, c.CoveredLines, c.TotalLines)
+	}
 	if c.Percentage == nil {
 		return 0, fmt.Errorf("%s has no percentage field", path)
 	}
-	return *c.Percentage, nil
+	pct := float64(c.CoveredLines) / float64(c.TotalLines) * 100
+	if math.IsNaN(*c.Percentage) || math.Abs(*c.Percentage-pct) > 0.5 {
+		return 0, fmt.Errorf("inconsistent coverage data in %s: percentage %v does not match %d/%d lines", path, *c.Percentage, c.CoveredLines, c.TotalLines)
+	}
+	return pct, nil
 }

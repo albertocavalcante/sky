@@ -15,6 +15,7 @@ package skyconfig
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,6 +95,16 @@ type LintConfig struct {
 	WarningsAsErrors bool `json:"warnings_as_errors" toml:"warnings_as_errors"`
 }
 
+// ValidateCoverageThreshold reports an error unless v is a finite percentage
+// in [0, 100]. NaN and Inf would otherwise make every threshold comparison
+// false and silently disable enforcement.
+func ValidateCoverageThreshold(v float64) error {
+	if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > 100 {
+		return fmt.Errorf("invalid coverage threshold %v: must be between 0 and 100", v)
+	}
+	return nil
+}
+
 // Duration wraps time.Duration for TOML/JSON string parsing.
 type Duration struct {
 	time.Duration
@@ -120,7 +131,7 @@ func (d *Duration) UnmarshalText(text []byte) error {
 
 // MarshalText implements encoding.TextMarshaler for Duration.
 func (d Duration) MarshalText() ([]byte, error) {
-	if d.Duration == 0 {
+	if d.Duration == 0 && !d.Set {
 		return nil, nil
 	}
 	return []byte(d.Duration.String()), nil

@@ -1,6 +1,9 @@
 package ci
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // TestResults mirrors the JSON emitted by `skytest -json`
 // (see tester.JSONReporter in internal/starlark/tester/reporter.go).
@@ -11,6 +14,27 @@ type TestResults struct {
 	Files      int          `json:"files"`
 	DurationMS float64      `json:"duration_ms"`
 	Results    []FileResult `json:"results"`
+
+	// hasAggregate is set when the input carried the aggregate counts.
+	hasAggregate bool
+}
+
+// UnmarshalJSON decodes the skytest JSON and records whether the aggregate
+// counts (passed/failed/total) were present.
+func (r *TestResults) UnmarshalJSON(data []byte) error {
+	type plain TestResults
+	var p plain
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(data, &keys); err != nil {
+		return err
+	}
+	*r = TestResults(p)
+	_, hasTotal := keys["total"]
+	r.hasAggregate = hasTotal
+	return nil
 }
 
 // FileResult represents test results for a single file.
@@ -33,18 +57,32 @@ func (r *TestResults) Duration() time.Duration {
 	return time.Duration(r.DurationMS * float64(time.Millisecond))
 }
 
-// Summary computes test summary statistics from the individual tests.
-// skytest -json does not report skipped tests, so skipped is always 0.
+// Summary returns test counts. When the input carries skytest's aggregate
+// counts they are authoritative: a skipped test is listed with passed=true in
+// the per-test results but is excluded from the aggregate passed/failed/total,
+// so skipped is the number of per-test passes beyond the aggregate. Without
+// aggregate counts (hand-written input) the counts come from the tests.
 func (r *TestResults) Summary() (passed, failed, skipped, total int) {
+	var tPassed, tFailed int
 	for _, f := range r.Results {
 		for _, t := range f.Tests {
-			total++
 			if t.Passed {
-				passed++
+				tPassed++
 			} else {
-				failed++
+				tFailed++
 			}
 		}
+	}
+	if !r.hasAggregate {
+		return tPassed, tFailed, 0, tPassed + tFailed
+	}
+	passed, failed = r.Passed, r.Failed
+	total = r.Total
+	if total == 0 {
+		total = passed + failed
+	}
+	if extra := tPassed - passed; extra > 0 {
+		skipped = extra
 	}
 	return
 }

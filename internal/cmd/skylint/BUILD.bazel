@@ -2,12 +2,17 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "skylint",
-    srcs = ["run.go"],
+    srcs = [
+        "github.go",
+        "run.go",
+    ],
     importpath = "github.com/albertocavalcante/sky/internal/cmd/skylint",
     visibility = ["//:__subpackages__"],
     deps = [
+        "//internal/ci",
         "//internal/starlark/linter",
         "//internal/starlark/linter/buildtools",
+        "//internal/starlark/sortutil",
         "//internal/version",
     ],
 )

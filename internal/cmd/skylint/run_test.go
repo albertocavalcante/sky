@@ -214,3 +214,24 @@ func TestRun_FlagValidation(t *testing.T) {
 		t.Errorf("file modified by invalid invocation: %s", b)
 	}
 }
+
+func TestRun_GitHubFormatEscapesWorkflowCommands(t *testing.T) {
+	dir := t.TempDir()
+	name := "a\n::stop-commands::TOKEN\n.bzl"
+	file := filepath.Join(dir, name)
+	if err := os.WriteFile(file, []byte("def f(:\n"), 0o644); err != nil {
+		t.Skipf("cannot create file with newline in name: %v", err)
+	}
+	for _, args := range [][]string{{"--format", "github", file}, {"--fix", "--format", "github", file}} {
+		var stdout, stderr bytes.Buffer
+		RunWithIO(context.Background(), args, nil, &stdout, &stderr)
+		for _, line := range strings.Split(stdout.String(), "\n") {
+			if strings.HasPrefix(line, "::stop-commands") {
+				t.Errorf("args %v: workflow command injection:\n%q", args, stdout.String())
+			}
+		}
+		if !strings.Contains(stdout.String(), "%0A") {
+			t.Errorf("args %v: newline not escaped: %q", args, stdout.String())
+		}
+	}
+}

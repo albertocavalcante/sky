@@ -154,7 +154,7 @@ func RunWithIO(ctx context.Context, args []string, _ io.Reader, stdout, stderr i
 	case "json":
 		reporter = linter.NewJSONReporter()
 	case "github":
-		reporter = linter.NewGitHubReporter()
+		reporter = githubReporter{}
 	default:
 		writef(stderr, "skylint: unknown format: %s\n", formatFlag)
 		return exitError

@@ -54,8 +54,8 @@ func (h *GitHubHandler) writeAnnotations(results *TestResults, w io.Writer) {
 				errMsg = "test failed"
 			}
 			printf(w, "::error file=%s::%s\n",
-				escapeProperty(relPath),
-				escapeData(test.Name+": "+errMsg))
+				EscapeProperty(relPath),
+				EscapeData(test.Name+": "+errMsg))
 		}
 	}
 }
@@ -144,17 +144,17 @@ func (h *GitHubHandler) writeOutputs(results *TestResults) error {
 	return nil
 }
 
-// escapeData escapes a workflow command message.
-func escapeData(s string) string {
+// EscapeData escapes a workflow command message.
+func EscapeData(s string) string {
 	s = strings.ReplaceAll(s, "%", "%25")
 	s = strings.ReplaceAll(s, "\r", "%0D")
 	s = strings.ReplaceAll(s, "\n", "%0A")
 	return s
 }
 
-// escapeProperty escapes a workflow command property value.
-func escapeProperty(s string) string {
-	s = escapeData(s)
+// EscapeProperty escapes a workflow command property value.
+func EscapeProperty(s string) string {
+	s = EscapeData(s)
 	s = strings.ReplaceAll(s, ":", "%3A")
 	s = strings.ReplaceAll(s, ",", "%2C")
 	return s

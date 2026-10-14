@@ -19,5 +19,9 @@ func LoadTOMLConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("parsing TOML config %s: %w", path, err)
 	}
 
+	if err := ValidateCoverageThreshold(cfg.Test.Coverage.FailUnder); err != nil {
+		return nil, fmt.Errorf("config %s: test.coverage.fail_under: %w", path, err)
+	}
+
 	return &cfg, nil
 }

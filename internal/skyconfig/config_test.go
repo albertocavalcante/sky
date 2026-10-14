@@ -746,3 +746,57 @@ func TestMerge_ExplicitZeroTimeout(t *testing.T) {
 		t.Errorf("unset timeout should keep default, got %v", base.Test.Timeout)
 	}
 }
+
+func TestDurationExplicitZeroRoundTrips(t *testing.T) {
+	var d Duration
+	if err := d.UnmarshalText([]byte("0s")); err != nil {
+		t.Fatal(err)
+	}
+	text, err := d.MarshalText()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back Duration
+	if err := back.UnmarshalText(text); err != nil {
+		t.Fatal(err)
+	}
+	if !back.Set || back.Duration != 0 {
+		t.Errorf("round trip of explicit 0s: got %+v (text %q), want Set=true", back, text)
+	}
+
+	// An unset duration stays unset.
+	text, _ = Duration{}.MarshalText()
+	var unset Duration
+	if err := unset.UnmarshalText(text); err != nil {
+		t.Fatal(err)
+	}
+	if unset.Set {
+		t.Errorf("unset duration became set (text %q)", text)
+	}
+}
+
+func TestFailUnderRejectsInvalid(t *testing.T) {
+	dir := t.TempDir()
+	for _, v := range []string{"nan", "inf", "-inf", "-1", "101"} {
+		p := filepath.Join(dir, "sky-"+v+".toml")
+		if err := os.WriteFile(p, []byte("[test.coverage]\nfail_under = "+v+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadTOMLConfig(p); err == nil {
+			t.Errorf("toml fail_under=%s accepted", v)
+		}
+	}
+	for _, v := range []string{"float('nan')", "float('inf')", "-5", "150"} {
+		p := filepath.Join(dir, "c.sky")
+		src := "def configure():\n    return {'test': {'coverage': {'fail_under': " + v + "}}}\n"
+		if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadStarlarkConfig(p, DefaultStarlarkTimeout); err == nil {
+			t.Errorf("starlark fail_under=%s accepted", v)
+		}
+	}
+	if err := ValidateCoverageThreshold(80); err != nil {
+		t.Errorf("80 rejected: %v", err)
+	}
+}
