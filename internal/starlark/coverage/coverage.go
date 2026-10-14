@@ -9,8 +9,6 @@ package coverage
 import (
 	"sort"
 	"sync"
-
-	"go.starlark.net/syntax"
 )
 
 // LineCoverage tracks execution counts for lines in a file.
@@ -43,41 +41,6 @@ func (lc *LineCoverage) Register(line int) {
 	if _, ok := lc.Hits[line]; !ok {
 		lc.Hits[line] = 0
 	}
-}
-
-// ExecutableLines returns the sorted 1-based line numbers of statements in
-// src that produce executable code (docstrings and `pass` are excluded).
-func ExecutableLines(filename string, src []byte) ([]int, error) {
-	f, err := syntax.Parse(filename, src, 0)
-	if err != nil {
-		return nil, err
-	}
-	set := make(map[int]bool)
-	syntax.Walk(f, func(n syntax.Node) bool {
-		stmt, ok := n.(syntax.Stmt)
-		if !ok {
-			return true
-		}
-		switch s := stmt.(type) {
-		case *syntax.ExprStmt:
-			if _, isLit := s.X.(*syntax.Literal); isLit {
-				return true // docstring / bare literal
-			}
-		case *syntax.BranchStmt:
-			if s.Token == syntax.PASS {
-				return true
-			}
-		}
-		start, _ := stmt.Span()
-		set[int(start.Line)] = true
-		return true
-	})
-	lines := make([]int, 0, len(set))
-	for l := range set {
-		lines = append(lines, l)
-	}
-	sort.Ints(lines)
-	return lines, nil
 }
 
 // Compute calculates TotalLines and CoveredLines from Hits.
@@ -311,20 +274,12 @@ func (c *DefaultCollector) BeforeExec(filename string, line int) {
 	fc.Lines.RecordHit(line)
 }
 
-// RegisterSource registers all executable lines of src for filename with zero
-// hits, so unexecuted lines are reported as missing.
-func (c *DefaultCollector) RegisterSource(filename string, src []byte) error {
-	lines, err := ExecutableLines(filename, src)
-	if err != nil {
-		return err
-	}
+// RegisterLine registers a line as executable with zero hits, so unexecuted
+// lines are reported as missing.
+func (c *DefaultCollector) RegisterLine(filename string, line int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	fc := c.report.AddFile(filename)
-	for _, l := range lines {
-		fc.Lines.Register(l)
-	}
-	return nil
+	c.report.AddFile(filename).Lines.Register(line)
 }
 
 // AfterExec implements Collector.
