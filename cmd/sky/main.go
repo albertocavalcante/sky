@@ -134,7 +134,7 @@ func parseInterspersed(fs *flag.FlagSet, args []string) error {
 		}
 		rest := fs.Args()
 		consumed := len(args) - len(rest)
-		if consumed > 0 && args[consumed-1] == "--" {
+		if consumed > 0 && endsWithTerminator(fs, args[:consumed]) {
 			// Explicit terminator: everything after it is positional.
 			positional = append(positional, rest...)
 			break
@@ -148,6 +148,30 @@ func parseInterspersed(fs *flag.FlagSet, args []string) error {
 	// Re-parse behind a terminator so fs.Args() reports the collected
 	// positionals without re-interpreting any of them as flags.
 	return fs.Parse(append([]string{"--"}, positional...))
+}
+
+// endsWithTerminator reports whether the last consumed argument is a real
+// "--" terminator rather than the value of a preceding non-bool flag.
+func endsWithTerminator(fs *flag.FlagSet, consumed []string) bool {
+	for i := 0; i < len(consumed); i++ {
+		a := consumed[i]
+		if a == "--" {
+			return i == len(consumed)-1
+		}
+		if len(a) < 2 || a[0] != '-' || strings.Contains(a, "=") {
+			continue
+		}
+		name := strings.TrimLeft(a, "-")
+		f := fs.Lookup(name)
+		if f == nil {
+			continue
+		}
+		if bf, ok := f.Value.(interface{ IsBoolFlag() bool }); ok && bf.IsBoolFlag() {
+			continue
+		}
+		i++ // next argument is this flag's value, even if it is "--"
+	}
+	return false
 }
 
 func runPlugin(args []string, stdout, stderr io.Writer) int {
