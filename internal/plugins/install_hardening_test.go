@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -22,12 +24,42 @@ func writeTestFile(t *testing.T, path, content string) {
 	}
 }
 
+// marketplaceJSON serializes a marketplace index; raw string interpolation
+// breaks on Windows paths, whose backslashes are invalid JSON escapes.
+func marketplaceJSON(t *testing.T, entries ...map[string]any) string {
+	t.Helper()
+	data, err := json.Marshal(map[string]any{"plugins": entries})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func TestInstallFromMarketplace_BackslashPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("backslash is a path separator")
+	}
+	dir := t.TempDir()
+	bin := filepath.Join(dir, `we\ird`)
+	writeTestFile(t, bin, "x")
+	sum := sha256.Sum256([]byte("x"))
+	idx := filepath.Join(dir, "idx.json")
+	writeTestFile(t, idx, marketplaceJSON(t, map[string]any{"name": "foo", "url": bin, "sha256": hex.EncodeToString(sum[:])}))
+	s := NewStore(filepath.Join(dir, "root"))
+	if err := s.UpsertMarketplace(Marketplace{Name: "m", URL: idx}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.InstallFromMarketplace(context.Background(), "foo", "m"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestInstallFromMarketplace_RequiresChecksum(t *testing.T) {
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "bin")
 	writeTestFile(t, bin, "x")
 	idx := filepath.Join(dir, "idx.json")
-	writeTestFile(t, idx, `{"plugins":[{"name":"foo","url":"`+bin+`"}]}`)
+	writeTestFile(t, idx, marketplaceJSON(t, map[string]any{"name": "foo", "url": bin}))
 	s := NewStore(filepath.Join(dir, "root"))
 	if err := s.UpsertMarketplace(Marketplace{Name: "m", URL: idx}); err != nil {
 		t.Fatal(err)
@@ -47,7 +79,7 @@ func TestInstallFromMarketplace_SourcePersisted(t *testing.T) {
 	writeTestFile(t, bin, "x")
 	sum := sha256.Sum256([]byte("x"))
 	idx := filepath.Join(dir, "idx.json")
-	writeTestFile(t, idx, `{"plugins":[{"name":"foo","url":"`+bin+`","sha256":"`+hex.EncodeToString(sum[:])+`"}]}`)
+	writeTestFile(t, idx, marketplaceJSON(t, map[string]any{"name": "foo", "url": bin, "sha256": hex.EncodeToString(sum[:])}))
 	s := NewStore(filepath.Join(dir, "root"))
 	if err := s.UpsertMarketplace(Marketplace{Name: "m", URL: idx}); err != nil {
 		t.Fatal(err)
@@ -120,7 +152,7 @@ func TestInstall_InvalidType(t *testing.T) {
 func TestMarketplace_InvalidTypeRejected(t *testing.T) {
 	dir := t.TempDir()
 	idx := filepath.Join(dir, "idx.json")
-	writeTestFile(t, idx, `{"plugins":[{"name":"foo","url":"u","type":"bogus"}]}`)
+	writeTestFile(t, idx, marketplaceJSON(t, map[string]any{"name": "foo", "url": "u", "type": "bogus"}))
 	s := NewStore(filepath.Join(dir, "root"))
 	if err := s.UpsertMarketplace(Marketplace{Name: "m", URL: idx}); err != nil {
 		t.Fatal(err)
@@ -133,7 +165,7 @@ func TestMarketplace_InvalidTypeRejected(t *testing.T) {
 func TestMarketplace_ContinuesPastFetchErrors(t *testing.T) {
 	dir := t.TempDir()
 	good := filepath.Join(dir, "good.json")
-	writeTestFile(t, good, `{"plugins":[{"name":"foo","url":"u"}]}`)
+	writeTestFile(t, good, marketplaceJSON(t, map[string]any{"name": "foo", "url": "u"}))
 	s := NewStore(filepath.Join(dir, "root"))
 	for _, m := range []Marketplace{{Name: "bad", URL: filepath.Join(dir, "missing.json")}, {Name: "good", URL: good}} {
 		if err := s.UpsertMarketplace(m); err != nil {
