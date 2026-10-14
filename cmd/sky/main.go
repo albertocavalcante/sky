@@ -141,14 +141,21 @@ func parseInterspersed(fs *flag.FlagSet, args []string) error {
 			return err
 		}
 		rest := fs.Args()
+		consumed := len(args) - len(rest)
+		if consumed > 0 && args[consumed-1] == "--" {
+			// Explicit terminator: everything after it is positional.
+			positional = append(positional, rest...)
+			break
+		}
 		if len(rest) == 0 {
 			break
 		}
 		positional = append(positional, rest[0])
 		args = rest[1:]
 	}
-	// Re-parse so fs.Args() reports the collected positionals.
-	return fs.Parse(positional)
+	// Re-parse behind a terminator so fs.Args() reports the collected
+	// positionals without re-interpreting any of them as flags.
+	return fs.Parse(append([]string{"--"}, positional...))
 }
 
 func runPlugin(args []string, stdout, stderr io.Writer) int {
