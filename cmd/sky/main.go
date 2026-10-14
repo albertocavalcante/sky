@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"syscall"
 	"text/tabwriter"
 	"time"
 
@@ -99,14 +98,7 @@ func runCoreCommand(name string, args []string, stdout, stderr io.Writer) int {
 	if err := cmd.Run(); err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			if code := exitErr.ExitCode(); code >= 0 {
-				return code
-			}
-			// Killed by a signal: follow the shell convention of 128+signal.
-			if ws, ok := exitErr.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
-				return 128 + int(ws.Signal())
-			}
-			return 1
+			return plugins.ExitCode(exitErr)
 		}
 		writef(stderr, "sky: %v\n", err)
 		return 1

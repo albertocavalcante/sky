@@ -116,3 +116,20 @@ func TestExecRunnerMetadataAndRun(t *testing.T) {
 		t.Fatalf("expected empty stderr, got %s", stderr.String())
 	}
 }
+
+func TestRunExec_SignalExitCode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script plugins are not supported on windows")
+	}
+	script := filepath.Join(t.TempDir(), "p")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nkill -TERM $$\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	code, err := runExec(context.Background(), Plugin{Name: "p", Path: script}, "run", nil, nil, &bytes.Buffer{}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 143 {
+		t.Fatalf("exit code = %d, want 143", code)
+	}
+}

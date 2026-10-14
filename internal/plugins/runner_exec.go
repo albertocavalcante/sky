@@ -6,7 +6,20 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"syscall"
 )
+
+// ExitCode converts a finished process's exit error into a shell-style exit
+// code: the process exit status, or 128+signal when it was killed by a signal.
+func ExitCode(exitErr *exec.ExitError) int {
+	if code := exitErr.ExitCode(); code >= 0 {
+		return code
+	}
+	if ws, ok := exitErr.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+		return 128 + int(ws.Signal())
+	}
+	return 1
+}
 
 func runExec(ctx context.Context, plugin Plugin, mode string, args []string, stdin io.Reader, stdout, stderr io.Writer) (int, error) {
 	cmd := exec.CommandContext(ctx, plugin.Path, args...)
@@ -18,7 +31,7 @@ func runExec(ctx context.Context, plugin Plugin, mode string, args []string, std
 	if err := cmd.Run(); err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			return exitErr.ExitCode(), nil
+			return ExitCode(exitErr), nil
 		}
 		return 1, err
 	}
