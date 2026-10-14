@@ -20,7 +20,7 @@ func (s *Server) publishDiagnostics(ctx context.Context, uri string, content str
 	path := uriToPath(uri)
 	var diagnostics []protocol.Diagnostic
 
-	// Run linter (only when the buffer matches what is on disk; see lintBuffer)
+	// Run linter on the in-memory buffer (see lintBuffer)
 	if findings, err := s.lintBuffer(path, content); err == nil {
 		for _, f := range findings {
 			diagnostics = append(diagnostics, lintFindingToDiagnosticIn(content, f))
@@ -52,8 +52,9 @@ func (s *Server) publishDiagnostics(ctx context.Context, uri string, content str
 	log.Printf("published %d diagnostics for %s", len(diagnostics), path)
 }
 
-// lintBuffer lints the in-memory document content. Findings always describe
-// exactly the given bytes, never the on-disk file.
+// lintBuffer lints the in-memory document content. Findings for the primary
+// file describe exactly the given bytes, never the on-disk file; rules that
+// inspect other files (multifile rules) may still read those from disk.
 func (s *Server) lintBuffer(path, content string) ([]linter.Finding, error) {
 	return s.lintDriver.RunContent(path, []byte(content))
 }
