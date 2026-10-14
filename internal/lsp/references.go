@@ -3,6 +3,7 @@ package lsp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strings"
 
@@ -239,27 +240,130 @@ func (li *lineIndex) line(n int) string {
 	return strings.TrimSuffix(li.lines[n], "\r")
 }
 
-// collectRenameRefs returns the references to targetName plus, when
-// targetName is a parameter of a def in the file, the keyword-argument
-// labels (f(name=...)) at call sites of that function in the same file.
-// Calls in other files cannot be resolved here and are not renamed.
-func collectRenameRefs(content string, file *build.File, targetName string) []identRef {
-	refs := collectIdentRefs(content, file, targetName)
+// bindingInfo describes every binding of a name in a file.
+type bindingInfo struct {
+	defs   []*build.DefStmt // def statements binding the name
+	others int              // params, assignments, loop variables
+	loads  int              // load() bindings
+}
 
-	funcs := map[string]bool{}
-	build.Walk(file, func(expr build.Expr, _ []build.Expr) {
-		def, ok := expr.(*build.DefStmt)
-		if !ok {
-			return
+// collectBindings records, file-wide, how each name is bound. It is
+// deliberately scope-insensitive: any second binding of a name makes the
+// name ambiguous for callee resolution.
+func collectBindings(file *build.File) map[string]*bindingInfo {
+	info := map[string]*bindingInfo{}
+	get := func(n string) *bindingInfo {
+		if info[n] == nil {
+			info[n] = &bindingInfo{}
 		}
-		for _, p := range def.Params {
-			if paramName(p) == targetName {
-				funcs[def.Name] = true
+		return info[n]
+	}
+	var bind func(e build.Expr)
+	bind = func(e build.Expr) {
+		switch v := e.(type) {
+		case *build.Ident:
+			get(v.Name).others++
+		case *build.ListExpr:
+			for _, x := range v.List {
+				bind(x)
+			}
+		case *build.TupleExpr:
+			for _, x := range v.List {
+				bind(x)
+			}
+		case *build.ParenExpr:
+			bind(v.X)
+		case *build.UnaryExpr:
+			bind(v.X)
+		case *build.AssignExpr:
+			bind(v.LHS)
+		}
+	}
+	build.Walk(file, func(expr build.Expr, stack []build.Expr) {
+		var parent build.Expr
+		if len(stack) > 0 {
+			parent = stack[len(stack)-1]
+		}
+		switch e := expr.(type) {
+		case *build.AssignExpr:
+			switch parent.(type) {
+			case *build.CallExpr, *build.DefStmt, *build.LambdaExpr:
+				return
+			}
+			if strings.HasSuffix(e.Op, "=") {
+				bind(e.LHS)
+			}
+		case *build.DefStmt:
+			b := get(e.Name)
+			b.defs = append(b.defs, e)
+			for _, p := range e.Params {
+				bind(p)
+			}
+		case *build.LambdaExpr:
+			for _, p := range e.Params {
+				bind(p)
+			}
+		case *build.ForStmt:
+			bind(e.Vars)
+		case *build.ForClause:
+			bind(e.Vars)
+		case *build.LoadStmt:
+			for _, id := range e.To {
+				get(id.Name).loads++
 			}
 		}
 	})
-	if len(funcs) == 0 {
-		return refs
+	return info
+}
+
+// hasNamedParam reports whether def has an ordinary (non *args/**kwargs)
+// parameter called name, i.e. one that can be passed by keyword.
+func hasNamedParam(def *build.DefStmt, name string) bool {
+	for _, p := range def.Params {
+		if _, variadic := p.(*build.UnaryExpr); variadic {
+			continue
+		}
+		if paramName(p) == name {
+			return true
+		}
+	}
+	return false
+}
+
+// collectRenameRefs returns the references to targetName plus, when
+// targetName is an ordinary parameter of a def, the keyword-argument labels
+// (f(name=...)) of calls that resolve to that def with certainty.
+//
+// Policy: a call is resolved only when its callee is a bare identifier whose
+// name is bound exactly once in the file, by a def. Anything else is never
+// edited. If targetName is a keyword-capable parameter (of a def or a
+// lambda) and some call passes targetName= to a bare-identifier callee that
+// cannot be resolved this way (shadowed, reassigned, aliased, bound to a
+// lambda or a parameter), the edit could silently break that call, so an
+// error is returned and the caller must refuse the rename. Calls through
+// attributes, loaded names and undefined globals are assumed to be foreign.
+// Calls in other files cannot be seen and are not renamed.
+func collectRenameRefs(content string, file *build.File, targetName string) ([]identRef, error) {
+	refs := collectIdentRefs(content, file, targetName)
+
+	bindings := collectBindings(file)
+	paramOwned := false // targetName is a keyword-capable param of a def or lambda
+	build.Walk(file, func(expr build.Expr, _ []build.Expr) {
+		switch e := expr.(type) {
+		case *build.DefStmt:
+			if hasNamedParam(e, targetName) {
+				paramOwned = true
+			}
+		case *build.LambdaExpr:
+			for _, p := range e.Params {
+				if _, variadic := p.(*build.UnaryExpr); !variadic && paramName(p) == targetName {
+					paramOwned = true
+				}
+			}
+		}
+	})
+	if !paramOwned {
+		return refs, nil
 	}
 
 	li := newLineIndex(content)
@@ -267,24 +371,42 @@ func collectRenameRefs(content string, file *build.File, targetName string) []id
 	for _, r := range refs {
 		seen[[2]int{int(r.Range.Start.Line), int(r.Range.Start.Character)}] = true
 	}
+	var unresolved string
 	build.Walk(file, func(expr build.Expr, _ []build.Expr) {
 		call, ok := expr.(*build.CallExpr)
 		if !ok {
 			return
 		}
 		fn, ok := call.X.(*build.Ident)
-		if !ok || !funcs[fn.Name] {
+		if !ok {
 			return
 		}
+		var labels []*build.Ident
 		for _, arg := range call.List {
-			as, ok := arg.(*build.AssignExpr)
-			if !ok {
-				continue
+			if as, ok := arg.(*build.AssignExpr); ok {
+				if id, ok := as.LHS.(*build.Ident); ok && id.Name == targetName {
+					labels = append(labels, id)
+				}
 			}
-			id, ok := as.LHS.(*build.Ident)
-			if !ok || id.Name != targetName {
-				continue
+		}
+		if len(labels) == 0 {
+			return
+		}
+		b := bindings[fn.Name]
+		switch {
+		case b == nil || (len(b.defs) == 0 && b.others == 0):
+			return // builtin, undefined global or loaded name: not a def in this file
+		case len(b.defs) == 1 && b.others == 0 && b.loads == 0:
+			if !hasNamedParam(b.defs[0], targetName) {
+				return // resolved to a def with a different signature
 			}
+		default:
+			if unresolved == "" {
+				unresolved = fn.Name
+			}
+			return
+		}
+		for _, id := range labels {
 			start, end := id.Span()
 			sc := uint32(runeColToUTF16(li.line(start.Line-1), start.LineRune-1))
 			ec := uint32(runeColToUTF16(li.line(end.Line-1), end.LineRune-1))
@@ -299,7 +421,10 @@ func collectRenameRefs(content string, file *build.File, targetName string) []id
 			}})
 		}
 	})
-	return refs
+	if unresolved != "" {
+		return nil, fmt.Errorf("cannot safely rename parameter %q: the call %s(%s=...) cannot be resolved to a single function definition (it is shadowed, reassigned, aliased or a lambda), so its keyword argument could be left stale or wrongly changed", targetName, unresolved, targetName)
+	}
+	return refs, nil
 }
 
 // paramName returns the name bound by a def parameter expression
