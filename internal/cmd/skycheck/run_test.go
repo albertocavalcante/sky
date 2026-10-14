@@ -187,3 +187,27 @@ result = add("hello", 42)
 	// The test documents expected behavior
 	_ = code // Result depends on checker strictness
 }
+
+func TestExpandPath_HiddenRootAndDot(t *testing.T) {
+	dir := t.TempDir()
+	hid := filepath.Join(dir, ".hid")
+	if err := os.MkdirAll(filepath.Join(hid, ".sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{filepath.Join(hid, "a.star"), filepath.Join(hid, ".sub", "b.star"), filepath.Join(dir, "c.star")} {
+		if err := os.WriteFile(f, []byte("x = 1\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := expandPath(hid)
+	if err != nil || len(got) != 1 {
+		t.Errorf("expandPath(hidden root) = %v, %v; want only a.star", got, err)
+	}
+	t.Chdir(hid)
+	for _, root := range []string{".", ".."} {
+		got, err := expandPath(root)
+		if err != nil || len(got) == 0 {
+			t.Errorf("expandPath(%q) = %v, %v; want files", root, got, err)
+		}
+	}
+}
