@@ -2,11 +2,13 @@ package skyls
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"time"
 
 	"github.com/albertocavalcante/sky/internal/lsp"
 	"github.com/albertocavalcante/sky/internal/version"
@@ -103,6 +105,13 @@ func RunWithIO(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 	// in-flight handlers before returning.
 	err := conn.Run(ctx)
 
+	// Undelivered output (client not reading, broken pipe) is always a
+	// failure, even after a clean exit handshake.
+	if errors.Is(err, lsp.ErrOutput) {
+		writef(stderr, "skyls: %v\n", err)
+		return exitError
+	}
+
 	// Per the LSP spec, exit after shutdown is 0, otherwise 1.
 	if code, exited := server.ExitStatus(); exited {
 		log.Printf("skyls: server stopped (exit code %d)", code)
@@ -124,8 +133,13 @@ type stdioConn struct {
 }
 
 // Close interrupts a blocked read on stdin (when it is closable) so the
-// connection's reader goroutine can finish.
+// connection's reader goroutine can finish, and, where the writer supports
+// deadlines (pipes and sockets), a blocked write on stdout. A plain blocking
+// stdout cannot be interrupted; the process exits with an error instead.
 func (s *stdioConn) Close() error {
+	if d, ok := s.Writer.(interface{ SetWriteDeadline(time.Time) error }); ok {
+		_ = d.SetWriteDeadline(time.Now())
+	}
 	if c, ok := s.Reader.(io.Closer); ok {
 		return c.Close()
 	}

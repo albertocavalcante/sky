@@ -77,8 +77,11 @@ func (d *Driver) RunFile(path string) ([]Finding, error) {
 }
 
 // RunContent executes all enabled rules on content as if it were the file at
-// path. Nothing is read from disk, so findings always describe exactly the
-// given bytes (used by editors linting unsaved buffers).
+// path. The primary source is taken from content and never re-read from disk,
+// so findings and replacement offsets describe exactly the given bytes (used
+// by editors linting unsaved buffers). Rules that depend on other files
+// (multifile rules, e.g. checks on loaded modules) may still read those
+// dependencies from disk.
 func (d *Driver) RunContent(path string, content []byte) ([]Finding, error) {
 	// Classify the file to determine its kind
 	classification, err := d.classifier.Classify(path)

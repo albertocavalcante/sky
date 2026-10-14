@@ -92,7 +92,10 @@ type Conn struct {
 	outMu    sync.Mutex
 	outCond  *sync.Cond
 	outQueue [][]byte
-	writing  bool // a drain goroutine is running
+	outBytes int   // total size of outQueue
+	writing  bool  // a drain goroutine is running
+	outFail  error // first fatal output error; later output is discarded
+	cancelFn context.CancelFunc
 
 	closeOnce sync.Once
 	closeErr  error
@@ -133,6 +136,18 @@ const flushGrace = 500 * time.Millisecond
 // closing the transport.
 const readerJoinGrace = 200 * time.Millisecond
 
+// Outbound queue limits. A client that stops reading while still sending
+// requests would otherwise grow the queue without bound; exceeding either
+// cap terminates the connection instead.
+const (
+	maxQueuedMessages = 10000
+	maxQueuedBytes    = 64 << 20 // 64 MiB
+)
+
+// ErrOutput is wrapped by errors reporting that outbound messages could not
+// be delivered (client overloaded, not reading, or transport write failure).
+var ErrOutput = errors.New("lsp output failed")
+
 // maxMessageSize caps the Content-Length we are willing to allocate.
 const maxMessageSize = 64 << 20 // 64 MiB
 
@@ -169,7 +184,13 @@ func isOrdered(req *Request) bool {
 // Notifications and lifecycle messages are handled in order on the read loop;
 // other requests run concurrently. Run waits for in-flight handlers before
 // returning.
-func (c *Conn) Run(ctx context.Context) error {
+func (c *Conn) Run(parent context.Context) (err error) {
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
+	c.outMu.Lock()
+	c.cancelFn = cancel
+	c.outMu.Unlock()
+
 	// Read in a separate goroutine so cancellation (e.g. "exit") returns
 	// promptly even while blocked on the underlying reader.
 	results := make(chan readResult)
@@ -194,7 +215,14 @@ func (c *Conn) Run(ctx context.Context) error {
 	defer func() {
 		close(stop)
 		c.wg.Wait()
-		c.flush(flushGrace)
+		if !c.flush(flushGrace) {
+			// Pending output could not be delivered: interrupt the blocked
+			// write where the transport allows it, and report the failure.
+			_ = c.closeTransport()
+		}
+		if ferr := c.outputErr(); ferr != nil {
+			err = ferr
+		}
 		select {
 		case <-readerDone:
 		default:
@@ -246,7 +274,20 @@ func (c *Conn) Run(ctx context.Context) error {
 	}
 }
 
+// readRequest returns the next request or notification. Messages that are
+// well-formed responses from the client are ignored (the server never sends
+// requests, so there is nothing to correlate them with).
 func (c *Conn) readRequest() (*Request, error) {
+	for {
+		req, err := c.readMessage()
+		if err != nil || req != nil {
+			return req, err
+		}
+	}
+}
+
+// readMessage reads one frame. It returns (nil, nil) for a client response.
+func (c *Conn) readMessage() (*Request, error) {
 	// Read headers
 	contentLength := -1
 	sawHeader := false
@@ -308,6 +349,35 @@ func (c *Conn) readRequest() (*Request, error) {
 			code = CodeInvalidRequest
 		}
 		return nil, &errBadBody{err: err, code: code}
+	}
+
+	// Validate required members. Raw members are used so that an explicit
+	// null (which decodes to the zero value) is distinguishable from absence.
+	var probe struct {
+		ID     json.RawMessage `json:"id"`
+		Method json.RawMessage `json:"method"`
+		Result json.RawMessage `json:"result"`
+		Error  json.RawMessage `json:"error"`
+	}
+	_ = json.Unmarshal(body, &probe)
+	invalid := func(format string, args ...any) (*Request, error) {
+		return nil, &errBadBody{err: fmt.Errorf(format, args...), code: CodeInvalidRequest}
+	}
+	if len(probe.Method) == 0 && (len(probe.Result) > 0 || len(probe.Error) > 0) {
+		return nil, nil // a response, not a request
+	}
+	if req.JSONRPC != "2.0" {
+		return invalid("invalid request: jsonrpc must be \"2.0\"")
+	}
+	if len(probe.Method) == 0 || probe.Method[0] != '"' || req.Method == "" {
+		return invalid("invalid request: method must be a non-empty string")
+	}
+	if len(probe.ID) > 0 {
+		if ch := probe.ID[0]; ch != '"' && ch != '-' && (ch < '0' || ch > '9') {
+			return invalid("invalid request: id must be a string or number")
+		}
+		id := probe.ID
+		req.ID = &id
 	}
 
 	return &req, nil
@@ -392,15 +462,53 @@ func (c *Conn) Notify(ctx context.Context, method string, params any) error {
 }
 
 // enqueue adds a message body to the outbound queue, starting the drain
-// goroutine if none is running. Messages are written in enqueue order.
+// goroutine if none is running. Messages are written in enqueue order. It
+// never blocks: when the queue exceeds its caps the connection is terminated
+// and the message dropped.
 func (c *Conn) enqueue(body []byte) {
 	c.outMu.Lock()
 	defer c.outMu.Unlock()
+	if c.outFail != nil {
+		return
+	}
+	if len(c.outQueue) >= maxQueuedMessages || c.outBytes+len(body) > maxQueuedBytes {
+		c.failLocked(fmt.Errorf("%w: client is not reading (%d messages, %d bytes queued)", ErrOutput, len(c.outQueue), c.outBytes))
+		return
+	}
 	c.outQueue = append(c.outQueue, body)
+	c.outBytes += len(body)
 	if !c.writing {
 		c.writing = true
 		go c.drain()
 	}
+}
+
+// failLocked records a fatal output error, drops queued output, cancels the
+// Run context and closes the transport (from another goroutine, since Close
+// may be what unblocks a stuck write). Callers hold outMu.
+func (c *Conn) failLocked(err error) {
+	if c.outFail != nil {
+		return
+	}
+	c.outFail = err
+	c.outQueue = nil
+	c.outBytes = 0
+	cancel := c.cancelFn
+	log.Printf("terminating connection: %v", err)
+	go func() {
+		if cancel != nil {
+			cancel()
+		}
+		_ = c.closeTransport()
+	}()
+	c.outCond.Broadcast()
+}
+
+// outputErr returns the fatal output error, if any.
+func (c *Conn) outputErr() error {
+	c.outMu.Lock()
+	defer c.outMu.Unlock()
+	return c.outFail
 }
 
 func (c *Conn) drain() {
@@ -415,17 +523,22 @@ func (c *Conn) drain() {
 		body := c.outQueue[0]
 		c.outQueue[0] = nil
 		c.outQueue = c.outQueue[1:]
+		c.outBytes -= len(body)
 		c.outMu.Unlock()
 
 		header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body))
 		if _, err := c.rwc.Write(append([]byte(header), body...)); err != nil {
-			log.Printf("failed to write message: %v", err)
+			c.outMu.Lock()
+			c.failLocked(fmt.Errorf("%w: writing message: %v", ErrOutput, err))
+			c.outMu.Unlock()
 		}
 	}
 }
 
-// flush waits until all queued output has been written or grace elapses.
-func (c *Conn) flush(grace time.Duration) {
+// flush waits until all queued output has been written or grace elapses. It
+// reports whether everything was delivered; on timeout the connection is
+// marked failed.
+func (c *Conn) flush(grace time.Duration) bool {
 	timedOut := false
 	t := time.AfterFunc(grace, func() {
 		c.outMu.Lock()
@@ -436,9 +549,13 @@ func (c *Conn) flush(grace time.Duration) {
 	defer t.Stop()
 	c.outMu.Lock()
 	defer c.outMu.Unlock()
-	for c.writing && !timedOut {
+	for c.writing && c.outFail == nil && !timedOut {
 		c.outCond.Wait()
 	}
+	if c.outFail == nil && c.writing {
+		c.failLocked(fmt.Errorf("%w: pending output was not flushed within %v", ErrOutput, grace))
+	}
+	return c.outFail == nil
 }
 
 func (c *Conn) closeTransport() error {
@@ -450,8 +567,12 @@ func (c *Conn) closeTransport() error {
 // underlying connection.
 func (c *Conn) Close() error {
 	c.wg.Wait()
-	c.flush(flushGrace)
-	return c.closeTransport()
+	flushed := c.flush(flushGrace)
+	err := c.closeTransport()
+	if !flushed {
+		return errors.Join(c.outputErr(), err)
+	}
+	return err
 }
 
 // ErrMethodNotFound is returned when a method is not implemented.

@@ -28,7 +28,8 @@ func (s *Server) handleCodeAction(ctx context.Context, params json.RawMessage) (
 	log.Printf("codeAction: %s range=%v", path, p.Range)
 
 	// Run linter to get findings with replacements
-	// (the linter works on disk content, so this is skipped for dirty buffers)
+	// (the primary buffer is linted from memory, so replacement offsets match
+	// the document; dependency rules may still read other files from disk)
 	findings, err := s.lintBuffer(path, doc.Content)
 	if err != nil {
 		log.Printf("codeAction: linter error: %v", err)

@@ -72,9 +72,40 @@ func TestEOFWithoutExitIsClean(t *testing.T) {
 }
 
 // EOF inside a declared Content-Length is a protocol error, not a clean stop.
+// The zero-body case (header block, then immediate EOF) is the one that used
+// to be mistaken for a clean end of stream.
 func TestTruncatedFrameIsError(t *testing.T) {
-	in := frame(initMsg) + "Content-Length: 50\r\n\r\n{\"jsonrpc\""
-	if code, _ := runWith(t, strings.NewReader(in)); code != 1 {
-		t.Errorf("exit code = %d, want 1", code)
+	for name, tail := range map[string]string{
+		"no body bytes":      "Content-Length: 50\r\n\r\n",
+		"partial body bytes": "Content-Length: 50\r\n\r\n{\"jsonrpc\"",
+	} {
+		in := frame(initMsg) + tail
+		if code, _ := runWith(t, strings.NewReader(in)); code != 1 {
+			t.Errorf("%s: exit code = %d, want 1", name, code)
+		}
+	}
+}
+
+// blockedWriter never accepts output, like a client that stopped reading.
+type blockedWriter struct{ release chan struct{} }
+
+func (w blockedWriter) Write(p []byte) (int, error) { <-w.release; return len(p), nil }
+
+// EOF while responses are still unflushed must not exit 0.
+func TestEOFWithUnflushedOutputIsError(t *testing.T) {
+	w := blockedWriter{release: make(chan struct{})}
+	defer close(w.release)
+	var errOut bytes.Buffer
+	done := make(chan int, 1)
+	go func() {
+		done <- RunWithIO(context.Background(), nil, strings.NewReader(frame(initMsg)), w, &errOut)
+	}()
+	select {
+	case code := <-done:
+		if code != 1 {
+			t.Errorf("exit code = %d, want 1 (stderr: %s)", code, errOut.String())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("RunWithIO did not return")
 	}
 }

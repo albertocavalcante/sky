@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/albertocavalcante/sky/internal/starlark/filekind"
@@ -113,7 +114,10 @@ func (s *Server) handleRename(ctx context.Context, params json.RawMessage) (any,
 			Message: "cannot rename: file has syntax errors",
 		}
 	}
-	refs := collectRenameRefs(doc.Content, file, word)
+	refs, err := collectRenameRefs(doc.Content, file, word)
+	if err != nil {
+		return nil, &ResponseError{Code: CodeRequestFailed, Message: err.Error()}
+	}
 	if len(refs) == 0 {
 		return nil, nil
 	}
@@ -149,14 +153,22 @@ func getWordAndRangeAtPosition(content string, line, char int) (string, protocol
 
 	// Find start of word
 	start := pos
-	for start > 0 && isIdentChar(lineContent[start-1]) {
-		start--
+	for start > 0 {
+		r, size := utf8.DecodeLastRuneInString(lineContent[:start])
+		if !isIdentRune(r) {
+			break
+		}
+		start -= size
 	}
 
 	// Find end of word
 	end := pos
-	for end < len(lineContent) && isIdentChar(lineContent[end]) {
-		end++
+	for end < len(lineContent) {
+		r, size := utf8.DecodeRuneInString(lineContent[end:])
+		if !isIdentRune(r) {
+			break
+		}
+		end += size
 	}
 
 	if start == end {
@@ -170,6 +182,12 @@ func getWordAndRangeAtPosition(content string, line, char int) (string, protocol
 	}
 
 	return word, wordRange
+}
+
+// isIdentRune reports whether r can appear in an identifier, using the same
+// rules as isValidIdentifier.
+func isIdentRune(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || (r >= '0' && r <= '9')
 }
 
 // starlarkReservedSet holds the words the Starlark scanner reserves (they
