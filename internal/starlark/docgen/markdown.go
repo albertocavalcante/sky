@@ -175,7 +175,13 @@ func renderParsedDocstring(w io.Writer, fn FunctionDoc) {
 		}
 
 		// Render any documented params not in signature (rare but possible)
-		for name, desc := range p.Args {
+		extra := make([]string, 0)
+		for name := range p.Args {
+			extra = append(extra, name)
+		}
+		sort.Strings(extra)
+		for _, name := range extra {
+			desc := p.Args[name]
 			found := false
 			for _, pn := range paramNames {
 				if pn == name {
@@ -218,16 +224,24 @@ func renderParsedDocstring(w io.Writer, fn FunctionDoc) {
 		writef(w, "```python\n%s\n```\n\n", p.Example)
 	}
 
-	// Note
-	if p.Note != "" {
-		writeln(w, "**Note:**\n")
-		writef(w, "> %s\n\n", strings.ReplaceAll(p.Note, "\n", "\n> "))
+	// Note, Warning, Deprecated, Todo, See Also
+	for _, sec := range []struct{ title, body string }{
+		{"Note", p.Note},
+		{"Warning", p.Warning},
+		{"Deprecated", p.Deprecated},
+		{"Todo", p.Todo},
+		{"See Also", p.SeeAlso},
+	} {
+		if sec.body != "" {
+			writef(w, "**%s:**\n\n", sec.title)
+			writef(w, "> %s\n\n", strings.ReplaceAll(sec.body, "\n", "\n> "))
+		}
 	}
 }
 
-// toAnchor converts a name to a markdown anchor.
+// toAnchor converts a name to a markdown anchor. GitHub keeps underscores.
 func toAnchor(name string) string {
-	return strings.ToLower(strings.ReplaceAll(name, "_", "-"))
+	return strings.ToLower(name)
 }
 
 func writef(w io.Writer, format string, args ...any) {

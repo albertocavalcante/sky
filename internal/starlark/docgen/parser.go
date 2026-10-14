@@ -27,6 +27,18 @@ type ParsedDocstring struct {
 
 	// Note contains additional notes.
 	Note string
+
+	// Warning contains warnings.
+	Warning string
+
+	// Todo contains TODO items.
+	Todo string
+
+	// SeeAlso contains references to related symbols.
+	SeeAlso string
+
+	// Deprecated contains a deprecation notice.
+	Deprecated string
 }
 
 var sectionRegex = regexp.MustCompile(`(?m)^\s*(Args|Arguments|Parameters|Returns?|Yields?|Raises|Throws|Examples?|Notes?|See Also|Deprecated|Warning|Todo):`)
@@ -79,6 +91,18 @@ func ParseDocstring(docstring string) *ParsedDocstring {
 
 		case "note", "notes":
 			parsed.Note = strings.TrimSpace(content)
+
+		case "warning":
+			parsed.Warning = strings.TrimSpace(content)
+
+		case "todo":
+			parsed.Todo = strings.TrimSpace(content)
+
+		case "see also":
+			parsed.SeeAlso = strings.TrimSpace(content)
+
+		case "deprecated":
+			parsed.Deprecated = strings.TrimSpace(content)
 		}
 	}
 
@@ -186,7 +210,7 @@ func parseArgsSection(content string) map[string]string {
 			}
 
 			// Parse new arg
-			currentArg = strings.TrimSpace(trimmed[:colonIdx])
+			currentArg = argNameFromKey(strings.TrimSpace(trimmed[:colonIdx]))
 			currentDesc.Reset()
 			if colonIdx+1 < len(trimmed) {
 				currentDesc.WriteString(strings.TrimSpace(trimmed[colonIdx+1:]))
@@ -208,11 +232,23 @@ func parseArgsSection(content string) map[string]string {
 	return args
 }
 
+// typedArgRegex matches the Google-style "name (type)" form.
+var typedArgRegex = regexp.MustCompile(`^(\*{0,2}[A-Za-z_][A-Za-z0-9_]*)\s*\(.*\)$`)
+
+// argNameFromKey strips an optional "(type)" suffix from an argument key.
+func argNameFromKey(key string) string {
+	if m := typedArgRegex.FindStringSubmatch(key); m != nil {
+		return m[1]
+	}
+	return key
+}
+
 // HasDocumentation returns true if the parsed docstring has meaningful content.
 func (p *ParsedDocstring) HasDocumentation() bool {
 	if p == nil {
 		return false
 	}
 	return p.Summary != "" || p.Description != "" || len(p.Args) > 0 ||
-		p.Returns != "" || len(p.Raises) > 0 || p.Example != ""
+		p.Returns != "" || len(p.Raises) > 0 || p.Example != "" ||
+		p.Note != "" || p.Warning != "" || p.Todo != "" || p.SeeAlso != "" || p.Deprecated != ""
 }

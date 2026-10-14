@@ -1,8 +1,13 @@
 package linter
 
 import (
+	"regexp"
 	"strings"
 )
+
+// ruleListPrefix matches a leading comma-separated rule list such as
+// "a, b ,c" (but not trailing prose after it).
+var ruleListPrefix = regexp.MustCompile(`^[^\s,]+(?:\s*,\s*[^\s,]+)*`)
 
 // SuppressionType represents the type of suppression comment.
 type SuppressionType int
@@ -114,11 +119,9 @@ func (p *SuppressionParser) parseDisableDirective(line string, commentIdx int, c
 
 	// Extract the rule list
 	rulesStr := comment[idx+len(disablePrefix):]
-	// Take everything until whitespace or end of line
-	rulesStr = strings.TrimSpace(rulesStr)
-	if spaceIdx := strings.IndexAny(rulesStr, " \t\n\r"); spaceIdx != -1 {
-		rulesStr = rulesStr[:spaceIdx]
-	}
+	// Take a comma-separated list (whitespace around commas allowed); stop
+	// at the first whitespace that is not followed by a comma-joined name.
+	rulesStr = ruleListPrefix.FindString(strings.TrimSpace(rulesStr))
 
 	rules := parseRuleList(rulesStr)
 
@@ -150,11 +153,9 @@ func (p *SuppressionParser) parseDisableNextLineDirective(comment string, lineNu
 
 	// Extract the rule list
 	rulesStr := comment[idx+len(disablePrefix):]
-	// Take everything until whitespace or end of line
-	rulesStr = strings.TrimSpace(rulesStr)
-	if spaceIdx := strings.IndexAny(rulesStr, " \t\n\r"); spaceIdx != -1 {
-		rulesStr = rulesStr[:spaceIdx]
-	}
+	// Take a comma-separated list (whitespace around commas allowed); stop
+	// at the first whitespace that is not followed by a comma-joined name.
+	rulesStr = ruleListPrefix.FindString(strings.TrimSpace(rulesStr))
 
 	rules := parseRuleList(rulesStr)
 

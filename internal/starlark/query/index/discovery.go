@@ -92,31 +92,25 @@ func discoverBazelPattern(pattern string, root string) ([]string, error) {
 	return nil, nil
 }
 
-// discoverGlobPattern handles glob patterns like *.bzl, **/*.star
+// discoverGlobPattern handles glob patterns like *.bzl, lib/*.bzl, **/*.star.
+// Patterns are matched against root-relative, slash-separated paths; "**"
+// matches zero or more directories.
 func discoverGlobPattern(pattern string, root string) ([]string, error) {
-	// Check for recursive glob
-	if strings.HasPrefix(pattern, "**/") {
-		// Recursive glob: **/*.bzl
-		suffix := strings.TrimPrefix(pattern, "**/")
-		return discoverRecursiveGlob(root, suffix)
-	}
-
-	// Simple glob: *.bzl
-	fullPattern := filepath.Join(root, pattern)
-	matches, err := filepath.Glob(fullPattern)
-	if err != nil {
-		return nil, err
-	}
-
-	// Filter to only Starlark files
-	var result []string
-	for _, match := range matches {
-		if IsStarlarkFile(filepath.Base(match)) {
-			result = append(result, match)
+	if !strings.ContainsAny(pattern, "/") {
+		// Simple glob: *.bzl (root level only)
+		matches, err := filepath.Glob(filepath.Join(root, pattern))
+		if err != nil {
+			return nil, err
 		}
+		var result []string
+		for _, match := range matches {
+			if IsStarlarkFile(filepath.Base(match)) {
+				result = append(result, match)
+			}
+		}
+		return result, nil
 	}
-
-	return result, nil
+	return discoverRecursiveGlob(root, pattern)
 }
 
 // discoverRecursive finds all Starlark files recursively under a directory.
@@ -129,7 +123,7 @@ func discoverRecursive(dir string) ([]string, error) {
 		}
 
 		// Skip hidden directories
-		if entry.IsDir() && strings.HasPrefix(entry.Name(), ".") && entry.Name() != "." {
+		if entry.IsDir() && path != dir && strings.HasPrefix(entry.Name(), ".") {
 			return filepath.SkipDir
 		}
 
@@ -169,32 +163,29 @@ func discoverInDirectory(dir string) ([]string, error) {
 	return files, nil
 }
 
-// discoverRecursiveGlob finds files matching a pattern recursively.
-func discoverRecursiveGlob(root string, suffix string) ([]string, error) {
+// discoverRecursiveGlob walks root and returns Starlark files whose
+// root-relative slash path matches pattern.
+func discoverRecursiveGlob(root string, pattern string) ([]string, error) {
 	var files []string
-
-	// Extract extension from suffix for filtering
-	ext := filepath.Ext(suffix)
 
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		// Skip hidden directories
-		if entry.IsDir() && strings.HasPrefix(entry.Name(), ".") && entry.Name() != "." {
-			return filepath.SkipDir
-		}
-
-		// Skip directories
 		if entry.IsDir() {
+			// Skip hidden directories, but never the walk root itself.
+			if path != root && strings.HasPrefix(entry.Name(), ".") {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 
-		// Check if the file matches the pattern
-		if ext != "" && filepath.Ext(entry.Name()) == ext {
-			files = append(files, path)
-		} else if matched, _ := filepath.Match(suffix, entry.Name()); matched {
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return nil
+		}
+		if IsStarlarkFile(entry.Name()) && matchGlob(pattern, filepath.ToSlash(rel)) {
 			files = append(files, path)
 		}
 

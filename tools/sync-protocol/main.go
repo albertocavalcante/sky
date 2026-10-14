@@ -22,6 +22,7 @@ import (
 	"go/ast"
 	"go/format"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"os"
 	"os/exec"
@@ -292,14 +293,27 @@ func exprToString(expr ast.Expr) string {
 	case *ast.StructType:
 		return structToString(e)
 	case *ast.InterfaceType:
-		return "interface{}"
+		if e.Methods == nil || len(e.Methods.List) == 0 {
+			return "interface{}"
+		}
+		return printNode(e)
 	case *ast.BasicLit:
 		return e.Value
 	case *ast.BinaryExpr:
 		return exprToString(e.X) + " " + e.Op.String() + " " + exprToString(e.Y)
 	default:
-		return fmt.Sprintf("/* unknown: %T */", expr)
+		// Unary, call, index, func types, parens, etc.: let go/printer render them.
+		return printNode(expr)
 	}
+}
+
+// printNode renders an arbitrary AST node as Go source.
+func printNode(n ast.Node) string {
+	var buf bytes.Buffer
+	if err := printer.Fprint(&buf, token.NewFileSet(), n); err != nil {
+		return fmt.Sprintf("/* unprintable: %T */", n)
+	}
+	return buf.String()
 }
 
 func structToString(s *ast.StructType) string {

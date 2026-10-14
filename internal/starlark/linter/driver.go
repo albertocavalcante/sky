@@ -218,7 +218,7 @@ func (d *Driver) expandPath(path string) ([]string, error) {
 		}
 
 		// Skip hidden directories
-		if entry.IsDir() && strings.HasPrefix(entry.Name(), ".") && entry.Name() != "." {
+		if entry.IsDir() && p != path && strings.HasPrefix(entry.Name(), ".") {
 			return filepath.SkipDir
 		}
 

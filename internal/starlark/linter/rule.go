@@ -47,6 +47,8 @@ type Rule struct {
 
 	// Requires lists rules that must run before this rule.
 	// Used for horizontal dependencies (same file, different rules).
+	// Requirements that are not in the set of enabled rules are skipped when
+	// ordering rules (they impose no ordering); ResultOf is then unavailable.
 	Requires []*Rule
 
 	// Run is the function that executes this rule.
