@@ -13,6 +13,9 @@ go_library(
 
 go_test(
     name = "skycov_test",
-    srcs = ["run_test.go"],
+    srcs = [
+        "atomic_test.go",
+        "run_test.go",
+    ],
     embed = [":skycov"],
 )

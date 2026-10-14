@@ -3,6 +3,8 @@ package skycov
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -251,7 +253,15 @@ func writeln(w io.Writer, args ...any) {
 // writeFileAtomic writes data to a temp file in the destination directory and
 // renames it into place, so the destination is never left truncated.
 func writeFileAtomic(path string, data []byte) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".skycov-*")
+	// An existing destination keeps its permission bits; a new one is created
+	// 0666 so the process umask applies (os.CreateTemp would force 0600).
+	mode := os.FileMode(0o666)
+	existing := false
+	if fi, err := os.Stat(path); err == nil {
+		mode = fi.Mode().Perm()
+		existing = true
+	}
+	tmp, err := createTemp(filepath.Dir(path), ".skycov-")
 	if err != nil {
 		return err
 	}
@@ -265,13 +275,32 @@ func writeFileAtomic(path string, data []byte) error {
 		_ = os.Remove(name)
 		return err
 	}
-	if err := os.Chmod(name, 0o644); err != nil {
-		_ = os.Remove(name)
-		return err
+	if existing {
+		if err := os.Chmod(name, mode); err != nil {
+			_ = os.Remove(name)
+			return err
+		}
 	}
 	if err := os.Rename(name, path); err != nil {
 		_ = os.Remove(name)
 		return err
 	}
 	return nil
+}
+
+// createTemp creates a new file in dir with mode 0666 (before umask).
+func createTemp(dir, prefix string) (*os.File, error) {
+	for i := 0; i < 100; i++ {
+		var b [6]byte
+		if _, err := rand.Read(b[:]); err != nil {
+			return nil, err
+		}
+		name := filepath.Join(dir, prefix+hex.EncodeToString(b[:]))
+		f, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o666)
+		if os.IsExist(err) {
+			continue
+		}
+		return f, err
+	}
+	return nil, fmt.Errorf("could not create temp file in %s", dir)
 }
