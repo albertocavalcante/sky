@@ -229,11 +229,19 @@ func TestRun_Demo(t *testing.T) {
 }
 
 func TestRun_BadFormatDoesNotCreateOutput(t *testing.T) {
-	out := filepath.Join(t.TempDir(), "out.txt")
+	dir := t.TempDir()
+	covFile := filepath.Join(dir, "coverage.json")
+	if err := os.WriteFile(covFile, []byte(`{"files":{"a.star":{"lines":{"1":1,"2":0}}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "out.txt")
 	var stdout, stderr bytes.Buffer
-	code := RunWithIO(context.Background(), []string{"--demo", "-format", "nope", "-o", out}, nil, &stdout, &stderr)
+	code := RunWithIO(context.Background(), []string{"-format", "nope", "-o", out, covFile}, nil, &stdout, &stderr)
 	if code != 2 {
 		t.Errorf("code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "unknown format") {
+		t.Errorf("stderr should name the bad format, got: %s", stderr.String())
 	}
 	if _, err := os.Stat(out); err == nil {
 		t.Error("output file created despite invalid format")
