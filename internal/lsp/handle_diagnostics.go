@@ -123,7 +123,7 @@ func checkerDiagnosticToLSP(d checker.Diagnostic) protocol.Diagnostic {
 }
 
 // checkerDiagnosticToLSPIn converts a checker diagnostic (1-based line and
-// byte column) to an LSP diagnostic with UTF-16 columns computed against content.
+// rune column, as defined by syntax.Position) to an LSP diagnostic with UTF-16 columns computed against content.
 func checkerDiagnosticToLSPIn(content string, d checker.Diagnostic) protocol.Diagnostic {
 	col := func(line, c int) uint32 {
 		if c <= 0 {
@@ -133,7 +133,7 @@ func checkerDiagnosticToLSPIn(content string, d checker.Diagnostic) protocol.Dia
 		if !ok {
 			return uint32(c - 1)
 		}
-		return uint32(byteToUTF16Col(text, c-1))
+		return uint32(runeColToUTF16(text, c-1))
 	}
 	// Convert 1-based to 0-based positions
 	startLine := uint32(0)
