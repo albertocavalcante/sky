@@ -56,7 +56,7 @@ func (s *Server) handleReferences(ctx context.Context, params json.RawMessage) (
 	}
 
 	// Find all references to the symbol
-	refs := findReferences(file, word, p.TextDocument.Uri, p.Context.IncludeDeclaration)
+	refs := findReferencesIn(doc.Content, file, word, p.TextDocument.Uri, p.Context.IncludeDeclaration)
 
 	log.Printf("references: found %d references to %q", len(refs), word)
 
@@ -73,109 +73,163 @@ func isStarlarkKeyword(word string) bool {
 	return false
 }
 
+// identRef is one occurrence of an identifier in a file.
+type identRef struct {
+	Range protocol.Range
+	// IsDecl is true when the occurrence introduces the name (def name,
+	// parameter, assignment target, loop variable, load alias).
+	IsDecl bool
+}
+
 // findReferences finds all references to a symbol name in a file.
 // If includeDeclaration is true, includes the definition site as well.
+// Columns are rune-based (no UTF-16 conversion); prefer findReferencesIn when
+// the source text is available.
 func findReferences(file *build.File, targetName string, uri string, includeDeclaration bool) []protocol.Location {
+	return findReferencesIn("", file, targetName, uri, includeDeclaration)
+}
+
+// findReferencesIn is like findReferences but converts columns to UTF-16
+// using content.
+func findReferencesIn(content string, file *build.File, targetName string, uri string, includeDeclaration bool) []protocol.Location {
 	var refs []protocol.Location
+	for _, r := range collectIdentRefs(content, file, targetName) {
+		if r.IsDecl && !includeDeclaration {
+			continue
+		}
+		refs = append(refs, protocol.Location{Uri: uri, Range: r.Range})
+	}
+	return refs
+}
 
-	// Track declaration positions to optionally exclude them
-	declarationLines := make(map[int]bool)
+// collectIdentRefs returns every identifier occurrence named targetName in
+// file, at any nesting depth. Keyword-argument names in calls and attribute
+// names (x.name) are not references and are excluded. Occurrences are
+// identified by position, so a declaration never hides other uses on the
+// same line.
+func collectIdentRefs(content string, file *build.File, targetName string) []identRef {
+	// Pass 1: classify identifiers by node identity.
+	decl := map[*build.Ident]bool{}
+	skip := map[*build.Ident]bool{}
 
-	// First, handle function definitions (DefStmt.Name is stored as string, not as Ident)
-	for _, stmt := range file.Stmt {
-		if def, ok := stmt.(*build.DefStmt); ok && def.Name == targetName {
-			start, _ := def.Span()
-			if includeDeclaration {
-				// Add the function name as a reference
-				// DefStmt.Span() gives us the "def" keyword position
-				// We need to calculate where the function name is: after "def "
-				// The name starts 4 characters after the "def" keyword
-				nameStart := start.LineRune + 3 // "def" is 3 chars, plus 1 for space = position after space
-				nameEnd := nameStart + len(targetName)
-				refs = append(refs, protocol.Location{
-					Uri: uri,
-					Range: protocol.Range{
-						Start: protocol.Position{
-							Line:      uint32(start.Line - 1),
-							Character: uint32(nameStart),
-						},
-						End: protocol.Position{
-							Line:      uint32(start.Line - 1),
-							Character: uint32(nameEnd),
-						},
-					},
-				})
-			} else {
-				declarationLines[start.Line] = true
+	var markDecl func(e build.Expr)
+	markDecl = func(e build.Expr) {
+		switch v := e.(type) {
+		case *build.Ident:
+			decl[v] = true
+		case *build.ListExpr:
+			for _, x := range v.List {
+				markDecl(x)
 			}
+		case *build.TupleExpr:
+			for _, x := range v.List {
+				markDecl(x)
+			}
+		case *build.ParenExpr:
+			markDecl(v.X)
+		case *build.UnaryExpr: // *args / **kwargs
+			markDecl(v.X)
+		case *build.AssignExpr: // param with default
+			markDecl(v.LHS)
 		}
 	}
 
-	// Find declaration positions for other declarations if we need to exclude them
-	if !includeDeclaration {
-		// Look for top-level assignments
-		for _, stmt := range file.Stmt {
-			if assign, ok := stmt.(*build.AssignExpr); ok {
-				if ident, ok := assign.LHS.(*build.Ident); ok && ident.Name == targetName {
-					start, _ := ident.Span()
-					declarationLines[start.Line] = true
-				}
-			}
-		}
-
-		// Look for parameter definitions in functions
-		for _, stmt := range file.Stmt {
-			if def, ok := stmt.(*build.DefStmt); ok {
-				for _, param := range def.Params {
-					switch p := param.(type) {
-					case *build.Ident:
-						if p.Name == targetName {
-							start, _ := p.Span()
-							declarationLines[start.Line] = true
-						}
-					case *build.AssignExpr:
-						if ident, ok := p.LHS.(*build.Ident); ok && ident.Name == targetName {
-							start, _ := ident.Span()
-							declarationLines[start.Line] = true
-						}
-					case *build.UnaryExpr:
-						if ident, ok := p.X.(*build.Ident); ok && ident.Name == targetName {
-							start, _ := ident.Span()
-							declarationLines[start.Line] = true
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// Walk all expressions in the file to find identifier references
 	build.Walk(file, func(expr build.Expr, stack []build.Expr) {
-		if ident, ok := expr.(*build.Ident); ok {
-			if ident.Name == targetName {
-				start, end := ident.Span()
-
-				// Skip declarations if requested
-				if !includeDeclaration && declarationLines[start.Line] {
-					return
+		var parent build.Expr
+		if len(stack) > 0 {
+			parent = stack[len(stack)-1]
+		}
+		switch e := expr.(type) {
+		case *build.AssignExpr:
+			switch parent.(type) {
+			case *build.CallExpr:
+				if id, ok := e.LHS.(*build.Ident); ok {
+					skip[id] = true // keyword argument name
 				}
-
-				refs = append(refs, protocol.Location{
-					Uri: uri,
-					Range: protocol.Range{
-						Start: protocol.Position{
-							Line:      uint32(start.Line - 1),
-							Character: uint32(start.LineRune - 1),
-						},
-						End: protocol.Position{
-							Line:      uint32(end.Line - 1),
-							Character: uint32(end.LineRune - 1),
-						},
-					},
-				})
+				return
+			case *build.DefStmt, *build.LambdaExpr:
+				return // handled with the parameters below
+			}
+			if e.Op == "=" {
+				markDecl(e.LHS)
+			}
+		case *build.DefStmt:
+			for _, p := range e.Params {
+				markDecl(p)
+			}
+		case *build.LambdaExpr:
+			for _, p := range e.Params {
+				markDecl(p)
+			}
+		case *build.ForStmt:
+			markDecl(e.Vars)
+		case *build.ForClause:
+			markDecl(e.Vars)
+		case *build.LoadStmt:
+			for _, id := range e.To {
+				decl[id] = true
 			}
 		}
 	})
 
+	// Pass 2: emit occurrences.
+	var refs []identRef
+	seen := map[[2]int]bool{}
+	add := func(start, end build.Position, isDecl bool) {
+		key := [2]int{start.Line, start.LineRune}
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		refs = append(refs, identRef{
+			Range: protocol.Range{
+				Start: protocol.Position{
+					Line:      uint32(start.Line - 1),
+					Character: uint32(runeColToUTF16(lineOf(content, start.Line-1), start.LineRune-1)),
+				},
+				End: protocol.Position{
+					Line:      uint32(end.Line - 1),
+					Character: uint32(runeColToUTF16(lineOf(content, end.Line-1), end.LineRune-1)),
+				},
+			},
+			IsDecl: isDecl,
+		})
+	}
+
+	build.Walk(file, func(expr build.Expr, stack []build.Expr) {
+		switch e := expr.(type) {
+		case *build.DefStmt:
+			if e.Name == targetName {
+				start, end := defNamePosition(content, e)
+				add(start, end, true)
+			}
+		case *build.Ident:
+			if e.Name != targetName || skip[e] {
+				return
+			}
+			start, end := e.Span()
+			add(start, end, decl[e])
+		}
+	})
+
 	return refs
+}
+
+// defNamePosition locates the name of a def statement. DefStmt.Name is a
+// plain string, so the position is derived from the "def" keyword position.
+func defNamePosition(content string, def *build.DefStmt) (start, end build.Position) {
+	kw, _ := def.Span()
+	i := kw.LineRune - 1 + len("def") // 0-based rune index just after "def"
+	if content == "" {
+		i++ // no text available: assume a single space
+	} else {
+		runes := []rune(lineOf(content, kw.Line-1))
+		for i < len(runes) && (runes[i] == ' ' || runes[i] == '\t') {
+			i++
+		}
+	}
+	nameLen := len([]rune(def.Name))
+	start = build.Position{Line: kw.Line, LineRune: i + 1}
+	end = build.Position{Line: kw.Line, LineRune: i + 1 + nameLen}
+	return start, end
 }
