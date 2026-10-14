@@ -450,3 +450,32 @@ func writeJSON(path string, value any) error {
 	cleaned = true
 	return nil
 }
+
+// UpdatePluginMetadata sets the version and description of an installed plugin,
+// but only if the entry is still the installation identified by installedAt.
+// It reports false (without error) when the plugin was removed or reinstalled
+// in the meantime, so a stale inspection never resurrects an old entry.
+func (s *Store) UpdatePluginMetadata(name string, installedAt time.Time, version, description string) (bool, error) {
+	updated := false
+	err := s.withWriteLock(func() error {
+		plugins, err := s.loadPluginsNL()
+		if err != nil {
+			return err
+		}
+		for i := range plugins {
+			if plugins[i].Name != name || !plugins[i].InstalledAt.Equal(installedAt) {
+				continue
+			}
+			if version != "" {
+				plugins[i].Version = version
+			}
+			if description != "" {
+				plugins[i].Description = description
+			}
+			updated = true
+			return s.savePlugins(plugins)
+		}
+		return nil
+	})
+	return updated, err
+}

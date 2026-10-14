@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"syscall"
 	"text/tabwriter"
 	"time"
 
@@ -99,14 +98,7 @@ func runCoreCommand(name string, args []string, stdout, stderr io.Writer) int {
 	if err := cmd.Run(); err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			if code := exitErr.ExitCode(); code >= 0 {
-				return code
-			}
-			// Killed by a signal: follow the shell convention of 128+signal.
-			if ws, ok := exitErr.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
-				return 128 + int(ws.Signal())
-			}
-			return 1
+			return plugins.ExitCode(exitErr)
 		}
 		writef(stderr, "sky: %v\n", err)
 		return 1
@@ -141,14 +133,21 @@ func parseInterspersed(fs *flag.FlagSet, args []string) error {
 			return err
 		}
 		rest := fs.Args()
+		consumed := len(args) - len(rest)
+		if consumed > 0 && args[consumed-1] == "--" {
+			// Explicit terminator: everything after it is positional.
+			positional = append(positional, rest...)
+			break
+		}
 		if len(rest) == 0 {
 			break
 		}
 		positional = append(positional, rest[0])
 		args = rest[1:]
 	}
-	// Re-parse so fs.Args() reports the collected positionals.
-	return fs.Parse(positional)
+	// Re-parse behind a terminator so fs.Args() reports the collected
+	// positionals without re-interpreting any of them as flags.
+	return fs.Parse(append([]string{"--"}, positional...))
 }
 
 func runPlugin(args []string, stdout, stderr io.Writer) int {
@@ -336,14 +335,9 @@ func runPluginInspect(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	if metadata.Version != "" {
-		plugin.Version = metadata.Version
-	}
-	if metadata.Summary != "" {
-		plugin.Description = metadata.Summary
-	}
-	plugin.Type = plugin.EffectiveType()
-	if err := store.UpsertPlugin(*plugin); err != nil {
+	// Only touch version/description, and only if the plugin was not
+	// reinstalled or removed while its metadata was being collected.
+	if _, err := store.UpdatePluginMetadata(plugin.Name, plugin.InstalledAt, metadata.Version, metadata.Summary); err != nil {
 		writef(stderr, "sky: %v\n", err)
 		return 1
 	}

@@ -39,7 +39,14 @@ func (s *Store) InstallFromPath(name, path, version string, pluginType PluginTyp
 	}
 
 	dest := s.PluginPath(name, pluginType)
-	if err := copyFile(path, dest, 0o755); err != nil {
+	tmp, err := os.CreateTemp(s.PluginsDir(), name+"-tmp-")
+	if err != nil {
+		return Plugin{}, fmt.Errorf("create temp: %w", err)
+	}
+	tmpName := tmp.Name()
+	_ = tmp.Close()
+	defer func() { _ = os.Remove(tmpName) }() // no-op after a successful rename
+	if err := copyFile(path, tmpName, 0o755); err != nil {
 		return Plugin{}, fmt.Errorf("install plugin: %w", err)
 	}
 
@@ -51,25 +58,119 @@ func (s *Store) InstallFromPath(name, path, version string, pluginType PluginTyp
 		Path:        dest,
 		Type:        pluginType,
 	}
-	if err := s.UpsertPlugin(plugin); err != nil {
+	if err := s.commitInstall(tmpName, plugin); err != nil {
 		return Plugin{}, err
 	}
 	return plugin, nil
 }
 
+// commitInstall moves the staged binary into place, records the plugin and
+// removes the previous binary, all under the store write lock. The previous
+// binary is only removed if it lives inside this store's plugins directory and
+// is not the freshly installed destination.
+func (s *Store) commitInstall(tmpName string, plugin Plugin) error {
+	dest := plugin.Path
+	return s.withWriteLock(func() error {
+		plugins, err := s.loadPluginsNL()
+		if err != nil {
+			return err
+		}
+		oldPath := ""
+		for _, p := range plugins {
+			if p.Name == plugin.Name {
+				oldPath = p.Path
+				if oldPath == "" {
+					oldPath = s.PluginPath(plugin.Name, p.EffectiveType())
+				}
+				break
+			}
+		}
+		if err := os.Chmod(tmpName, 0o755); err != nil {
+			return fmt.Errorf("chmod plugin: %w", err)
+		}
+		if err := os.Rename(tmpName, dest); err != nil {
+			return fmt.Errorf("install plugin: %w", err)
+		}
+		if err := s.upsertPluginNL(plugin); err != nil {
+			return err
+		}
+		if oldPath != "" && s.ownsBinary(oldPath) && !samePath(oldPath, dest) {
+			if err := os.Remove(oldPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("remove previous plugin binary: %w", err)
+			}
+		}
+		return nil
+	})
+}
+
+// canonicalPath returns an absolute path with symlinks resolved as far as the
+// path exists (the final components may not exist yet).
+func canonicalPath(p string) string {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		abs = filepath.Clean(p)
+	}
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		return resolved
+	}
+	if resolved, err := filepath.EvalSymlinks(filepath.Dir(abs)); err == nil {
+		return filepath.Join(resolved, filepath.Base(abs))
+	}
+	return abs
+}
+
+func samePath(a, b string) bool {
+	return canonicalPath(a) == canonicalPath(b)
+}
+
+// ownsBinary reports whether path is a file directly inside this store's
+// plugins directory.
+func (s *Store) ownsBinary(path string) bool {
+	return filepath.Dir(canonicalPath(path)) == canonicalPath(s.PluginsDir())
+}
+
+// downloadIdleTimeout aborts a download whose body makes no progress for this long.
+var downloadIdleTimeout = 30 * time.Second
+
+// downloadTransport is shared by all downloads so keep-alive connections are
+// reused instead of leaking one idle pool per install.
+var downloadTransport = &http.Transport{
+	Proxy:                 http.ProxyFromEnvironment,
+	DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ResponseHeaderTimeout: 20 * time.Second,
+	IdleConnTimeout:       30 * time.Second,
+	MaxIdleConnsPerHost:   2,
+}
+
 // maxDownloadBytes caps the size of a downloaded plugin.
 const maxDownloadBytes = 256 << 20
 
-// newDownloadClient returns an HTTP client with dial/header timeouts but no
-// whole-body timeout; callers rely on the context for overall cancellation.
+// newDownloadClient returns an HTTP client with dial/header timeouts and no
+// whole-body timeout; body stalls are caught by idleReader.
 func newDownloadClient() *http.Client {
-	return &http.Client{Transport: &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 20 * time.Second,
-	}}
+	return &http.Client{Transport: downloadTransport}
 }
+
+// idleReader cancels the request when no bytes arrive within the timeout.
+type idleReader struct {
+	r      io.Reader
+	timer  *time.Timer
+	d      time.Duration
+	cancel context.CancelFunc
+}
+
+func newIdleReader(r io.Reader, d time.Duration, cancel context.CancelFunc) *idleReader {
+	return &idleReader{r: r, d: d, cancel: cancel, timer: time.AfterFunc(d, cancel)}
+}
+
+func (i *idleReader) Read(p []byte) (int, error) {
+	n, err := i.r.Read(p)
+	i.timer.Reset(i.d)
+	return n, err
+}
+
+func (i *idleReader) stop() { i.timer.Stop() }
 
 // copyLimited copies src to dst, failing if more than limit bytes are read.
 func copyLimited(dst io.Writer, src io.Reader, limit int64) error {
@@ -141,6 +242,10 @@ func (s *Store) installFromURL(ctx context.Context, name, url, expectedSHA, vers
 
 	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
 		client := newDownloadClient()
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		// Cover the header phase too; the idle reader takes over for the body.
+		hdrTimer := time.AfterFunc(downloadIdleTimeout, cancel)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
 			return Plugin{}, fmt.Errorf("build request: %w", err)
@@ -149,11 +254,14 @@ func (s *Store) installFromURL(ctx context.Context, name, url, expectedSHA, vers
 		if err != nil {
 			return Plugin{}, fmt.Errorf("download plugin: %w", err)
 		}
+		hdrTimer.Stop()
 		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusOK {
 			return Plugin{}, fmt.Errorf("download plugin: status %s", resp.Status)
 		}
-		if err := copyLimited(writer, resp.Body, limit); err != nil {
+		body := newIdleReader(resp.Body, downloadIdleTimeout, cancel)
+		defer body.stop()
+		if err := copyLimited(writer, body, limit); err != nil {
 			return Plugin{}, fmt.Errorf("download plugin: %w", err)
 		}
 	} else {
@@ -172,10 +280,6 @@ func (s *Store) installFromURL(ctx context.Context, name, url, expectedSHA, vers
 	if err := tmp.Close(); err != nil {
 		return Plugin{}, fmt.Errorf("finalize plugin: %w", err)
 	}
-	if err := os.Chmod(tmp.Name(), 0o755); err != nil {
-		return Plugin{}, fmt.Errorf("chmod plugin: %w", err)
-	}
-
 	if expectedSHA != "" {
 		actual := hex.EncodeToString(hasher.Sum(nil))
 		if !strings.EqualFold(actual, expectedSHA) {
@@ -198,36 +302,9 @@ func (s *Store) installFromURL(ctx context.Context, name, url, expectedSHA, vers
 		Type:        pluginType,
 	}
 
-	err = s.withWriteLock(func() error {
-		plugins, err := s.loadPluginsNL()
-		if err != nil {
-			return err
-		}
-		oldPath := ""
-		for _, p := range plugins {
-			if p.Name == name {
-				oldPath = p.Path
-				if oldPath == "" {
-					oldPath = s.PluginPath(name, p.EffectiveType())
-				}
-				break
-			}
-		}
-		if err := os.Rename(tmp.Name(), dest); err != nil {
-			return fmt.Errorf("install plugin: %w", err)
-		}
-		cleaned = true
-		if err := s.upsertPluginNL(plugin); err != nil {
-			return err
-		}
-		if oldPath != "" && filepath.Clean(oldPath) != filepath.Clean(dest) {
-			if err := os.Remove(oldPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("remove previous plugin binary: %w", err)
-			}
-		}
-		return nil
-	})
-	if err != nil {
+	cleaned = true // commitInstall owns the staged file from here on
+	if err := s.commitInstall(tmp.Name(), plugin); err != nil {
+		_ = os.Remove(tmp.Name())
 		return Plugin{}, err
 	}
 	return plugin, nil
