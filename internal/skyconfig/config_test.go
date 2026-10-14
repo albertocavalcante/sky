@@ -774,3 +774,29 @@ func TestDurationExplicitZeroRoundTrips(t *testing.T) {
 		t.Errorf("unset duration became set (text %q)", text)
 	}
 }
+
+func TestFailUnderRejectsInvalid(t *testing.T) {
+	dir := t.TempDir()
+	for _, v := range []string{"nan", "inf", "-inf", "-1", "101"} {
+		p := filepath.Join(dir, "sky-"+v+".toml")
+		if err := os.WriteFile(p, []byte("[test.coverage]\nfail_under = "+v+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadTOMLConfig(p); err == nil {
+			t.Errorf("toml fail_under=%s accepted", v)
+		}
+	}
+	for _, v := range []string{"float('nan')", "float('inf')", "-5", "150"} {
+		p := filepath.Join(dir, "c.sky")
+		src := "def configure():\n    return {'test': {'coverage': {'fail_under': " + v + "}}}\n"
+		if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadStarlarkConfig(p, DefaultStarlarkTimeout); err == nil {
+			t.Errorf("starlark fail_under=%s accepted", v)
+		}
+	}
+	if err := ValidateCoverageThreshold(80); err != nil {
+		t.Errorf("80 rejected: %v", err)
+	}
+}
