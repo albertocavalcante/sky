@@ -106,3 +106,28 @@ func TestWatcherHandleEventNoDeadlockWithRefresh(t *testing.T) {
 		t.Fatal("deadlock: write lock unobtainable (handleEvent blocked holding RLock)")
 	}
 }
+
+func TestSnapshotPathKeepsLegacyNames(t *testing.T) {
+	dir := t.TempDir()
+	sm := NewSnapshotManager(false)
+	sm.SetContext(filepath.Join(dir, "t.star"), "test_p[hello world]")
+	want := filepath.Join(sm.snapshotDir(), "test_p[hello world]__snap.snap")
+	if got := sm.snapshotPath("snap"); got != want {
+		t.Errorf("existing-style name changed:\n got %s\nwant %s", got, want)
+	}
+}
+
+func TestSnapshotPathBoundedLength(t *testing.T) {
+	dir := t.TempDir()
+	sm := NewSnapshotManager(false)
+	long := "test_p[" + strings.Repeat("a b ", 100) + "]"
+	sm.SetContext(filepath.Join(dir, "t.star"), long)
+	p := sm.snapshotPath("snap")
+	if n := len(filepath.Base(p)); n > 255 {
+		t.Errorf("filename %d bytes > 255", n)
+	}
+	sm.SetContext(filepath.Join(dir, "t.star"), long+"x")
+	if sm.snapshotPath("snap") == p {
+		t.Error("distinct long names collide")
+	}
+}
