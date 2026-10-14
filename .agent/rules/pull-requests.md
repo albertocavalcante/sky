@@ -96,3 +96,7 @@ user has asked for it in the current task.
 Follow `.agent/workflows/review.md`: every thread gets a fix, a defer (with an
 issue link) or a reasoned rejection, and a reply. Resolve fixed and deferred
 threads. Leave rejected threads unresolved so the reviewer can respond.
+
+## After merge
+
+Delete the branch and any worktrees you made (see `git-workflow.md`, Branch Hygiene). Do not leave them for later.
