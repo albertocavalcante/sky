@@ -4,10 +4,15 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func writeTestFile(t *testing.T, path, content string) {
@@ -214,5 +219,63 @@ func TestInstallFromPath_RemovesPreviousBinaryOfOtherType(t *testing.T) {
 		if strings.Contains(e.Name(), "-tmp-") {
 			t.Fatalf("leftover temp %s", e.Name())
 		}
+	}
+}
+
+func TestInstallFromURL_StalledBodyTimesOut(t *testing.T) {
+	old := downloadIdleTimeout
+	downloadIdleTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { downloadIdleTimeout = old })
+
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("partial"))
+		w.(http.Flusher).Flush()
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(release) })
+
+	s := NewStore(filepath.Join(t.TempDir(), "root"))
+	done := make(chan error, 1)
+	go func() {
+		_, err := s.InstallFromURL(context.Background(), "foo", srv.URL, "", "", "", "")
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected error for stalled download")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("download hung on a stalled body")
+	}
+}
+
+func TestInstallFromURL_ReusesConnections(t *testing.T) {
+	var conns atomic.Int32
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("x"))
+	}))
+	srv.Config.ConnState = func(_ net.Conn, st http.ConnState) {
+		if st == http.StateNew {
+			conns.Add(1)
+		}
+	}
+	srv.Start()
+	t.Cleanup(srv.Close)
+
+	s := NewStore(filepath.Join(t.TempDir(), "root"))
+	for i := 0; i < 3; i++ {
+		if _, err := s.InstallFromURL(context.Background(), "foo", srv.URL, "", "", "", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := conns.Load(); n != 1 {
+		t.Fatalf("want 1 reused connection, got %d", n)
 	}
 }

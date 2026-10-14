@@ -129,19 +129,48 @@ func (s *Store) ownsBinary(path string) bool {
 	return filepath.Dir(canonicalPath(path)) == canonicalPath(s.PluginsDir())
 }
 
+// downloadIdleTimeout aborts a download whose body makes no progress for this long.
+var downloadIdleTimeout = 30 * time.Second
+
+// downloadTransport is shared by all downloads so keep-alive connections are
+// reused instead of leaking one idle pool per install.
+var downloadTransport = &http.Transport{
+	Proxy:                 http.ProxyFromEnvironment,
+	DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ResponseHeaderTimeout: 20 * time.Second,
+	IdleConnTimeout:       30 * time.Second,
+	MaxIdleConnsPerHost:   2,
+}
+
 // maxDownloadBytes caps the size of a downloaded plugin.
 const maxDownloadBytes = 256 << 20
 
-// newDownloadClient returns an HTTP client with dial/header timeouts but no
-// whole-body timeout; callers rely on the context for overall cancellation.
+// newDownloadClient returns an HTTP client with dial/header timeouts and no
+// whole-body timeout; body stalls are caught by idleReader.
 func newDownloadClient() *http.Client {
-	return &http.Client{Transport: &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 20 * time.Second,
-	}}
+	return &http.Client{Transport: downloadTransport}
 }
+
+// idleReader cancels the request when no bytes arrive within the timeout.
+type idleReader struct {
+	r      io.Reader
+	timer  *time.Timer
+	d      time.Duration
+	cancel context.CancelFunc
+}
+
+func newIdleReader(r io.Reader, d time.Duration, cancel context.CancelFunc) *idleReader {
+	return &idleReader{r: r, d: d, cancel: cancel, timer: time.AfterFunc(d, cancel)}
+}
+
+func (i *idleReader) Read(p []byte) (int, error) {
+	n, err := i.r.Read(p)
+	i.timer.Reset(i.d)
+	return n, err
+}
+
+func (i *idleReader) stop() { i.timer.Stop() }
 
 // copyLimited copies src to dst, failing if more than limit bytes are read.
 func copyLimited(dst io.Writer, src io.Reader, limit int64) error {
@@ -213,6 +242,10 @@ func (s *Store) installFromURL(ctx context.Context, name, url, expectedSHA, vers
 
 	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
 		client := newDownloadClient()
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		// Cover the header phase too; the idle reader takes over for the body.
+		hdrTimer := time.AfterFunc(downloadIdleTimeout, cancel)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
 			return Plugin{}, fmt.Errorf("build request: %w", err)
@@ -221,11 +254,14 @@ func (s *Store) installFromURL(ctx context.Context, name, url, expectedSHA, vers
 		if err != nil {
 			return Plugin{}, fmt.Errorf("download plugin: %w", err)
 		}
+		hdrTimer.Stop()
 		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusOK {
 			return Plugin{}, fmt.Errorf("download plugin: status %s", resp.Status)
 		}
-		if err := copyLimited(writer, resp.Body, limit); err != nil {
+		body := newIdleReader(resp.Body, downloadIdleTimeout, cancel)
+		defer body.stop()
+		if err := copyLimited(writer, body, limit); err != nil {
 			return Plugin{}, fmt.Errorf("download plugin: %w", err)
 		}
 	} else {
