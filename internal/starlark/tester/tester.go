@@ -274,6 +274,11 @@ func (r *Runner) RunFile(filename string, src []byte) (*FileResult, error) {
 	// TODO(upstream): Simplify once OnExec is merged upstream.
 	r.setupCoverageHook(thread)
 
+	// Register executable lines up front so unexecuted lines count as missing.
+	if r.coverage != nil {
+		_ = r.coverage.RegisterSource(filename, src)
+	}
+
 	globals, err := starlark.ExecFile(thread, filename, src, predeclared)
 	if err != nil {
 		return nil, fmt.Errorf("executing %s: %w", filename, err)
