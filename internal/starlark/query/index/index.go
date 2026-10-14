@@ -204,28 +204,9 @@ func (idx *Index) MatchFiles(pattern string) []*File {
 
 	// Handle glob patterns
 	if strings.Contains(pattern, "*") {
-		// Check for recursive glob pattern (**)
-		isRecursive := strings.Contains(pattern, "**")
-
 		for _, f := range idx.files {
-			if isRecursive {
-				// For **/*.bzl, match the extension pattern against all files
-				if strings.HasPrefix(pattern, "**/") {
-					subPattern := strings.TrimPrefix(pattern, "**/")
-					matched, err := filepath.Match(subPattern, filepath.Base(f.Path))
-					if err == nil && matched {
-						result = append(result, f)
-					}
-				}
-			} else {
-				// For non-recursive patterns like *.bzl, only match files at root level
-				// (i.e., paths without directory separators)
-				if !strings.Contains(f.Path, "/") {
-					matched, err := filepath.Match(pattern, f.Path)
-					if err == nil && matched {
-						result = append(result, f)
-					}
-				}
+			if matchGlob(pattern, f.Path) {
+				result = append(result, f)
 			}
 		}
 		return result
