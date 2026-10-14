@@ -73,7 +73,16 @@ func (d *Driver) RunFile(path string) ([]Finding, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading file: %w", err)
 	}
+	return d.RunContent(path, content)
+}
 
+// RunContent executes all enabled rules on content as if it were the file at
+// path. The primary source is taken from content and never re-read from disk,
+// so findings and replacement offsets describe exactly the given bytes (used
+// by editors linting unsaved buffers). Rules that depend on other files
+// (multifile rules, e.g. checks on loaded modules) may still read those
+// dependencies from disk.
+func (d *Driver) RunContent(path string, content []byte) ([]Finding, error) {
 	// Classify the file to determine its kind
 	classification, err := d.classifier.Classify(path)
 	if err != nil {
@@ -218,7 +227,7 @@ func (d *Driver) expandPath(path string) ([]string, error) {
 		}
 
 		// Skip hidden directories
-		if entry.IsDir() && strings.HasPrefix(entry.Name(), ".") && entry.Name() != "." {
+		if entry.IsDir() && p != path && strings.HasPrefix(entry.Name(), ".") {
 			return filepath.SkipDir
 		}
 

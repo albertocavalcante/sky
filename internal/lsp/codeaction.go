@@ -28,7 +28,9 @@ func (s *Server) handleCodeAction(ctx context.Context, params json.RawMessage) (
 	log.Printf("codeAction: %s range=%v", path, p.Range)
 
 	// Run linter to get findings with replacements
-	findings, err := s.lintDriver.RunFile(path)
+	// (the primary buffer is linted from memory, so replacement offsets match
+	// the document; dependency rules may still read other files from disk)
+	findings, err := s.lintBuffer(path, doc.Content)
 	if err != nil {
 		log.Printf("codeAction: linter error: %v", err)
 		return []protocol.CodeAction{}, nil
@@ -68,7 +70,7 @@ func findingsToCodeActions(uri string, findings []linter.Finding, content string
 		}
 
 		// Create the diagnostic that this action fixes
-		diag := lintFindingToDiagnostic(f)
+		diag := lintFindingToDiagnosticIn(content, f)
 
 		// Create the code action
 		action := protocol.CodeAction{
@@ -90,27 +92,10 @@ func findingsToCodeActions(uri string, findings []linter.Finding, content string
 	return actions
 }
 
-// byteOffsetToPosition converts a byte offset in content to a 0-based line and column.
+// byteOffsetToPosition converts a byte offset in content to a 0-based line and
+// UTF-16 column.
 func byteOffsetToPosition(content string, offset int) (line, col uint32) {
-	if offset < 0 {
-		return 0, 0
-	}
-	if offset > len(content) {
-		offset = len(content)
-	}
-
-	line = 0
-	lineStart := 0
-
-	for i := 0; i < offset; i++ {
-		if content[i] == '\n' {
-			line++
-			lineStart = i + 1
-		}
-	}
-
-	col = uint32(offset - lineStart)
-	return line, col
+	return offsetToPosition(content, offset)
 }
 
 // filterCodeActionsByRange filters code actions to only include those

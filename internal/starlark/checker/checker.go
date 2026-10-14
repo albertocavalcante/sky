@@ -135,6 +135,7 @@ func defaultUniversal() map[string]bool {
 		"any":       true,
 		"bool":      true,
 		"bytes":     true,
+		"chr":       true,
 		"dict":      true,
 		"dir":       true,
 		"enumerate": true,
@@ -148,10 +149,12 @@ func defaultUniversal() map[string]bool {
 		"list":      true,
 		"max":       true,
 		"min":       true,
+		"ord":       true,
 		"print":     true,
 		"range":     true,
 		"repr":      true,
 		"reversed":  true,
+		"set":       true,
 		"sorted":    true,
 		"str":       true,
 		"tuple":     true,
@@ -237,6 +240,49 @@ func (c *Checker) findUnusedBindings(f *syntax.File) []Diagnostic {
 	bindings := make(map[*syntax.Ident]bool) // ident -> used
 	uses := make(map[string][]*syntax.Ident) // name -> all uses
 
+	// Function parameters and loop variables are intentionally not reported:
+	// parameters are part of a function's signature and loop variables are
+	// often only needed for iteration.
+	skip := make(map[*syntax.Ident]bool)
+	markIdents := func(root syntax.Node) {
+		if root == nil {
+			return
+		}
+		syntax.Walk(root, func(n syntax.Node) bool {
+			if id, ok := n.(*syntax.Ident); ok {
+				skip[id] = true
+			}
+			return true
+		})
+	}
+	markParams := func(params []syntax.Expr) {
+		for _, p := range params {
+			switch p := p.(type) {
+			case *syntax.Ident:
+				skip[p] = true
+			case *syntax.UnaryExpr: // *args, **kwargs
+				markIdents(p.X)
+			case *syntax.BinaryExpr: // name=default
+				if id, ok := p.X.(*syntax.Ident); ok {
+					skip[id] = true
+				}
+			}
+		}
+	}
+	syntax.Walk(f, func(n syntax.Node) bool {
+		switch n := n.(type) {
+		case *syntax.DefStmt:
+			markParams(n.Params)
+		case *syntax.LambdaExpr:
+			markParams(n.Params)
+		case *syntax.ForStmt:
+			markIdents(n.Vars)
+		case *syntax.ForClause:
+			markIdents(n.Vars)
+		}
+		return true
+	})
+
 	// First pass: collect all binding sites and uses
 	syntax.Walk(f, func(n syntax.Node) bool {
 		switch n := n.(type) {
@@ -254,11 +300,17 @@ func (c *Checker) findUnusedBindings(f *syntax.File) []Diagnostic {
 			case resolve.Local, resolve.Cell:
 				if b.First == n {
 					// This is a binding site
-					bindings[n] = false
+					if !skip[n] {
+						bindings[n] = false
+					}
 				} else {
 					// This is a use
 					uses[n.Name] = append(uses[n.Name], n)
 				}
+			case resolve.Free:
+				// A use of a variable captured from an enclosing function;
+				// b.First is the defining identifier in the outer scope.
+				uses[n.Name] = append(uses[n.Name], n)
 			case resolve.Global:
 				// Track uses but don't warn on unused globals
 				if b.First != n {

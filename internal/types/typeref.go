@@ -402,6 +402,20 @@ func ElementType(t TypeRef) TypeRef {
 	return nil
 }
 
+// IterElementType returns the type produced by iterating over t (as list(),
+// set() and for-loops do): the key type for dicts, the element type for lists
+// and sets. It returns nil if t is not a known iterable. Unlike ElementType,
+// which models indexing, a dict yields its keys.
+func IterElementType(t TypeRef) TypeRef {
+	if n, ok := t.(*NamedType); ok && n.Name == "dict" {
+		if len(n.Args) > 0 {
+			return n.Args[0]
+		}
+		return Unknown()
+	}
+	return ElementType(t)
+}
+
 // ContainsUnknown returns true if the type or any nested type is Unknown.
 func ContainsUnknown(t TypeRef) bool {
 	if t.IsUnknown() {

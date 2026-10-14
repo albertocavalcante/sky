@@ -181,7 +181,7 @@ func parseTestConfig(d *starlark.Dict, cfg *TestConfig) error {
 		if err != nil {
 			return fmt.Errorf("invalid timeout %q: %w", s, err)
 		}
-		cfg.Timeout = Duration{dur}
+		cfg.Timeout = Duration{Duration: dur, Set: true}
 	}
 
 	// parallel
@@ -269,12 +269,18 @@ func parseCoverageConfig(d *starlark.Dict, cfg *CoverageConfig) error {
 	if v, found, _ := d.Get(starlark.String("fail_under")); found {
 		switch val := v.(type) {
 		case starlark.Int:
-			i, _ := val.Int64()
+			i, ok := val.Int64()
+			if !ok {
+				return fmt.Errorf("fail_under: %s is out of range: must be between 0 and 100", val)
+			}
 			cfg.FailUnder = float64(i)
 		case starlark.Float:
 			cfg.FailUnder = float64(val)
 		default:
 			return fmt.Errorf("fail_under must be a number, got %s", v.Type())
+		}
+		if err := ValidateCoverageThreshold(cfg.FailUnder); err != nil {
+			return fmt.Errorf("fail_under: %w", err)
 		}
 	}
 

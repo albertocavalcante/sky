@@ -12,6 +12,9 @@ go_library(
 
 go_test(
     name = "coverage_test",
-    srcs = ["coverage_test.go"],
+    srcs = [
+        "coverage_test.go",
+        "regress_test.go",
+    ],
     embed = [":coverage"],
 )

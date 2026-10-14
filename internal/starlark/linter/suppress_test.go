@@ -469,3 +469,42 @@ func TestSuppressionParser_InlineVsLine(t *testing.T) {
 		})
 	}
 }
+
+func TestSuppressionParser_LeadingCommaAndMalformedList(t *testing.T) {
+	for _, directive := range []string{"disable=", "disable-next-line="} {
+		line := 1
+		src := "# skylint: " + directive + ",rule-a\ncode()\n"
+		if directive == "disable-next-line=" {
+			line = 2
+		}
+		p := NewSuppressionParser([]byte(src))
+		if !p.IsSuppressed(Finding{Line: line, Rule: "rule-a"}) {
+			t.Errorf("%s,rule-a: rule-a should be suppressed", directive)
+		}
+		if p.IsSuppressed(Finding{Line: line, Rule: "rule-b"}) {
+			t.Errorf("%s,rule-a: rule-b must not be suppressed", directive)
+		}
+
+		src = "# skylint: " + directive + ",,\ncode()\n"
+		p = NewSuppressionParser([]byte(src))
+		if p.IsSuppressed(Finding{Line: line, Rule: "rule-b"}) {
+			t.Errorf("%s,,: malformed list must not suppress everything", directive)
+		}
+	}
+}
+
+func TestSuppressionParser_DisableAllTrailingComma(t *testing.T) {
+	tests := []struct {
+		src  string
+		line int
+	}{
+		{"# skylint: disable=all,\ncode()\n", 1},
+		{"# skylint: disable-next-line=all,\ncode()\n", 2},
+	}
+	for _, tt := range tests {
+		parser := NewSuppressionParser([]byte(tt.src))
+		if !parser.IsSuppressed(Finding{FilePath: "t.star", Line: tt.line, Rule: "any-rule"}) {
+			t.Errorf("%q should suppress every rule", tt.src)
+		}
+	}
+}

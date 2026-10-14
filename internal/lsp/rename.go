@@ -3,10 +3,14 @@ package lsp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/albertocavalcante/sky/internal/protocol"
+	"github.com/albertocavalcante/sky/internal/starlark/filekind"
 )
 
 // Starlark keywords that cannot be renamed
@@ -92,8 +96,28 @@ func (s *Server) handleRename(ctx context.Context, params json.RawMessage) (any,
 		return nil, nil
 	}
 
-	// Find all references to this word
-	refs := findAllReferences(doc.Content, word)
+	if !isValidIdentifier(p.NewName) || isKeyword(p.NewName) {
+		return nil, &ResponseError{
+			Code:    CodeInvalidParams,
+			Message: fmt.Sprintf("%q is not a valid identifier", p.NewName),
+		}
+	}
+
+	// Find all references using the syntax tree, so occurrences inside
+	// strings and comments, keyword-argument names and attribute names are
+	// never touched.
+	path := uriToPath(p.TextDocument.Uri)
+	file, err := parseStarlarkFile([]byte(doc.Content), path, filekind.KindStarlark)
+	if err != nil {
+		return nil, &ResponseError{
+			Code:    CodeRequestFailed,
+			Message: "cannot rename: file has syntax errors",
+		}
+	}
+	refs, err := collectRenameRefs(doc.Content, file, word)
+	if err != nil {
+		return nil, &ResponseError{Code: CodeRequestFailed, Message: err.Error()}
+	}
 	if len(refs) == 0 {
 		return nil, nil
 	}
@@ -102,7 +126,7 @@ func (s *Server) handleRename(ctx context.Context, params json.RawMessage) (any,
 	edits := make([]protocol.TextEdit, 0, len(refs))
 	for _, ref := range refs {
 		edits = append(edits, protocol.TextEdit{
-			Range:   ref,
+			Range:   ref.Range,
 			NewText: p.NewName,
 		})
 	}
@@ -114,31 +138,37 @@ func (s *Server) handleRename(ctx context.Context, params json.RawMessage) (any,
 	}, nil
 }
 
-// getWordAndRangeAtPosition extracts the word and its range at a given line and character position.
+// getWordAndRangeAtPosition extracts the word and its range at a given line
+// and character (UTF-16) position. A cursor at the end of a word selects it.
 func getWordAndRangeAtPosition(content string, line, char int) (string, protocol.Range) {
-	lines := strings.Split(content, "\n")
-	if line < 0 || line >= len(lines) {
+	lineContent, ok := lineText(content, line)
+	if !ok || char < 0 {
 		return "", protocol.Range{}
 	}
-
-	lineContent := lines[line]
-	if char < 0 || char >= len(lineContent) {
-		// Allow char == len for end of line
-		if char != len(lineContent) {
-			return "", protocol.Range{}
-		}
+	lineContent = strings.TrimSuffix(lineContent, "\r")
+	if char > utf16Len(lineContent) {
+		return "", protocol.Range{}
 	}
+	pos := utf16ColToByte(lineContent, char)
 
 	// Find start of word
-	start := char
-	for start > 0 && isIdentChar(lineContent[start-1]) {
-		start--
+	start := pos
+	for start > 0 {
+		r, size := utf8.DecodeLastRuneInString(lineContent[:start])
+		if !isIdentRune(r) {
+			break
+		}
+		start -= size
 	}
 
 	// Find end of word
-	end := char
-	for end < len(lineContent) && isIdentChar(lineContent[end]) {
-		end++
+	end := pos
+	for end < len(lineContent) {
+		r, size := utf8.DecodeRuneInString(lineContent[end:])
+		if !isIdentRune(r) {
+			break
+		}
+		end += size
 	}
 
 	if start == end {
@@ -147,56 +177,42 @@ func getWordAndRangeAtPosition(content string, line, char int) (string, protocol
 
 	word := lineContent[start:end]
 	wordRange := protocol.Range{
-		Start: protocol.Position{Line: uint32(line), Character: uint32(start)},
-		End:   protocol.Position{Line: uint32(line), Character: uint32(end)},
+		Start: protocol.Position{Line: uint32(line), Character: uint32(byteToUTF16Col(lineContent, start))},
+		End:   protocol.Position{Line: uint32(line), Character: uint32(byteToUTF16Col(lineContent, end))},
 	}
 
 	return word, wordRange
 }
 
-// findAllReferences finds all occurrences of a word in the content.
-// It returns ranges for each occurrence, ensuring only whole-word matches.
-func findAllReferences(content, word string) []protocol.Range {
-	var refs []protocol.Range
-	lines := strings.Split(content, "\n")
+// isIdentRune reports whether r can appear in an identifier, using the same
+// rules as isValidIdentifier.
+func isIdentRune(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || (r >= '0' && r <= '9')
+}
 
-	for lineNum, lineContent := range lines {
-		// Find all occurrences in this line
-		offset := 0
-		for {
-			idx := strings.Index(lineContent[offset:], word)
-			if idx == -1 {
-				break
-			}
+// starlarkReservedSet holds the words the Starlark scanner reserves (they
+// are not valid identifiers) beyond the language keywords.
+var starlarkReservedSet = map[string]bool{
+	"as": true, "async": true, "await": true, "class": true, "del": true,
+	"except": true, "finally": true, "from": true, "global": true,
+	"import": true, "is": true, "nonlocal": true, "raise": true, "try": true,
+	"with": true, "yield": true,
+}
 
-			absoluteIdx := offset + idx
-			wordEnd := absoluteIdx + len(word)
-
-			// Check if this is a whole word match (not part of a larger identifier)
-			isWholeWord := true
-
-			// Check character before
-			if absoluteIdx > 0 && isIdentChar(lineContent[absoluteIdx-1]) {
-				isWholeWord = false
-			}
-
-			// Check character after
-			if wordEnd < len(lineContent) && isIdentChar(lineContent[wordEnd]) {
-				isWholeWord = false
-			}
-
-			if isWholeWord {
-				refs = append(refs, protocol.Range{
-					Start: protocol.Position{Line: uint32(lineNum), Character: uint32(absoluteIdx)},
-					End:   protocol.Position{Line: uint32(lineNum), Character: uint32(wordEnd)},
-				})
-			}
-
-			offset = wordEnd
-		}
+// isValidIdentifier reports whether name is a valid Starlark identifier:
+// a Unicode letter or '_' followed by letters, digits or '_', and not a
+// keyword or reserved word.
+func isValidIdentifier(name string) bool {
+	if name == "" || starlarkKeywordSet[name] || starlarkReservedSet[name] {
+		return false
 	}
-
-	return refs
+	for i, r := range name {
+		if r == '_' || unicode.IsLetter(r) || (i > 0 && r >= '0' && r <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // isKeyword returns true if the word is a Starlark keyword.

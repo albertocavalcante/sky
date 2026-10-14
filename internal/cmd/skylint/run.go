@@ -144,6 +144,27 @@ func RunWithIO(ctx context.Context, args []string, _ io.Reader, stdout, stderr i
 		return exitError
 	}
 
+	// Create reporter based on format (validated up front, also in fix mode)
+	var reporter linter.Reporter
+	switch formatFlag {
+	case "text":
+		reporter = linter.NewTextReporter()
+	case "compact":
+		reporter = linter.NewCompactReporter()
+	case "json":
+		reporter = linter.NewJSONReporter()
+	case "github":
+		reporter = githubReporter{}
+	default:
+		writef(stderr, "skylint: unknown format: %s\n", formatFlag)
+		return exitError
+	}
+
+	if diffFlag && !fixFlag {
+		writeln(stderr, "skylint: --diff requires --fix")
+		return exitError
+	}
+
 	// Get paths to lint
 	paths := fs.Args()
 	if len(paths) == 0 {
@@ -207,25 +228,26 @@ func RunWithIO(ctx context.Context, args []string, _ io.Reader, stdout, stderr i
 					writef(stderr, " (%d skipped due to conflicts)", totalSkipped)
 				}
 				writeln(stderr)
+
+				// Re-lint so the report and exit code reflect what remains.
+				if filesChanged > 0 {
+					result, err = driver.Run(ctx, paths)
+					if err != nil {
+						writef(stderr, "skylint: %v\n", err)
+						return exitError
+					}
+				}
 			}
 		}
-		return exitOK
-	}
 
-	// Create reporter based on format
-	var reporter linter.Reporter
-	switch formatFlag {
-	case "text":
-		reporter = linter.NewTextReporter()
-	case "compact":
-		reporter = linter.NewCompactReporter()
-	case "json":
-		reporter = linter.NewJSONReporter()
-	case "github":
-		reporter = linter.NewGitHubReporter()
-	default:
-		writef(stderr, "skylint: unknown format: %s\n", formatFlag)
-		return exitError
+		// In diff mode nothing was applied, so stdout carries only the diff.
+		if !diffFlag {
+			if err := reporter.Report(stdout, result); err != nil {
+				writef(stderr, "skylint: failed to report results: %v\n", err)
+				return exitError
+			}
+		}
+		return exitCodeFor(result, warningsAsErrors)
 	}
 
 	// Report results
@@ -234,18 +256,20 @@ func RunWithIO(ctx context.Context, args []string, _ io.Reader, stdout, stderr i
 		return exitError
 	}
 
-	// Determine exit code
+	return exitCodeFor(result, warningsAsErrors)
+}
+
+// exitCodeFor maps lint results to a process exit code.
+func exitCodeFor(result *linter.Result, warningsAsErrors bool) int {
 	if result.HasErrors() || len(result.Errors) > 0 {
 		return exitError
 	}
-	// If warnings-as-errors is enabled, treat warnings as errors
-	if warningsAsErrors && result.HasWarnings() {
-		return exitError
-	}
 	if result.HasWarnings() {
+		if warningsAsErrors {
+			return exitError
+		}
 		return exitWarning
 	}
-
 	return exitOK
 }
 

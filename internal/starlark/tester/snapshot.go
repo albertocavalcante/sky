@@ -2,11 +2,14 @@
 package tester
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/pmezard/go-difflib/difflib"
 	"go.starlark.net/starlark"
@@ -80,7 +83,8 @@ func (sm *SnapshotManager) snapshotPath(name string) string {
 		"|", "_",
 	)
 	safeName := r.Replace(name)
-	return filepath.Join(sm.snapshotDir(), sm.testName+"__"+safeName+".snap")
+	file := boundSnapshotFileName(encodeFileComponent(sm.testName) + "__" + safeName + ".snap")
+	return filepath.Join(sm.snapshotDir(), file)
 }
 
 // Compare compares a value against its snapshot.
@@ -335,4 +339,45 @@ func formatDiff(expected, actual string) string {
 		return fmt.Sprintf("--- Expected\n%s\n+++ Actual\n%s", expected, actual)
 	}
 	return result
+}
+
+// maxSnapshotFileName bounds the snapshot file name length in bytes.
+const maxSnapshotFileName = 200
+
+// encodeFileComponent percent-encodes only bytes that are unsafe in a file
+// name: path separators, '%' itself, control characters and the Windows-invalid
+// set. Everything else (spaces, brackets, unicode, ...) is kept as-is so
+// existing baselines keep their names. A ".." component cannot escape because
+// separators are encoded, but a name that is only dots is encoded too.
+func encodeFileComponent(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c < 0x20 || c == 0x7f || c == '%' || c == '/' || c == '\\' ||
+			c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|' {
+			fmt.Fprintf(&b, "%%%02X", c)
+			continue
+		}
+		b.WriteByte(c)
+	}
+	out := b.String()
+	if strings.Trim(out, ".") == "" {
+		return strings.ReplaceAll(out, ".", "%2E")
+	}
+	return out
+}
+
+// boundSnapshotFileName keeps name within maxSnapshotFileName bytes by
+// truncating to a readable prefix and appending a digest of the full name.
+func boundSnapshotFileName(name string) string {
+	if len(name) <= maxSnapshotFileName {
+		return name
+	}
+	sum := sha256.Sum256([]byte(name))
+	suffix := "-" + hex.EncodeToString(sum[:8]) + ".snap"
+	cut := maxSnapshotFileName - len(suffix)
+	for cut > 0 && !utf8.RuneStart(name[cut]) {
+		cut--
+	}
+	return name[:cut] + suffix
 }

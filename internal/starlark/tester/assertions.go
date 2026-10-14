@@ -2,6 +2,7 @@ package tester
 
 import (
 	"fmt"
+	"strings"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
@@ -130,10 +131,21 @@ func assertContains(thread *starlark.Thread, b *starlark.Builtin, args starlark.
 				return starlark.None, nil
 			}
 		}
-	case *starlark.Tuple:
+	case starlark.Tuple:
 		for i := 0; i < c.Len(); i++ {
 			eq, _ := starlark.Equal(c.Index(i), item)
 			if eq {
+				return starlark.None, nil
+			}
+		}
+	case starlark.Bytes:
+		switch it := item.(type) {
+		case starlark.Bytes:
+			if contains(string(c), string(it)) {
+				return starlark.None, nil
+			}
+		case starlark.Int:
+			if n, ok := it.Int64(); ok && n >= 0 && n < 256 && strings.IndexByte(string(c), byte(n)) >= 0 {
 				return starlark.None, nil
 			}
 		}

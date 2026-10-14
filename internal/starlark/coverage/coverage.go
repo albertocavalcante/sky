@@ -35,6 +35,14 @@ func (lc *LineCoverage) RecordHit(line int) {
 	lc.Hits[line]++
 }
 
+// Register marks a line as executable without recording an execution, so
+// that never-executed lines count towards TotalLines.
+func (lc *LineCoverage) Register(line int) {
+	if _, ok := lc.Hits[line]; !ok {
+		lc.Hits[line] = 0
+	}
+}
+
 // Compute calculates TotalLines and CoveredLines from Hits.
 func (lc *LineCoverage) Compute() {
 	lc.TotalLines = len(lc.Hits)
@@ -264,6 +272,14 @@ func (c *DefaultCollector) BeforeExec(filename string, line int) {
 
 	fc := c.report.AddFile(filename)
 	fc.Lines.RecordHit(line)
+}
+
+// RegisterLine registers a line as executable with zero hits, so unexecuted
+// lines are reported as missing.
+func (c *DefaultCollector) RegisterLine(filename string, line int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.report.AddFile(filename).Lines.Register(line)
 }
 
 // AfterExec implements Collector.

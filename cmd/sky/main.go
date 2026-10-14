@@ -30,6 +30,8 @@ var coreCommands = map[string]string{
 	"test":  "skytest",
 	"doc":   "skydoc",
 	"ls":    "skyls",
+	"cov":   "skycov",
+	"ci":    "sky-ci",
 }
 
 func main() {
@@ -43,7 +45,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	switch args[0] {
-	case "version":
+	case "version", "--version", "-v":
 		writef(stdout, "sky %s\n", version.String())
 		return 0
 	case "plugin":
@@ -96,7 +98,7 @@ func runCoreCommand(name string, args []string, stdout, stderr io.Writer) int {
 	if err := cmd.Run(); err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			return exitErr.ExitCode()
+			return plugins.ExitCode(exitErr)
 		}
 		writef(stderr, "sky: %v\n", err)
 		return 1
@@ -119,6 +121,57 @@ func findCoreBinary(name string) (string, error) {
 
 	// Fall back to PATH lookup
 	return exec.LookPath(name)
+}
+
+// parseInterspersed parses flags that may appear before, between, or after
+// positional arguments (Go's flag package stops at the first positional).
+// After it returns, fs.Args() holds the positional arguments in order.
+func parseInterspersed(fs *flag.FlagSet, args []string) error {
+	var positional []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			return err
+		}
+		rest := fs.Args()
+		consumed := len(args) - len(rest)
+		if consumed > 0 && endsWithTerminator(fs, args[:consumed]) {
+			// Explicit terminator: everything after it is positional.
+			positional = append(positional, rest...)
+			break
+		}
+		if len(rest) == 0 {
+			break
+		}
+		positional = append(positional, rest[0])
+		args = rest[1:]
+	}
+	// Re-parse behind a terminator so fs.Args() reports the collected
+	// positionals without re-interpreting any of them as flags.
+	return fs.Parse(append([]string{"--"}, positional...))
+}
+
+// endsWithTerminator reports whether the last consumed argument is a real
+// "--" terminator rather than the value of a preceding non-bool flag.
+func endsWithTerminator(fs *flag.FlagSet, consumed []string) bool {
+	for i := 0; i < len(consumed); i++ {
+		a := consumed[i]
+		if a == "--" {
+			return i == len(consumed)-1
+		}
+		if len(a) < 2 || a[0] != '-' || strings.Contains(a, "=") {
+			continue
+		}
+		name := strings.TrimLeft(a, "-")
+		f := fs.Lookup(name)
+		if f == nil {
+			continue
+		}
+		if bf, ok := f.Value.(interface{ IsBoolFlag() bool }); ok && bf.IsBoolFlag() {
+			continue
+		}
+		i++ // next argument is this flag's value, even if it is "--"
+	}
+	return false
 }
 
 func runPlugin(args []string, stdout, stderr io.Writer) int {
@@ -188,7 +241,7 @@ func runPluginInstall(args []string, stdout, stderr io.Writer) int {
 	versionFlag := fs.String("version", "", "plugin version metadata")
 	sha := fs.String("sha256", "", "expected sha256 for --url downloads")
 	typeFlag := fs.String("type", "", "plugin type (exe|wasm)")
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return 2
 	}
 
@@ -249,7 +302,7 @@ func runPluginInstall(args []string, stdout, stderr io.Writer) int {
 func runPluginRemove(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("remove", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {
@@ -275,7 +328,7 @@ func runPluginRemove(args []string, stdout, stderr io.Writer) int {
 func runPluginInspect(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("inspect", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {
@@ -306,14 +359,9 @@ func runPluginInspect(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	if metadata.Version != "" {
-		plugin.Version = metadata.Version
-	}
-	if metadata.Summary != "" {
-		plugin.Description = metadata.Summary
-	}
-	plugin.Type = plugin.EffectiveType()
-	if err := store.UpsertPlugin(*plugin); err != nil {
+	// Only touch version/description, and only if the plugin was not
+	// reinstalled or removed while its metadata was being collected.
+	if _, err := store.UpdatePluginMetadata(plugin.Name, plugin.InstalledAt, metadata.Version, metadata.Summary); err != nil {
 		writef(stderr, "sky: %v\n", err)
 		return 1
 	}
@@ -331,7 +379,7 @@ func runPluginSearch(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("search", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	marketplace := fs.String("marketplace", "", "marketplace name (optional)")
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {
@@ -413,7 +461,7 @@ func runMarketplaceList(stdout, stderr io.Writer) int {
 func runMarketplaceAdd(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("marketplace add", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 2 {
@@ -444,7 +492,7 @@ func runMarketplaceAdd(args []string, stdout, stderr io.Writer) int {
 func runMarketplaceRemove(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("marketplace remove", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {
@@ -643,7 +691,7 @@ func runPluginInit(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	wasm := fs.Bool("wasm", false, "create a WASM plugin template")
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {

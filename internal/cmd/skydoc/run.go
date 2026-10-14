@@ -1,6 +1,7 @@
 package skydoc
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/albertocavalcante/sky/internal/atomicfile"
 	"github.com/albertocavalcante/sky/internal/starlark/docgen"
 	"github.com/albertocavalcante/sky/internal/version"
 )
@@ -108,41 +110,21 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		return 1
 	}
 
-	// Determine output writer
-	var out io.Writer = stdout
-	if outputFlag != "" {
-		// Ensure output directory exists
-		dir := filepath.Dir(outputFlag)
-		if dir != "" && dir != "." {
-			if err := os.MkdirAll(dir, 0755); err != nil {
-				writef(stderr, "skydoc: %v\n", err)
-				return 1
-			}
-		}
-
-		f, err := os.Create(outputFlag)
-		if err != nil {
-			writef(stderr, "skydoc: %v\n", err)
-			return 1
-		}
-		defer func() { _ = f.Close() }()
-		out = f
-	}
-
-	// Generate output
+	// Render fully in memory; validate the format before touching the output.
+	var buf bytes.Buffer
 	switch formatFlag {
 	case "markdown", "md":
 		mdOpts := docgen.MarkdownOptions{
 			Title:                  titleFlag,
 			IncludeTableOfContents: tocFlag,
 		}
-		if err := docgen.RenderMarkdown(out, doc, mdOpts); err != nil {
+		if err := docgen.RenderMarkdown(&buf, doc, mdOpts); err != nil {
 			writef(stderr, "skydoc: %v\n", err)
 			return 1
 		}
 
 	case "json":
-		enc := json.NewEncoder(out)
+		enc := json.NewEncoder(&buf)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(doc); err != nil {
 			writef(stderr, "skydoc: %v\n", err)
@@ -152,6 +134,27 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	default:
 		writef(stderr, "skydoc: unknown format %q (use markdown or json)\n", formatFlag)
 		return 2
+	}
+
+	if outputFlag == "" {
+		if _, err := stdout.Write(buf.Bytes()); err != nil {
+			writef(stderr, "skydoc: %v\n", err)
+			return 1
+		}
+		return 0
+	}
+
+	// Ensure output directory exists
+	dir := filepath.Dir(outputFlag)
+	if dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			writef(stderr, "skydoc: %v\n", err)
+			return 1
+		}
+	}
+	if err := writeFileAtomic(outputFlag, buf.Bytes()); err != nil {
+		writef(stderr, "skydoc: %v\n", err)
+		return 1
 	}
 
 	return 0
@@ -171,4 +174,10 @@ func writef(w io.Writer, format string, args ...any) {
 
 func writeln(w io.Writer, args ...any) {
 	_, _ = fmt.Fprintln(w, args...)
+}
+
+// writeFileAtomic atomically replaces path, preserving an existing file's
+// permission bits and honoring the umask for a new one.
+func writeFileAtomic(path string, data []byte) error {
+	return atomicfile.Write(path, data, 0o666)
 }

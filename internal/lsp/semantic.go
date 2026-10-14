@@ -124,6 +124,26 @@ func tokenizeContent(content string) []SemanticToken {
 	// Sort tokens by position (line, then character)
 	sortTokens(tokens)
 
+	return tokensToUTF16(tokens, content)
+}
+
+// tokensToUTF16 converts token columns and lengths from rune counts (as
+// produced from buildtools positions) to UTF-16 code units, as LSP requires.
+func tokensToUTF16(tokens []SemanticToken, content string) []SemanticToken {
+	if len(tokens) == 0 {
+		return tokens
+	}
+	li := newLineIndex(content)
+	for i := range tokens {
+		t := &tokens[i]
+		if int(t.Line) >= len(li.lines) {
+			continue
+		}
+		start := li.utf16Col(int(t.Line), int(t.StartChar))
+		end := li.utf16Col(int(t.Line), int(t.StartChar+t.Length))
+		t.StartChar = uint32(start)
+		t.Length = uint32(max(end-start, 0))
+	}
 	return tokens
 }
 
@@ -233,7 +253,7 @@ func tokenizeComment(comment build.Comment) []SemanticToken {
 	tokens = append(tokens, SemanticToken{
 		Line:      uint32(start.Line - 1), // 0-based
 		StartChar: uint32(start.LineRune - 1),
-		Length:    uint32(len(text)),
+		Length:    uint32(utf8.RuneCountInString(text)), // converted to UTF-16 later
 		Type:      TokenComment,
 		Modifiers: 0,
 	})
@@ -290,7 +310,7 @@ func tokenizeDefStmt(def *build.DefStmt, parentScope *Scope, content string) []S
 		tokens = append(tokens, SemanticToken{
 			Line:      uint32(nameStart.Line - 1),
 			StartChar: uint32(nameStart.LineRune - 1),
-			Length:    uint32(len(def.Name)),
+			Length:    uint32(utf8.RuneCountInString(def.Name)),
 			Type:      TokenFunction,
 			Modifiers: ModDeclaration | ModDefinition,
 		})
@@ -323,7 +343,7 @@ func tokenizeParameter(param build.Expr, scope *Scope, content string) []Semanti
 		tokens = append(tokens, SemanticToken{
 			Line:      uint32(start.Line - 1),
 			StartChar: uint32(start.LineRune - 1),
-			Length:    uint32(len(p.Name)),
+			Length:    uint32(utf8.RuneCountInString(p.Name)),
 			Type:      TokenParameter,
 			Modifiers: ModDeclaration,
 		})
@@ -336,7 +356,7 @@ func tokenizeParameter(param build.Expr, scope *Scope, content string) []Semanti
 			tokens = append(tokens, SemanticToken{
 				Line:      uint32(start.Line - 1),
 				StartChar: uint32(start.LineRune - 1),
-				Length:    uint32(len(ident.Name)),
+				Length:    uint32(utf8.RuneCountInString(ident.Name)),
 				Type:      TokenParameter,
 				Modifiers: ModDeclaration,
 			})
@@ -352,7 +372,7 @@ func tokenizeParameter(param build.Expr, scope *Scope, content string) []Semanti
 			tokens = append(tokens, SemanticToken{
 				Line:      uint32(start.Line - 1),
 				StartChar: uint32(start.LineRune - 1),
-				Length:    uint32(len(ident.Name)),
+				Length:    uint32(utf8.RuneCountInString(ident.Name)),
 				Type:      TokenParameter,
 				Modifiers: ModDeclaration,
 			})
@@ -403,7 +423,7 @@ func tokenizeLoadStmt(load *build.LoadStmt, content string) []SemanticToken {
 		tokens = append(tokens, SemanticToken{
 			Line:      uint32(tStart.Line - 1),
 			StartChar: uint32(tStart.LineRune - 1),
-			Length:    uint32(len(to.Name)),
+			Length:    uint32(utf8.RuneCountInString(to.Name)),
 			Type:      TokenVariable,
 			Modifiers: ModDeclaration,
 		})
@@ -467,7 +487,7 @@ func tokenizeLoopVars(vars build.Expr, scope *Scope, content string) []SemanticT
 		tokens = append(tokens, SemanticToken{
 			Line:      uint32(start.Line - 1),
 			StartChar: uint32(start.LineRune - 1),
-			Length:    uint32(len(v.Name)),
+			Length:    uint32(utf8.RuneCountInString(v.Name)),
 			Type:      TokenVariable,
 			Modifiers: ModDeclaration,
 		})
@@ -526,7 +546,7 @@ func tokenizeBranchStmt(b *build.BranchStmt) []SemanticToken {
 	tokens = append(tokens, SemanticToken{
 		Line:      uint32(pos.Line - 1),
 		StartChar: uint32(pos.LineRune - 1),
-		Length:    uint32(len(keyword)),
+		Length:    uint32(utf8.RuneCountInString(keyword)),
 		Type:      TokenKeyword,
 		Modifiers: 0,
 	})
@@ -575,7 +595,7 @@ func tokenizeAssignExpr(a *build.AssignExpr, scope *Scope, content string) []Sem
 		tokens = append(tokens, SemanticToken{
 			Line:      uint32(start.Line - 1),
 			StartChar: uint32(start.LineRune - 1),
-			Length:    uint32(len(lhs.Name)),
+			Length:    uint32(utf8.RuneCountInString(lhs.Name)),
 			Type:      TokenVariable,
 			Modifiers: mods,
 		})
@@ -608,7 +628,7 @@ func tokenizeCallExpr(c *build.CallExpr, scope *Scope, content string) []Semanti
 		tokens = append(tokens, SemanticToken{
 			Line:      uint32(nameStart.Line - 1),
 			StartChar: uint32(nameStart.LineRune - 1),
-			Length:    uint32(len(fn.Name)),
+			Length:    uint32(utf8.RuneCountInString(fn.Name)),
 			Type:      TokenMethod,
 			Modifiers: 0,
 		})
@@ -627,7 +647,7 @@ func tokenizeCallExpr(c *build.CallExpr, scope *Scope, content string) []Semanti
 				tokens = append(tokens, SemanticToken{
 					Line:      uint32(start.Line - 1),
 					StartChar: uint32(start.LineRune - 1),
-					Length:    uint32(len(ident.Name)),
+					Length:    uint32(utf8.RuneCountInString(ident.Name)),
 					Type:      TokenProperty,
 					Modifiers: 0,
 				})
@@ -662,7 +682,7 @@ func tokenizeIdentInCallContext(ident *build.Ident, scope *Scope) []SemanticToke
 	tokens = append(tokens, SemanticToken{
 		Line:      uint32(start.Line - 1),
 		StartChar: uint32(start.LineRune - 1),
-		Length:    uint32(len(name)),
+		Length:    uint32(utf8.RuneCountInString(name)),
 		Type:      typ,
 		Modifiers: mods,
 	})
@@ -724,7 +744,7 @@ func tokenizeExpr(expr build.Expr, scope *Scope, content string) []SemanticToken
 		tokens = append(tokens, SemanticToken{
 			Line:      uint32(e.NamePos.Line - 1),
 			StartChar: uint32(e.NamePos.LineRune - 1),
-			Length:    uint32(len(e.Name)),
+			Length:    uint32(utf8.RuneCountInString(e.Name)),
 			Type:      TokenProperty,
 			Modifiers: 0,
 		})
@@ -812,7 +832,7 @@ func tokenizeIdent(ident *build.Ident, scope *Scope) []SemanticToken {
 	tokens = append(tokens, SemanticToken{
 		Line:      uint32(start.Line - 1),
 		StartChar: uint32(start.LineRune - 1),
-		Length:    uint32(len(name)),
+		Length:    uint32(utf8.RuneCountInString(name)),
 		Type:      typ,
 		Modifiers: mods,
 	})

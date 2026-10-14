@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/albertocavalcante/sky/internal/cmd/skycov",
     visibility = ["//:__subpackages__"],
     deps = [
+        "//internal/atomicfile",
         "//internal/starlark/coverage",
         "//internal/version",
     ],
@@ -13,6 +14,9 @@ go_library(
 
 go_test(
     name = "skycov_test",
-    srcs = ["run_test.go"],
+    srcs = [
+        "atomic_test.go",
+        "run_test.go",
+    ],
     embed = [":skycov"],
 )

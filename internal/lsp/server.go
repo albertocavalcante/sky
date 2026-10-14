@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/bazelbuild/buildtools/build"
 
@@ -20,12 +21,14 @@ import (
 
 // Server handles LSP requests for Starlark files.
 type Server struct {
-	conn *Conn
+	conn atomic.Pointer[Conn]
 
 	// State
 	mu          sync.RWMutex
 	initialized bool
 	shutdown    bool
+	exited      bool
+	exitCode    int
 	documents   map[string]*Document
 	rootURI     string
 
@@ -79,7 +82,20 @@ func NewServerWithProvider(onExit func(), provider builtins.Provider) *Server {
 
 // SetConn sets the connection for sending notifications.
 func (s *Server) SetConn(conn *Conn) {
-	s.conn = conn
+	s.conn.Store(conn)
+}
+
+func (s *Server) getConn() *Conn {
+	return s.conn.Load()
+}
+
+// ExitStatus reports whether an "exit" notification was received and the
+// process exit code the LSP spec prescribes: 0 if "shutdown" preceded "exit",
+// 1 otherwise.
+func (s *Server) ExitStatus() (code int, exited bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.exitCode, s.exited
 }
 
 // Handle implements Handler interface - routes requests to methods.
@@ -270,6 +286,14 @@ func (s *Server) handleShutdown(ctx context.Context) (any, error) {
 
 func (s *Server) handleExit(ctx context.Context) (any, error) {
 	log.Printf("exit")
+	s.mu.Lock()
+	s.exited = true
+	if s.shutdown {
+		s.exitCode = 0
+	} else {
+		s.exitCode = 1 // per spec: exit without prior shutdown is an error
+	}
+	s.mu.Unlock()
 	if s.onExit != nil {
 		s.onExit()
 	}
@@ -279,25 +303,27 @@ func (s *Server) handleExit(ctx context.Context) (any, error) {
 // --- Shared utilities ---
 
 // getWordAtPosition extracts the word at a given line and character position.
+// char is a UTF-16 column. A cursor immediately after a word (including at
+// end of line) still selects that word.
 func getWordAtPosition(content string, line, char int) string {
-	lines := strings.Split(content, "\n")
-	if line < 0 || line >= len(lines) {
+	lineContent, ok := lineText(content, line)
+	if !ok {
 		return ""
 	}
-
-	lineContent := lines[line]
-	if char < 0 || char >= len(lineContent) {
+	lineContent = strings.TrimSuffix(lineContent, "\r")
+	if char < 0 {
 		return ""
 	}
+	pos := utf16ColToByte(lineContent, char)
 
 	// Find start of word (use package-level isIdentChar)
-	start := char
+	start := pos
 	for start > 0 && isIdentChar(lineContent[start-1]) {
 		start--
 	}
 
 	// Find end of word
-	end := char
+	end := pos
 	for end < len(lineContent) && isIdentChar(lineContent[end]) {
 		end++
 	}
@@ -339,16 +365,6 @@ func lineToRange(line int) protocol.Range {
 		Start: protocol.Position{Line: l, Character: 0},
 		End:   protocol.Position{Line: l, Character: 1000}, // End of line approximation
 	}
-}
-
-// uriToPath converts a document URI to a file path.
-// Handles file:// URIs and returns just the path component.
-func uriToPath(uri string) string {
-	s := string(uri)
-	if strings.HasPrefix(s, "file://") {
-		return s[7:] // Remove "file://"
-	}
-	return s
 }
 
 // ptrInt32 returns a pointer to the given int32 value.

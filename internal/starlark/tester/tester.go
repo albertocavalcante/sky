@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/albertocavalcante/sky/internal/starlark/coverage"
@@ -206,6 +207,9 @@ type Runner struct {
 	coverage *coverage.DefaultCollector
 	snapshot *SnapshotManager
 	mock     *MockManager
+
+	covMu   sync.Mutex
+	covSeen map[covFuncKey]bool
 }
 
 // New creates a new test runner.
@@ -278,6 +282,7 @@ func (r *Runner) RunFile(filename string, src []byte) (*FileResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("executing %s: %w", filename, err)
 	}
+	r.registerGlobalsCoverage(globals)
 
 	// Find test functions
 	testFuncs := r.findTestFunctions(globals)
@@ -335,7 +340,7 @@ func (r *Runner) RunFile(filename string, src []byte) (*FileResult, error) {
 					continue
 				}
 
-				testResult := r.runParametrizedTest(thread, virtualName, fn, setupFn, teardownFn, predeclared, fixtureRegistry, pc.caseDict)
+				testResult := r.runParametrizedTest(thread, virtualName, filename, fn, setupFn, teardownFn, predeclared, fixtureRegistry, pc.caseDict)
 				testResult.File = filename
 
 				// Handle xfail
@@ -409,6 +414,7 @@ func (r *Runner) RunFile(filename string, src []byte) (*FileResult, error) {
 
 			// Clear test-scoped fixture cache between tests
 			fixtureRegistry.ClearTestCache()
+			r.mock.Reset()
 
 			// Fail-fast: stop after first failure
 			if r.opts.FailFast && !testResult.Passed {
@@ -438,10 +444,12 @@ func (r *Runner) loadConftestFixtures(filename string, predeclared starlark.Stri
 		}
 
 		thread := &starlark.Thread{Name: conftestPath}
+		r.setupCoverageHook(thread)
 		globals, err := starlark.ExecFile(thread, conftestPath, src, predeclared)
 		if err != nil {
 			return nil, fmt.Errorf("executing conftest %s: %w", conftestPath, err)
 		}
+		r.registerGlobalsCoverage(globals)
 
 		// Extract fixtures from conftest
 		conftestFixtures := FindFixtures(globals)
@@ -549,10 +557,12 @@ func (r *Runner) loadPreludes(basePredeclared starlark.StringDict) (starlark.Str
 		}
 
 		thread := &starlark.Thread{Name: preludePath}
+		r.setupCoverageHook(thread)
 		globals, err := starlark.ExecFile(thread, preludePath, src, combined)
 		if err != nil {
 			return nil, fmt.Errorf("executing prelude %s: %w", preludePath, err)
 		}
+		r.registerGlobalsCoverage(globals)
 
 		// Add prelude globals to combined (later preludes can shadow earlier ones)
 		for k, v := range globals {
@@ -693,8 +703,12 @@ func (r *Runner) matchesMarkerFilter(testMeta TestMeta) bool {
 func (r *Runner) matchesFilter(name string) bool {
 	// Check TestNames first (from :: syntax)
 	if len(r.opts.TestNames) > 0 {
+		base := name
+		if i := strings.IndexByte(name, '['); i >= 0 {
+			base = name[:i] // parametrized: test_x[case] matches test_x
+		}
 		for _, allowed := range r.opts.TestNames {
-			if name == allowed {
+			if name == allowed || base == allowed {
 				return true
 			}
 		}
@@ -712,8 +726,7 @@ func (r *Runner) matchesFilter(name string) bool {
 	negate := false
 	if strings.HasPrefix(strings.ToLower(filter), "not ") {
 		negate = true
-		filter = strings.TrimPrefix(filter, "not ")
-		filter = strings.TrimPrefix(filter, "NOT ")
+		filter = strings.TrimSpace(filter[len("not "):])
 	}
 
 	// Simple substring match (case-insensitive)
@@ -882,6 +895,7 @@ func (r *Runner) extractTestParams(globals starlark.StringDict) map[string][]par
 func (r *Runner) runParametrizedTest(
 	_ *starlark.Thread,
 	name string,
+	filename string,
 	testFn *starlark.Function,
 	setupFn *starlark.Function,
 	teardownFn *starlark.Function,
@@ -897,6 +911,12 @@ func (r *Runner) runParametrizedTest(
 
 	// EXPERIMENTAL: Enable coverage collection for this test thread
 	r.setupCoverageHook(testThread)
+
+	// Set up snapshot manager in thread local storage
+	if r.snapshot != nil {
+		r.snapshot.SetContext(filename, name)
+		testThread.SetLocal(SnapshotManagerKey, r.snapshot)
+	}
 
 	// Set up timeout cancellation if configured
 	var timer *time.Timer

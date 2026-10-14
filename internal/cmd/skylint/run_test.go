@@ -3,8 +3,10 @@ package skylint
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -153,5 +155,83 @@ func TestRun_OutputFormats(t *testing.T) {
 				t.Errorf("RunWithIO(-format %s) returned %d, want 0\nstderr: %s", format, code, stderr.String())
 			}
 		})
+	}
+}
+
+const fixableSrc = "load(\"//a:b.bzl\", \"x\")\n\ndef f(a):\n    return 1\n"
+
+func TestRun_FixExitReflectsRemainingFindings(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "a.bzl")
+	if err := os.WriteFile(file, []byte(fixableSrc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"--fix", "--format", "json", file}, nil, &stdout, &stderr)
+	if code != exitWarning {
+		t.Errorf("--fix with remaining warnings: code = %d, want %d\nstderr: %s", code, exitWarning, stderr.String())
+	}
+	var parsed any
+	if err := json.Unmarshal(stdout.Bytes(), &parsed); err != nil {
+		t.Errorf("--format json ignored in fix mode: %v\n%s", err, stdout.String())
+	}
+	b, _ := os.ReadFile(file)
+	if strings.Contains(string(b), "load(") {
+		t.Errorf("unused load was not fixed: %s", b)
+	}
+}
+
+func TestRun_FixDiffDoesNotWrite(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "a.bzl")
+	if err := os.WriteFile(file, []byte(fixableSrc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"--fix", "--diff", file}, nil, &stdout, &stderr)
+	if code != exitWarning {
+		t.Errorf("code = %d, want %d", code, exitWarning)
+	}
+	if b, _ := os.ReadFile(file); string(b) != fixableSrc {
+		t.Errorf("--diff modified file: %s", b)
+	}
+}
+
+func TestRun_FlagValidation(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "a.bzl")
+	if err := os.WriteFile(file, []byte(fixableSrc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"--format", "bogus", file},
+		{"--fix", "--format", "bogus", file},
+		{"--diff", file},
+	} {
+		var stdout, stderr bytes.Buffer
+		if code := RunWithIO(context.Background(), args, nil, &stdout, &stderr); code != exitError {
+			t.Errorf("%v: code = %d, want %d", args, code, exitError)
+		}
+	}
+	if b, _ := os.ReadFile(file); string(b) != fixableSrc {
+		t.Errorf("file modified by invalid invocation: %s", b)
+	}
+}
+
+func TestRun_GitHubFormatEscapesWorkflowCommands(t *testing.T) {
+	dir := t.TempDir()
+	name := "a\n::stop-commands::TOKEN\n.bzl"
+	file := filepath.Join(dir, name)
+	if err := os.WriteFile(file, []byte("def f(:\n"), 0o644); err != nil {
+		t.Skipf("cannot create file with newline in name: %v", err)
+	}
+	for _, args := range [][]string{{"--format", "github", file}, {"--fix", "--format", "github", file}} {
+		var stdout, stderr bytes.Buffer
+		RunWithIO(context.Background(), args, nil, &stdout, &stderr)
+		for _, line := range strings.Split(stdout.String(), "\n") {
+			if strings.HasPrefix(line, "::stop-commands") {
+				t.Errorf("args %v: workflow command injection:\n%q", args, stdout.String())
+			}
+		}
+		if !strings.Contains(stdout.String(), "%0A") {
+			t.Errorf("args %v: newline not escaped: %q", args, stdout.String())
+		}
 	}
 }

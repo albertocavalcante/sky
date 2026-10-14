@@ -191,34 +191,13 @@ func extractFunctionName(content string, parenPos int) string {
 	return content[start:end]
 }
 
-// lineCharToOffset converts line and character position to byte offset.
+// lineCharToOffset converts an LSP line and (UTF-16) character position to a
+// byte offset. It returns -1 if the line does not exist.
 func lineCharToOffset(content string, line, char int) int {
-	currentLine := 0
-	offset := 0
-
-	for i, ch := range content {
-		if currentLine == line {
-			// Found the target line, now count characters
-			lineStart := i
-			for j := 0; j < char && i+j < len(content); j++ {
-				if content[i+j] == '\n' {
-					return i + j // Clamp to end of line
-				}
-			}
-			return lineStart + char
-		}
-		if ch == '\n' {
-			currentLine++
-		}
-		offset = i + 1
+	if _, ok := lineText(content, line); !ok {
+		return -1
 	}
-
-	// If we're on the last line
-	if currentLine == line {
-		return offset + char
-	}
-
-	return -1 // Line not found
+	return positionToOffset(content, line, char)
 }
 
 // getBuiltinSignature returns the signature for a builtin function.

@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/albertocavalcante/sky/internal/atomicfile"
 	"github.com/albertocavalcante/sky/internal/skyconfig"
 	"github.com/albertocavalcante/sky/internal/starlark/coverage"
 	"github.com/albertocavalcante/sky/internal/starlark/tester"
@@ -91,7 +92,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	fs.StringVar(&filterFlag, "k", "", "filter tests by name pattern (supports 'not' prefix)")
 	fs.StringVar(&markerFilter, "m", "", "filter tests by marker (supports 'not' prefix, e.g., '-m slow', '-m \"not slow\"')")
 	fs.Var(&preludeFlags, "prelude", "prelude file to load before tests (can be specified multiple times)")
-	fs.DurationVar(&timeoutFlag, "timeout", 0, "timeout per test (0 to use config default)")
+	fs.DurationVar(&timeoutFlag, "timeout", 0, "timeout per test (0 disables; default: from config or 30s)")
 	fs.BoolVar(&bailFlag, "bail", false, "stop on first test failure")
 	fs.BoolVar(&bailShortFlag, "x", false, "stop on first test failure (short for --bail)")
 	// EXPERIMENTAL: Coverage collection requires starlark-go-x with OnExec hook.
@@ -234,12 +235,15 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	// Apply config defaults, then CLI overrides
 	// Timeout: CLI > config > default (30s)
 	effectiveTimeout := cfg.Test.Timeout.Duration
-	if effectiveTimeout == 0 {
+	if effectiveTimeout == 0 && !cfg.Test.Timeout.Set {
 		effectiveTimeout = 30 * time.Second
 	}
-	if timeoutFlag != 0 {
-		effectiveTimeout = timeoutFlag
-	}
+	// An explicit --timeout (including 0, which disables timeouts) wins.
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "timeout" {
+			effectiveTimeout = timeoutFlag
+		}
+	})
 
 	// Parallel: CLI > config > default (empty = sequential)
 	effectiveParallel := cfg.Test.Parallel
@@ -325,9 +329,24 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	// Create a single runner for coverage reporting (if enabled)
 	// Note: We create per-file runners for execution to support :: syntax,
 	// but use a single runner to aggregate coverage data.
+	// The collector is shared with every per-file runner (opts is copied by
+	// value but the collector is a pointer), so the report reflects the tests
+	// that actually ran. A stale report from an earlier run is removed up
+	// front so a failed or empty collection can never be mistaken for fresh
+	// data by a consumer such as sky-ci.
 	var coverageRunner *tester.Runner
+	coverageMode := os.FileMode(0o666) // umask applies to a new report
 	if effectiveCoverage {
+		opts.CoverageCollector = coverage.NewCollector()
 		coverageRunner = tester.New(opts)
+		// Remember the stale report's permissions so the fresh one keeps them.
+		if fi, err := os.Stat(effectiveCoverageOut); err == nil {
+			coverageMode = fi.Mode().Perm()
+		}
+		if err := os.Remove(effectiveCoverageOut); err != nil && !os.IsNotExist(err) {
+			writef(stderr, "skytest: removing stale coverage file %s: %v\n", effectiveCoverageOut, err)
+			return exitError
+		}
 	}
 
 	// Select reporter
@@ -370,18 +389,20 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		return exitError
 	}
 
-	// Report summary
-	reporter.ReportSummary(stdout, result)
-
-	// Write coverage output if enabled
+	// Write coverage output before the summary: `skytest -json -coverage |
+	// sky-ci` treats the end of the JSON as "run complete", so the coverage
+	// file must already be fully on disk by then.
 	// EXPERIMENTAL: Coverage collection requires starlark-go-x with OnExec hook.
 	// TODO(upstream): Remove experimental note once OnExec is merged.
 	if effectiveCoverage && coverageRunner != nil {
-		if err := writeCoverageReport(coverageRunner, effectiveCoverageOut, stderr); err != nil {
+		if err := writeCoverageReport(coverageRunner, effectiveCoverageOut, coverageMode, stderr); err != nil {
 			writef(stderr, "skytest: coverage: %v\n", err)
 			// Don't fail the run for coverage errors, just warn
 		}
 	}
+
+	// Report summary
+	reporter.ReportSummary(stdout, result)
 
 	if result.HasFailures() {
 		return exitFailed
@@ -391,8 +412,13 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 
 // writeCoverageReport writes the coverage data to a JSON file.
 // EXPERIMENTAL: Coverage data is only collected when starlark-go-x OnExec hook is enabled.
-func writeCoverageReport(runner *tester.Runner, outPath string, stderr io.Writer) error {
+func writeCoverageReport(runner *tester.Runner, outPath string, perm os.FileMode, stderr io.Writer) error {
 	report := runner.CoverageReport()
+	if report != nil && report.TotalLines == 0 {
+		// Written for tooling that inspects it, but total_lines is 0: consumers
+		// (sky-ci) treat that as "no coverage data", not as 100%.
+		writeln(stderr, "skytest: coverage: no lines were instrumented (starlark-go-x OnExec hook not enabled); report has total_lines=0")
+	}
 	if report == nil {
 		writeln(stderr, "skytest: coverage: no data collected (starlark-go-x OnExec hook not enabled)")
 		writeln(stderr, "         To enable, uncomment the replace directive in go.mod:")
@@ -406,8 +432,8 @@ func writeCoverageReport(runner *tester.Runner, outPath string, stderr io.Writer
 		return fmt.Errorf("marshaling coverage: %w", err)
 	}
 
-	// Write to file
-	if err := os.WriteFile(outPath, data, 0o644); err != nil {
+	// Write to a unique temp file and rename so readers never see a partial report.
+	if err := atomicfile.Write(outPath, data, perm); err != nil {
 		return fmt.Errorf("writing %s: %w", outPath, err)
 	}
 

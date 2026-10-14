@@ -36,6 +36,8 @@ type FixtureRegistry struct {
 	fixtures map[string]*Fixture
 	// cache holds computed fixture values for file-scoped fixtures
 	cache map[string]starlark.Value
+	// resolving tracks fixtures currently being computed (cycle detection)
+	resolving map[string]bool
 	// builtins holds pre-computed builtin fixture values (e.g., mock)
 	builtins map[string]starlark.Value
 }
@@ -88,12 +90,22 @@ func (r *FixtureRegistry) GetOrCompute(thread *starlark.Thread, name string, reg
 		return nil, fmt.Errorf("fixture %q not found", name)
 	}
 
-	// Check cache for file-scoped fixtures
-	if fixture.Scope == ScopeFile {
-		if val, ok := r.cache[name]; ok {
-			return val, nil
-		}
+	// Check cache. Test-scoped values are cached too (and dropped by
+	// ClearTestCache between tests) so a fixture shared by a test and its
+	// dependencies resolves to a single instance per test.
+	if val, ok := r.cache[name]; ok {
+		return val, nil
 	}
+
+	// Detect dependency cycles.
+	if r.resolving == nil {
+		r.resolving = make(map[string]bool)
+	}
+	if r.resolving[name] {
+		return nil, fmt.Errorf("fixture dependency cycle detected at %q", name)
+	}
+	r.resolving[name] = true
+	defer delete(r.resolving, name)
 
 	// Compute the fixture value
 	// First resolve any dependencies the fixture might have
@@ -107,10 +119,7 @@ func (r *FixtureRegistry) GetOrCompute(thread *starlark.Thread, name string, reg
 		return nil, fmt.Errorf("calling fixture %q: %w", name, err)
 	}
 
-	// Cache file-scoped fixtures
-	if fixture.Scope == ScopeFile {
-		r.cache[name] = val
-	}
+	r.cache[name] = val
 
 	return val, nil
 }

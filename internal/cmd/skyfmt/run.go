@@ -296,7 +296,7 @@ func expandPath(path string) ([]string, error) {
 		}
 		if d.IsDir() {
 			// Skip hidden directories
-			if strings.HasPrefix(d.Name(), ".") && d.Name() != "." {
+			if p != path && strings.HasPrefix(d.Name(), ".") {
 				return filepath.SkipDir
 			}
 			return nil

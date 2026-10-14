@@ -74,7 +74,7 @@ func (w *WorkspaceIndex) AddFile(indexedFile *index.File, absPath string) {
 			Name: def.Name,
 			Kind: protocol.SymbolKindFunction,
 			Location: protocol.Location{
-				Uri:   string("file://" + absPath),
+				Uri:   pathToURI(absPath),
 				Range: lineToRange(def.Line),
 			},
 			File: absPath,
@@ -89,7 +89,7 @@ func (w *WorkspaceIndex) AddFile(indexedFile *index.File, absPath string) {
 			Name: assign.Name,
 			Kind: protocol.SymbolKindVariable,
 			Location: protocol.Location{
-				Uri:   string("file://" + absPath),
+				Uri:   pathToURI(absPath),
 				Range: lineToRange(assign.Line),
 			},
 			File: absPath,

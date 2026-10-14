@@ -78,7 +78,12 @@ func inferLiteral(e *build.LiteralExpr) TypeRef {
 		return Bool()
 	}
 
-	// Float: contains decimal point, exponent, or is explicitly float
+	// Hex, octal and binary integer literals may contain 'e'/'E' digits.
+	if len(token) > 1 && token[0] == '0' && strings.ContainsRune("xXoObB", rune(token[1])) {
+		return Int()
+	}
+
+	// Float: contains decimal point or exponent
 	if strings.Contains(token, ".") ||
 		strings.ContainsAny(token, "eE") {
 		return Float()
@@ -140,19 +145,20 @@ func inferSet(e *build.SetExpr) TypeRef {
 func inferCall(e *build.CallExpr) TypeRef {
 	switch fn := e.X.(type) {
 	case *build.Ident:
-		// Check builtin functions
-		if ret := BuiltinReturnType(fn.Name); ret != nil {
-			return ret
-		}
-
-		// Type conversion calls might be more specific
-		// For example, list() on a known iterable
+		// Calls whose result type depends on their arguments take
+		// precedence over the generic builtin return table.
 		switch fn.Name {
+		case "abs":
+			if len(e.List) == 1 {
+				if argType := InferExprType(e.List[0]); isFloatType(argType) {
+					return Float()
+				}
+			}
 		case "list":
 			// If argument is known, we might be able to infer element type
 			if len(e.List) > 0 {
 				argType := InferExprType(e.List[0])
-				if elemType := ElementType(argType); elemType != nil {
+				if elemType := IterElementType(argType); elemType != nil {
 					return List(elemType)
 				}
 			}
@@ -178,15 +184,18 @@ func inferCall(e *build.CallExpr) TypeRef {
 			}
 		case "tuple":
 			if len(e.List) > 0 {
+				// tuple(x) keeps the arity of a tuple argument; otherwise the
+				// length is unknown, so the result is an unspecialized tuple.
 				argType := InferExprType(e.List[0])
-				if elemType := ElementType(argType); elemType != nil {
-					return Tuple(elemType)
+				if n, ok := argType.(*NamedType); ok && n.Name == "tuple" {
+					return argType
 				}
+				return Tuple()
 			}
 		case "set":
 			if len(e.List) > 0 {
 				argType := InferExprType(e.List[0])
-				if elemType := ElementType(argType); elemType != nil {
+				if elemType := IterElementType(argType); elemType != nil {
 					return Set(elemType)
 				}
 			}
@@ -195,11 +204,16 @@ func inferCall(e *build.CallExpr) TypeRef {
 		case "depset":
 			if len(e.List) > 0 {
 				argType := InferExprType(e.List[0])
-				if elemType := ElementType(argType); elemType != nil {
+				if elemType := IterElementType(argType); elemType != nil {
 					return &NamedType{Name: "depset", Args: []TypeRef{elemType}}
 				}
 			}
 			return &NamedType{Name: "depset", Args: []TypeRef{Unknown()}}
+		}
+
+		// Fall back to the generic builtin return table.
+		if ret := BuiltinReturnType(fn.Name); ret != nil {
+			return ret
 		}
 
 	case *build.DotExpr:
@@ -265,10 +279,12 @@ func inferMethodCall(dot *build.DotExpr, args []build.Expr) TypeRef {
 	case "append", "extend", "insert", "remove", "clear", "reverse":
 		return None()
 	case "pop":
+		// list.pop() -> element, dict.pop(k) -> value; unknown receiver -> Unknown.
 		recvType := InferExprType(dot.X)
 		if elemType := ElementType(recvType); elemType != nil {
 			return elemType
 		}
+		return Unknown()
 	case "index":
 		return Int()
 	case "count":
@@ -303,7 +319,7 @@ func inferMethodCall(dot *build.DotExpr, args []build.Expr) TypeRef {
 			return List(Tuple(named.Args[0], named.Args[1]))
 		}
 		return List(Tuple(Unknown(), Unknown()))
-	case "update", "setdefault", "pop", "popitem", "clear":
+	case "update", "setdefault", "popitem", "clear":
 		return None()
 	}
 
@@ -414,7 +430,7 @@ func inferUnary(e *build.UnaryExpr) TypeRef {
 		if isNumericType(innerType) {
 			return innerType
 		}
-		return Int()
+		return Unknown()
 	case "~":
 		return Int()
 	}
@@ -458,8 +474,8 @@ func inferSlice(e *build.SliceExpr) TypeRef {
 		return baseType
 	}
 	if named, ok := baseType.(*NamedType); ok && named.Name == "tuple" {
-		// Tuple slice returns tuple (but we lose specific element types)
-		return Tuple(Unknown())
+		// Arity of the result is unknown: return an unspecialized tuple.
+		return Tuple()
 	}
 
 	return Unknown()

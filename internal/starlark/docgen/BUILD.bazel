@@ -17,6 +17,9 @@ go_library(
 
 go_test(
     name = "docgen_test",
-    srcs = ["docgen_test.go"],
+    srcs = [
+        "docgen_test.go",
+        "regress_test.go",
+    ],
     embed = [":docgen"],
 )

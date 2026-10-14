@@ -186,28 +186,33 @@ func (s *Store) savePlugins(plugins []Plugin) error {
 // UpsertPlugin inserts or replaces a plugin entry.
 func (s *Store) UpsertPlugin(plugin Plugin) error {
 	return s.withWriteLock(func() error {
-		if err := ValidateName(plugin.Name); err != nil {
-			return err
-		}
-
-		plugins, err := s.loadPluginsNL()
-		if err != nil {
-			return err
-		}
-
-		replaced := false
-		for i := range plugins {
-			if plugins[i].Name == plugin.Name {
-				plugins[i] = plugin
-				replaced = true
-				break
-			}
-		}
-		if !replaced {
-			plugins = append(plugins, plugin)
-		}
-		return s.savePlugins(plugins)
+		return s.upsertPluginNL(plugin)
 	})
+}
+
+// upsertPluginNL upserts a plugin; the caller must hold the write lock.
+func (s *Store) upsertPluginNL(plugin Plugin) error {
+	if err := ValidateName(plugin.Name); err != nil {
+		return err
+	}
+
+	plugins, err := s.loadPluginsNL()
+	if err != nil {
+		return err
+	}
+
+	replaced := false
+	for i := range plugins {
+		if plugins[i].Name == plugin.Name {
+			plugins[i] = plugin
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		plugins = append(plugins, plugin)
+	}
+	return s.savePlugins(plugins)
 }
 
 // FindPlugin returns the plugin entry if installed.
@@ -444,4 +449,33 @@ func writeJSON(path string, value any) error {
 	}
 	cleaned = true
 	return nil
+}
+
+// UpdatePluginMetadata sets the version and description of an installed plugin,
+// but only if the entry is still the installation identified by installedAt.
+// It reports false (without error) when the plugin was removed or reinstalled
+// in the meantime, so a stale inspection never resurrects an old entry.
+func (s *Store) UpdatePluginMetadata(name string, installedAt time.Time, version, description string) (bool, error) {
+	updated := false
+	err := s.withWriteLock(func() error {
+		plugins, err := s.loadPluginsNL()
+		if err != nil {
+			return err
+		}
+		for i := range plugins {
+			if plugins[i].Name != name || !plugins[i].InstalledAt.Equal(installedAt) {
+				continue
+			}
+			if version != "" {
+				plugins[i].Version = version
+			}
+			if description != "" {
+				plugins[i].Description = description
+			}
+			updated = true
+			return s.savePlugins(plugins)
+		}
+		return nil
+	})
+	return updated, err
 }

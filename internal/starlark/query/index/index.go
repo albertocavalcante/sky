@@ -151,6 +151,7 @@ func (idx *Index) Clear() {
 //   - "*.star"         - glob in current directory
 //   - "**/*.bzl"       - recursive glob
 func (idx *Index) MatchFiles(pattern string) []*File {
+	pattern = normalizeLookup(pattern)
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
 
@@ -204,28 +205,9 @@ func (idx *Index) MatchFiles(pattern string) []*File {
 
 	// Handle glob patterns
 	if strings.Contains(pattern, "*") {
-		// Check for recursive glob pattern (**)
-		isRecursive := strings.Contains(pattern, "**")
-
 		for _, f := range idx.files {
-			if isRecursive {
-				// For **/*.bzl, match the extension pattern against all files
-				if strings.HasPrefix(pattern, "**/") {
-					subPattern := strings.TrimPrefix(pattern, "**/")
-					matched, err := filepath.Match(subPattern, filepath.Base(f.Path))
-					if err == nil && matched {
-						result = append(result, f)
-					}
-				}
-			} else {
-				// For non-recursive patterns like *.bzl, only match files at root level
-				// (i.e., paths without directory separators)
-				if !strings.Contains(f.Path, "/") {
-					matched, err := filepath.Match(pattern, f.Path)
-					if err == nil && matched {
-						result = append(result, f)
-					}
-				}
+			if matchGlob(pattern, f.Path) {
+				result = append(result, f)
 			}
 		}
 		return result
@@ -242,7 +224,7 @@ func (idx *Index) MatchFiles(pattern string) []*File {
 // relativePath converts an absolute path to a path relative to the index root.
 func (idx *Index) relativePath(path string) (string, error) {
 	if !filepath.IsAbs(path) {
-		return path, nil
+		return filepath.ToSlash(path), nil
 	}
 
 	rel, err := filepath.Rel(idx.root, path)
@@ -250,7 +232,8 @@ func (idx *Index) relativePath(path string) (string, error) {
 		return "", fmt.Errorf("making path relative: %w", err)
 	}
 
-	return rel, nil
+	// Indexed paths are always slash-separated so matching is OS-independent.
+	return filepath.ToSlash(rel), nil
 }
 
 // absolutePath converts a relative path to an absolute path based on the index root.
@@ -276,4 +259,18 @@ func parseFile(content []byte, path string, kind filekind.Kind) (*build.File, er
 		// KindStarlark, KindSkyI, KindUnknown, or any other
 		return build.ParseDefault(path, content)
 	}
+}
+
+// normalizeLookup converts a caller-supplied path to the slash-separated form
+// used for stored keys.
+func normalizeLookup(p string) string {
+	return toSlashSep(p, filepath.Separator)
+}
+
+// toSlashSep replaces sep with '/'.
+func toSlashSep(p string, sep rune) string {
+	if sep == '/' {
+		return p
+	}
+	return strings.ReplaceAll(p, string(sep), "/")
 }

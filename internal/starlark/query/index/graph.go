@@ -1,5 +1,12 @@
 package index
 
+import (
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
+)
+
 // LoadGraph represents the load dependency graph.
 // It tracks which files load which modules and enables
 // both forward (file -> modules it loads) and reverse
@@ -10,6 +17,10 @@ type LoadGraph struct {
 
 	// Reverse maps a module to the files that load it.
 	Reverse map[string][]string
+
+	// reverseByPath indexes internal loads by normalized file path so any
+	// accepted spelling of a module finds them.
+	reverseByPath map[string][]string
 }
 
 // BuildLoadGraph builds the load graph from indexed files.
@@ -21,13 +32,22 @@ func (idx *Index) BuildLoadGraph() *LoadGraph {
 	g := &LoadGraph{
 		Forward: make(map[string][]string),
 		Reverse: make(map[string][]string),
+
+		reverseByPath: make(map[string][]string),
 	}
 
 	for _, f := range idx.files {
 		var modules []string
 		for _, load := range f.Loads {
-			modules = append(modules, load.Module)
-			g.Reverse[load.Module] = append(g.Reverse[load.Module], f.Path)
+			// Resolve package-relative labels (":x.bzl") against the loading
+			// file's package so they are not confused with root-package files.
+			module := resolveRelativeLabel(idx.packageDir(f.Path), load.Module)
+			modules = append(modules, module)
+			key := canonicalLabel(module)
+			g.Reverse[key] = append(g.Reverse[key], f.Path)
+			if p := moduleToPath(key); p != "" {
+				g.reverseByPath[p] = append(g.reverseByPath[p], f.Path)
+			}
 		}
 		if len(modules) > 0 {
 			g.Forward[f.Path] = modules
@@ -43,7 +63,75 @@ func (g *LoadGraph) LoadedBy(module string) []string {
 	if g == nil {
 		return nil
 	}
-	return g.Reverse[module]
+	module = normalizeLookup(module)
+	if r, ok := g.Reverse[module]; ok {
+		return r
+	}
+	key := canonicalLabel(module)
+	if g.reverseByPath != nil {
+		if p := moduleToPath(key); p != "" {
+			if r, ok := g.reverseByPath[p]; ok {
+				return r
+			}
+		}
+	}
+	return g.Reverse[key]
+}
+
+// packageDir returns the slash-separated directory of the Bazel package that
+// contains file: the nearest ancestor directory holding a BUILD or BUILD.bazel
+// file (indexed or on disk). When there is none (plain Starlark trees), it
+// falls back to the file's own directory. The caller must hold idx.mu.
+func (idx *Index) packageDir(file string) string {
+	file = filepath.ToSlash(file)
+	dir := path.Dir(file)
+	for d := dir; ; d = path.Dir(d) {
+		prefix := d + "/"
+		if d == "." {
+			prefix = ""
+		}
+		for _, name := range []string{"BUILD.bazel", "BUILD"} {
+			if _, ok := idx.files[prefix+name]; ok {
+				return strings.TrimSuffix(prefix, "/")
+			}
+			if st, err := os.Stat(filepath.Join(idx.root, filepath.FromSlash(prefix+name))); err == nil && !st.IsDir() {
+				return strings.TrimSuffix(prefix, "/")
+			}
+		}
+		if d == "." || d == "/" {
+			break
+		}
+	}
+	if dir == "." {
+		return ""
+	}
+	return dir
+}
+
+// resolveRelativeLabel resolves a package-relative label (":x.bzl") against
+// the given package directory. Other labels are returned unchanged.
+func resolveRelativeLabel(pkgDir, module string) string {
+	if !strings.HasPrefix(module, ":") {
+		return module
+	}
+	return "//" + pkgDir + module
+}
+
+// canonicalLabel normalizes a module reference to the "//pkg:name" form.
+// File paths ("lib/utils.bzl") and slash labels ("//lib/utils.bzl") map to
+// "//lib:utils.bzl". External labels and labels already containing a colon
+// are returned unchanged (apart from a missing "//" prefix on pkg:name).
+func canonicalLabel(module string) string {
+	if strings.HasPrefix(module, "@") {
+		return module
+	}
+	m := strings.TrimPrefix(module, "//")
+	m = strings.TrimPrefix(m, "./")
+	if strings.Contains(m, ":") {
+		return "//" + m
+	}
+	dir, base := path.Split(m)
+	return "//" + strings.TrimSuffix(dir, "/") + ":" + base
 }
 
 // AllLoads returns all transitive loads for a file.
@@ -54,6 +142,7 @@ func (g *LoadGraph) AllLoads(file string) []string {
 		return nil
 	}
 
+	file = normalizeLookup(file)
 	visited := make(map[string]bool)
 	var result []string
 

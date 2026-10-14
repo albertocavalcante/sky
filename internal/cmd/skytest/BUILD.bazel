@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/albertocavalcante/sky/internal/cmd/skytest",
     visibility = ["//:__subpackages__"],
     deps = [
+        "//internal/atomicfile",
         "//internal/skyconfig",
         "//internal/starlark/coverage",
         "//internal/starlark/tester",
@@ -16,8 +17,10 @@ go_library(
 go_test(
     name = "skytest_test",
     srcs = [
+        "coverage_write_test.go",
         "parallel_test.go",
         "run_test.go",
     ],
     embed = [":skytest"],
+    deps = ["//internal/starlark/tester"],
 )

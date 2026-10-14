@@ -3,6 +3,7 @@ package plugins
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -22,6 +23,7 @@ func (s *Store) SearchMarketplaces(ctx context.Context, query, marketplaceName s
 
 	query = strings.ToLower(query)
 	var results []SearchResult
+	var fetchErrs []error
 	matchedMarketplace := false
 	for _, marketplace := range marketplaces {
 		if marketplaceName != "" && marketplace.Name != marketplaceName {
@@ -33,7 +35,8 @@ func (s *Store) SearchMarketplaces(ctx context.Context, query, marketplaceName s
 
 		index, err := fetchMarketplaceIndex(ctx, marketplace)
 		if err != nil {
-			return nil, err
+			fetchErrs = append(fetchErrs, err)
+			continue
 		}
 
 		for _, plugin := range index.Plugins {
@@ -48,10 +51,13 @@ func (s *Store) SearchMarketplaces(ctx context.Context, query, marketplaceName s
 	if marketplaceName != "" && !matchedMarketplace {
 		return nil, fmt.Errorf("marketplace %q not configured", marketplaceName)
 	}
-	if marketplaceName != "" && len(results) == 0 {
-		return nil, fmt.Errorf("no matches in marketplace %q", marketplaceName)
-	}
 	if len(results) == 0 {
+		if len(fetchErrs) > 0 {
+			return nil, fmt.Errorf("no plugins matched %q; marketplace errors: %w", query, errors.Join(fetchErrs...))
+		}
+		if marketplaceName != "" {
+			return nil, fmt.Errorf("no matches in marketplace %q", marketplaceName)
+		}
 		return nil, fmt.Errorf("no plugins matched %q", query)
 	}
 	return results, nil
@@ -72,6 +78,7 @@ func (s *Store) ResolveMarketplacePlugin(ctx context.Context, name, marketplaceN
 	}
 
 	matchedMarketplace := false
+	var fetchErrs []error
 	for _, marketplace := range marketplaces {
 		if marketplaceName != "" && marketplace.Name != marketplaceName {
 			continue
@@ -82,11 +89,15 @@ func (s *Store) ResolveMarketplacePlugin(ctx context.Context, name, marketplaceN
 
 		index, err := fetchMarketplaceIndex(ctx, marketplace)
 		if err != nil {
-			return Marketplace{}, MarketplacePlugin{}, err
+			fetchErrs = append(fetchErrs, err)
+			continue
 		}
 
 		for _, plugin := range index.Plugins {
 			if plugin.Name == name {
+				if plugin.Type != "" && plugin.Type != TypeExecutable && plugin.Type != TypeWasm {
+					return Marketplace{}, MarketplacePlugin{}, fmt.Errorf("plugin %q in marketplace %q has invalid type %q", name, marketplace.Name, plugin.Type)
+				}
 				return marketplace, plugin, nil
 			}
 		}
@@ -94,6 +105,9 @@ func (s *Store) ResolveMarketplacePlugin(ctx context.Context, name, marketplaceN
 
 	if marketplaceName != "" && !matchedMarketplace {
 		return Marketplace{}, MarketplacePlugin{}, fmt.Errorf("marketplace %q not configured", marketplaceName)
+	}
+	if len(fetchErrs) > 0 {
+		return Marketplace{}, MarketplacePlugin{}, fmt.Errorf("plugin %q not found; marketplace errors: %w", name, errors.Join(fetchErrs...))
 	}
 	if marketplaceName != "" {
 		return Marketplace{}, MarketplacePlugin{}, fmt.Errorf("plugin %q not found in marketplace %q", name, marketplaceName)

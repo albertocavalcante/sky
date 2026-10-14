@@ -301,3 +301,51 @@ func BenchmarkIsStarlarkFile(b *testing.B) {
 		IsStarlarkFile(name)
 	}
 }
+
+func TestDiscoverGlobKeepsFilepathGlobSemantics(t *testing.T) {
+	root := t.TempDir()
+	for _, p := range []string{".config/a.bzl", "real/b.bzl"} {
+		full := filepath.Join(root, p)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("x = 1\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(root, "real"), filepath.Join(root, "lib")); err != nil {
+		t.Skip("symlinks unavailable")
+	}
+	for pat, want := range map[string]string{".config/*.bzl": ".config/a.bzl", "lib/*.bzl": "lib/b.bzl"} {
+		got, err := Discover(pat, root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 || got[0] != filepath.Join(root, want) {
+			t.Errorf("Discover(%q) = %v, want [%s]", pat, got, want)
+		}
+	}
+}
+
+func TestDiscoverGlobExcludesDirectories(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, "lib/real.bzl")
+	if err := os.MkdirAll(filepath.Join(root, "lib/cache.bzl"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "lib/real.bzl"), filepath.Join(root, "lib/link.bzl")); err != nil {
+		t.Skip("symlinks unsupported")
+	}
+	got, err := Discover("lib/*.bzl", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, g := range got {
+		names = append(names, filepath.Base(g))
+	}
+	sort.Strings(names)
+	if len(names) != 2 || names[0] != "link.bzl" || names[1] != "real.bzl" {
+		t.Errorf("got %v", names)
+	}
+}
