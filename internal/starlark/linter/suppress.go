@@ -7,7 +7,7 @@ import (
 
 // ruleListPrefix matches a leading comma-separated rule list such as
 // "a, b ,c" (but not trailing prose after it).
-var ruleListPrefix = regexp.MustCompile(`^[^\s,]+(?:\s*,\s*[^\s,]+)*`)
+var ruleListPrefix = regexp.MustCompile(`^[^\s,]*(?:\s*,\s*[^\s,]*)*`)
 
 // SuppressionType represents the type of suppression comment.
 type SuppressionType int
@@ -121,9 +121,10 @@ func (p *SuppressionParser) parseDisableDirective(line string, commentIdx int, c
 	rulesStr := comment[idx+len(disablePrefix):]
 	// Take a comma-separated list (whitespace around commas allowed); stop
 	// at the first whitespace that is not followed by a comma-joined name.
-	rulesStr = ruleListPrefix.FindString(strings.TrimSpace(rulesStr))
-
-	rules := parseRuleList(rulesStr)
+	rules, ok := parseDirectiveRules(rulesStr)
+	if !ok {
+		return nil
+	}
 
 	// Determine if this is inline (has code before the comment) or line suppression
 	// Check the original line before the comment starts
@@ -155,9 +156,10 @@ func (p *SuppressionParser) parseDisableNextLineDirective(comment string, lineNu
 	rulesStr := comment[idx+len(disablePrefix):]
 	// Take a comma-separated list (whitespace around commas allowed); stop
 	// at the first whitespace that is not followed by a comma-joined name.
-	rulesStr = ruleListPrefix.FindString(strings.TrimSpace(rulesStr))
-
-	rules := parseRuleList(rulesStr)
+	rules, ok := parseDirectiveRules(rulesStr)
+	if !ok {
+		return nil
+	}
 
 	return &Suppression{
 		Type:  SuppressionNextLine,
@@ -185,6 +187,22 @@ func findDirectivePrefix(comment string, directive string) (string, int) {
 	}
 
 	return "", -1
+}
+
+// parseDirectiveRules extracts the rule list following "disable=". An empty
+// or "all" list means every rule (empty slice, ok). A nonempty list that
+// contains no rule names (e.g. ",,") is malformed: ok is false and nothing
+// must be suppressed.
+func parseDirectiveRules(raw string) (rules []string, ok bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return []string{}, true
+	}
+	rules = parseRuleList(ruleListPrefix.FindString(raw))
+	if rules == nil {
+		return nil, false
+	}
+	return rules, true
 }
 
 // parseRuleList parses a comma-separated list of rule names.

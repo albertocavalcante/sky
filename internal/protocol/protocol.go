@@ -4066,23 +4066,23 @@ func (t *Or_AnnotatedTextEdit_SnippetTextEdit_TextEdit) UnmarshalJSON(x []byte) 
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x, "annotationId", "newText", "range"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"annotationId", "newText", "range"}, nil}); s > bestScore {
 			var v AnnotatedTextEdit
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "range", "snippet"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"range", "snippet"}, []string{"annotationId"}}); s > bestScore {
 			var v SnippetTextEdit
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "newText", "range"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"newText", "range"}, nil}); s > bestScore {
 			var v TextEdit
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -4220,17 +4220,17 @@ func (t *Or_CallHierarchyOptions_CallHierarchyRegistrationOptions_bool) Unmarsha
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
 			var v CallHierarchyOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "documentSelector"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
 			var v CallHierarchyRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -4439,17 +4439,17 @@ func (t *Or_DeclarationOptions_DeclarationRegistrationOptions_bool) UnmarshalJSO
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
 			var v DeclarationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "documentSelector"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
 			var v DeclarationRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -4535,17 +4535,17 @@ func (t *Or_DiagnosticOptions_DiagnosticRegistrationOptions) UnmarshalJSON(x []b
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x, "interFileDependencies", "workspaceDiagnostics"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"interFileDependencies", "workspaceDiagnostics"}, []string{"identifier", "workDoneProgress"}}); s > bestScore {
 			var v DiagnosticOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "documentSelector", "interFileDependencies", "workspaceDiagnostics"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector", "interFileDependencies", "workspaceDiagnostics"}, []string{"id", "identifier", "workDoneProgress"}}); s > bestScore {
 			var v DiagnosticRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -4593,17 +4593,17 @@ func (t *Or_DocumentColorOptions_DocumentColorRegistrationOptions_bool) Unmarsha
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
 			var v DocumentColorOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "documentSelector"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
 			var v DocumentColorRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -4794,17 +4794,17 @@ func (t *Or_EditRangeWithInsertReplace_Range) UnmarshalJSON(x []byte) error {
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x, "insert", "replace"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"insert", "replace"}, nil}); s > bestScore {
 			var v EditRangeWithInsertReplace
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "end", "start"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"end", "start"}, nil}); s > bestScore {
 			var v Range
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -4852,17 +4852,17 @@ func (t *Or_FoldingRangeOptions_FoldingRangeRegistrationOptions_bool) UnmarshalJ
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
 			var v FoldingRangeOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "documentSelector"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
 			var v FoldingRangeRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -4950,17 +4950,17 @@ func (t *Or_ImplementationOptions_ImplementationRegistrationOptions_bool) Unmars
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
 			var v ImplementationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "documentSelector"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
 			var v ImplementationRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -5013,17 +5013,17 @@ func (t *Or_InlayHintOptions_InlayHintRegistrationOptions_bool) UnmarshalJSON(x 
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"resolveProvider", "workDoneProgress"}}); s > bestScore {
 			var v InlayHintOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "documentSelector"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "resolveProvider", "workDoneProgress"}}); s > bestScore {
 			var v InlayHintRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -5111,17 +5111,17 @@ func (t *Or_InlineValueOptions_InlineValueRegistrationOptions_bool) UnmarshalJSO
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
 			var v InlineValueOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "documentSelector"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
 			var v InlineValueRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -5172,17 +5172,17 @@ func (t *Or_InsertReplaceEdit_TextEdit) UnmarshalJSON(x []byte) error {
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x, "insert", "newText", "replace"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"insert", "newText", "replace"}, nil}); s > bestScore {
 			var v InsertReplaceEdit
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "newText", "range"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"newText", "range"}, nil}); s > bestScore {
 			var v TextEdit
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -5300,17 +5300,17 @@ func (t *Or_LinkedEditingRangeOptions_LinkedEditingRangeRegistrationOptions_bool
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
 			var v LinkedEditingRangeOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "documentSelector"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
 			var v LinkedEditingRangeRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -5468,17 +5468,17 @@ func (t *Or_MonikerOptions_MonikerRegistrationOptions_bool) UnmarshalJSON(x []by
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
 			var v MonikerOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "documentSelector"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"workDoneProgress"}}); s > bestScore {
 			var v MonikerRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -5529,6 +5529,27 @@ func (t *Or_NotebookCellTextDocumentFilter_TextDocumentFilter) UnmarshalJSON(x [
 		t.Value = nil
 		return nil
 	}
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	{
+		bestScore := -1
+		var best any
+		if s := unionRank(x, keySet{[]string{"notebook"}, []string{"language"}}); s > bestScore {
+			var v NotebookCellTextDocumentFilter
+			if json.Unmarshal(x, &v) == nil {
+				best, bestScore = v, s
+			}
+		}
+		if s := unionRank(x, keySet{[]string{"language"}, []string{"pattern", "scheme"}}, keySet{[]string{"pattern"}, []string{"language", "scheme"}}, keySet{[]string{"scheme"}, []string{"language", "pattern"}}); s > bestScore {
+			var v TextDocumentFilter
+			if json.Unmarshal(x, &v) == nil {
+				best, bestScore = v, s
+			}
+		}
+		if bestScore >= 0 {
+			t.Value = best
+			return nil
+		}
+	}
 	var h0 NotebookCellTextDocumentFilter
 	if err := json.Unmarshal(x, &h0); err == nil {
 		t.Value = h0
@@ -5566,23 +5587,23 @@ func (t *Or_NotebookDocumentFilterNotebookType_NotebookDocumentFilterPattern_Not
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x, "notebookType"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"notebookType"}, []string{"pattern", "scheme"}}); s > bestScore {
 			var v NotebookDocumentFilterNotebookType
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "pattern"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"pattern"}, []string{"notebookType", "scheme"}}); s > bestScore {
 			var v NotebookDocumentFilterPattern
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "scheme"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"scheme"}, []string{"notebookType", "pattern"}}); s > bestScore {
 			var v NotebookDocumentFilterScheme
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -5633,17 +5654,17 @@ func (t *Or_NotebookDocumentFilterWithCells_NotebookDocumentFilterWithNotebook) 
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x, "cells"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"cells"}, []string{"notebook"}}); s > bestScore {
 			var v NotebookDocumentFilterWithCells
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "notebook"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"notebook"}, []string{"cells"}}); s > bestScore {
 			var v NotebookDocumentFilterWithNotebook
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -5724,17 +5745,17 @@ func (t *Or_NotebookDocumentSyncOptions_NotebookDocumentSyncRegistrationOptions)
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x, "notebookSelector"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"notebookSelector"}, []string{"save"}}); s > bestScore {
 			var v NotebookDocumentSyncOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "notebookSelector"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"notebookSelector"}, []string{"id", "save"}}); s > bestScore {
 			var v NotebookDocumentSyncRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -5922,17 +5943,17 @@ func (t *Or_SelectionRangeOptions_SelectionRangeRegistrationOptions_bool) Unmars
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
 			var v SelectionRangeOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "documentSelector"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
 			var v SelectionRangeRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -6018,17 +6039,17 @@ func (t *Or_SemanticTokensOptions_SemanticTokensRegistrationOptions) UnmarshalJS
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x, "legend"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"legend"}, []string{"full", "range", "workDoneProgress"}}); s > bestScore {
 			var v SemanticTokensOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "documentSelector", "legend"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector", "legend"}, []string{"full", "id", "range", "workDoneProgress"}}); s > bestScore {
 			var v SemanticTokensRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -6074,17 +6095,17 @@ func (t *Or_TextDocumentContentChangePartial_TextDocumentContentChangeWholeDocum
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x, "range", "text"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"range", "text"}, []string{"rangeLength"}}); s > bestScore {
 			var v TextDocumentContentChangePartial
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "text"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"text"}, nil}); s > bestScore {
 			var v TextDocumentContentChangeWholeDocument
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -6130,17 +6151,17 @@ func (t *Or_TextDocumentContentOptions_TextDocumentContentRegistrationOptions) U
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x, "schemes"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"schemes"}, nil}); s > bestScore {
 			var v TextDocumentContentOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "schemes"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"schemes"}, []string{"id"}}); s > bestScore {
 			var v TextDocumentContentRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -6188,23 +6209,23 @@ func (t *Or_TextDocumentFilterLanguage_TextDocumentFilterPattern_TextDocumentFil
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x, "language"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"language"}, []string{"pattern", "scheme"}}); s > bestScore {
 			var v TextDocumentFilterLanguage
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "pattern"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"pattern"}, []string{"language", "scheme"}}); s > bestScore {
 			var v TextDocumentFilterPattern
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "scheme"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"scheme"}, []string{"language", "pattern"}}); s > bestScore {
 			var v TextDocumentFilterScheme
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -6327,17 +6348,17 @@ func (t *Or_TypeDefinitionOptions_TypeDefinitionRegistrationOptions_bool) Unmars
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
 			var v TypeDefinitionOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "documentSelector"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
 			var v TypeDefinitionRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -6390,17 +6411,17 @@ func (t *Or_TypeHierarchyOptions_TypeHierarchyRegistrationOptions_bool) Unmarsha
 		t.Value = nil
 		return nil
 	}
-	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins).
+	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
 	{
 		bestScore := -1
 		var best any
-		if s := unionScore(x); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
 			var v TypeHierarchyOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionScore(x, "documentSelector"); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
 			var v TypeHierarchyRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s

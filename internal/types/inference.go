@@ -158,7 +158,7 @@ func inferCall(e *build.CallExpr) TypeRef {
 			// If argument is known, we might be able to infer element type
 			if len(e.List) > 0 {
 				argType := InferExprType(e.List[0])
-				if elemType := ElementType(argType); elemType != nil {
+				if elemType := IterElementType(argType); elemType != nil {
 					return List(elemType)
 				}
 			}
@@ -184,15 +184,18 @@ func inferCall(e *build.CallExpr) TypeRef {
 			}
 		case "tuple":
 			if len(e.List) > 0 {
+				// tuple(x) keeps the arity of a tuple argument; otherwise the
+				// length is unknown, so the result is an unspecialized tuple.
 				argType := InferExprType(e.List[0])
-				if elemType := ElementType(argType); elemType != nil {
-					return Tuple(elemType)
+				if n, ok := argType.(*NamedType); ok && n.Name == "tuple" {
+					return argType
 				}
+				return Tuple()
 			}
 		case "set":
 			if len(e.List) > 0 {
 				argType := InferExprType(e.List[0])
-				if elemType := ElementType(argType); elemType != nil {
+				if elemType := IterElementType(argType); elemType != nil {
 					return Set(elemType)
 				}
 			}
@@ -201,7 +204,7 @@ func inferCall(e *build.CallExpr) TypeRef {
 		case "depset":
 			if len(e.List) > 0 {
 				argType := InferExprType(e.List[0])
-				if elemType := ElementType(argType); elemType != nil {
+				if elemType := IterElementType(argType); elemType != nil {
 					return &NamedType{Name: "depset", Args: []TypeRef{elemType}}
 				}
 			}

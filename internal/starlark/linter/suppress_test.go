@@ -469,3 +469,26 @@ func TestSuppressionParser_InlineVsLine(t *testing.T) {
 		})
 	}
 }
+
+func TestSuppressionParser_LeadingCommaAndMalformedList(t *testing.T) {
+	for _, directive := range []string{"disable=", "disable-next-line="} {
+		line := 1
+		src := "# skylint: " + directive + ",rule-a\ncode()\n"
+		if directive == "disable-next-line=" {
+			line = 2
+		}
+		p := NewSuppressionParser([]byte(src))
+		if !p.IsSuppressed(Finding{Line: line, Rule: "rule-a"}) {
+			t.Errorf("%s,rule-a: rule-a should be suppressed", directive)
+		}
+		if p.IsSuppressed(Finding{Line: line, Rule: "rule-b"}) {
+			t.Errorf("%s,rule-a: rule-b must not be suppressed", directive)
+		}
+
+		src = "# skylint: " + directive + ",,\ncode()\n"
+		p = NewSuppressionParser([]byte(src))
+		if p.IsSuppressed(Finding{Line: line, Rule: "rule-b"}) {
+			t.Errorf("%s,,: malformed list must not suppress everything", directive)
+		}
+	}
+}

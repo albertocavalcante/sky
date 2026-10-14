@@ -301,3 +301,28 @@ func BenchmarkIsStarlarkFile(b *testing.B) {
 		IsStarlarkFile(name)
 	}
 }
+
+func TestDiscoverGlobKeepsFilepathGlobSemantics(t *testing.T) {
+	root := t.TempDir()
+	for _, p := range []string{".config/a.bzl", "real/b.bzl"} {
+		full := filepath.Join(root, p)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("x = 1\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(root, "real"), filepath.Join(root, "lib")); err != nil {
+		t.Skip("symlinks unavailable")
+	}
+	for pat, want := range map[string]string{".config/*.bzl": ".config/a.bzl", "lib/*.bzl": "lib/b.bzl"} {
+		got, err := Discover(pat, root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 || got[0] != filepath.Join(root, want) {
+			t.Errorf("Discover(%q) = %v, want [%s]", pat, got, want)
+		}
+	}
+}

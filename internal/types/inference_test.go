@@ -420,3 +420,24 @@ func TestIsBuiltin(t *testing.T) {
 		})
 	}
 }
+
+func TestInferExprType_ConversionCalls(t *testing.T) {
+	tests := []struct {
+		code string
+		want string
+	}{
+		{`list({"a": 1})`, "list[str]"},
+		{`set({"a": 1})`, "set[str]"},
+		{`list([1, 2])`, "list[int]"},
+		{`tuple([1, 2])`, "tuple"},
+		{`tuple((1, "a"))`, Tuple(Int(), Str()).String()},
+	}
+	for _, tt := range tests {
+		t.Run(tt.code, func(t *testing.T) {
+			got := InferExprType(parseExpr(t, tt.code))
+			if got.String() != tt.want {
+				t.Errorf("InferExprType(%q) = %q, want %q", tt.code, got.String(), tt.want)
+			}
+		})
+	}
+}

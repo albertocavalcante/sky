@@ -223,7 +223,7 @@ func (idx *Index) MatchFiles(pattern string) []*File {
 // relativePath converts an absolute path to a path relative to the index root.
 func (idx *Index) relativePath(path string) (string, error) {
 	if !filepath.IsAbs(path) {
-		return path, nil
+		return filepath.ToSlash(path), nil
 	}
 
 	rel, err := filepath.Rel(idx.root, path)
@@ -231,7 +231,8 @@ func (idx *Index) relativePath(path string) (string, error) {
 		return "", fmt.Errorf("making path relative: %w", err)
 	}
 
-	return rel, nil
+	// Indexed paths are always slash-separated so matching is OS-independent.
+	return filepath.ToSlash(rel), nil
 }
 
 // absolutePath converts a relative path to an absolute path based on the index root.
