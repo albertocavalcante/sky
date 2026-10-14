@@ -120,7 +120,7 @@ func (d *Duration) UnmarshalText(text []byte) error {
 
 // MarshalText implements encoding.TextMarshaler for Duration.
 func (d Duration) MarshalText() ([]byte, error) {
-	if d.Duration == 0 {
+	if d.Duration == 0 && !d.Set {
 		return nil, nil
 	}
 	return []byte(d.Duration.String()), nil

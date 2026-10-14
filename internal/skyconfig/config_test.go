@@ -746,3 +746,31 @@ func TestMerge_ExplicitZeroTimeout(t *testing.T) {
 		t.Errorf("unset timeout should keep default, got %v", base.Test.Timeout)
 	}
 }
+
+func TestDurationExplicitZeroRoundTrips(t *testing.T) {
+	var d Duration
+	if err := d.UnmarshalText([]byte("0s")); err != nil {
+		t.Fatal(err)
+	}
+	text, err := d.MarshalText()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back Duration
+	if err := back.UnmarshalText(text); err != nil {
+		t.Fatal(err)
+	}
+	if !back.Set || back.Duration != 0 {
+		t.Errorf("round trip of explicit 0s: got %+v (text %q), want Set=true", back, text)
+	}
+
+	// An unset duration stays unset.
+	text, _ = Duration{}.MarshalText()
+	var unset Duration
+	if err := unset.UnmarshalText(text); err != nil {
+		t.Fatal(err)
+	}
+	if unset.Set {
+		t.Errorf("unset duration became set (text %q)", text)
+	}
+}
