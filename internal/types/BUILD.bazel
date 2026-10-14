@@ -16,6 +16,7 @@ go_library(
 go_test(
     name = "types_test",
     srcs = [
+        "inference_regress_test.go",
         "inference_test.go",
         "parser_test.go",
         "typeref_test.go",
