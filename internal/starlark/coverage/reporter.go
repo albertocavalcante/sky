@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"io"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -283,7 +284,14 @@ func (r *CoberturaReporter) Report(w io.Writer, report *Report) error {
 		packages[dir] = append(packages[dir], path)
 	}
 
-	for pkgName, files := range packages {
+	pkgNames := make([]string, 0, len(packages))
+	for name := range packages {
+		pkgNames = append(pkgNames, name)
+	}
+	sort.Strings(pkgNames)
+
+	for _, pkgName := range pkgNames {
+		files := packages[pkgName]
 		pkg := coberturaPackage{
 			Name:       pkgName,
 			BranchRate: "0",
@@ -610,7 +618,13 @@ func (r *LCOVReporter) Report(w io.Writer, report *Report) error {
 		// Function coverage (FN:, FNDA:, FNF:, FNH:)
 		fnTotal := len(fc.Functions)
 		fnHit := 0
-		for name, fn := range fc.Functions {
+		fnNames := make([]string, 0, len(fc.Functions))
+		for name := range fc.Functions {
+			fnNames = append(fnNames, name)
+		}
+		sort.Strings(fnNames)
+		for _, name := range fnNames {
+			fn := fc.Functions[name]
 			writef(w, "FN:%d,%s\n", fn.StartLine, name)
 			writef(w, "FNDA:%d,%s\n", fn.Hits, name)
 			if fn.Hits > 0 {

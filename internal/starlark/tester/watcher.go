@@ -40,6 +40,8 @@ type Watcher struct {
 
 	// done signals the watcher to stop.
 	done chan struct{}
+
+	closeOnce sync.Once
 }
 
 // WatchEvent represents a file change event.
@@ -79,6 +81,24 @@ func NewWatcher(rootDir string) (*Watcher, error) {
 	return w, nil
 }
 
+// sendErr delivers an error without ever blocking the caller.
+func (w *Watcher) sendErr(err error) {
+	select {
+	case w.Errors <- err:
+	default:
+	}
+}
+
+// watchPath watches a file and its parent directory (so atomic saves that
+// replace the file via rename are still observed).
+func (w *Watcher) watchPath(p string) error {
+	if err := w.fsWatcher.Add(p); err != nil {
+		return err
+	}
+	_ = w.fsWatcher.Add(filepath.Dir(p))
+	return nil
+}
+
 // Add adds a test file to watch, along with its dependencies.
 func (w *Watcher) Add(testFile string) error {
 	w.mu.Lock()
@@ -95,83 +115,62 @@ func (w *Watcher) Add(testFile string) error {
 	}
 
 	// Watch the test file
-	if err := w.fsWatcher.Add(absPath); err != nil {
+	if err := w.watchPath(absPath); err != nil {
 		return fmt.Errorf("watching %s: %w", absPath, err)
 	}
 	w.testFiles[absPath] = true
 
-	// Parse the file to find its load() dependencies
-	deps, err := w.extractLoads(absPath)
-	if err != nil {
-		// Log but don't fail - the file might have syntax errors
-		w.Errors <- fmt.Errorf("extracting loads from %s: %w", absPath, err)
-		return nil
+	if err := w.trackTest(absPath); err != nil {
+		// Report but don't fail - the file might have syntax errors
+		w.sendErr(fmt.Errorf("extracting loads from %s: %w", absPath, err))
 	}
-
-	w.loads[absPath] = deps
-
-	// Watch each dependency and track reverse dependencies
-	for _, dep := range deps {
-		// Resolve relative path
-		depPath := w.resolveLoadPath(absPath, dep)
-		if depPath == "" {
-			continue
-		}
-
-		// Add to reverse deps
-		if w.dependencies[depPath] == nil {
-			w.dependencies[depPath] = make(map[string]bool)
-		}
-		w.dependencies[depPath][absPath] = true
-
-		// Watch the dependency file
-		if err := w.fsWatcher.Add(depPath); err != nil {
-			// File might not exist yet, that's ok
-			continue
-		}
-
-		// Recursively track dependencies of this file too
-		w.trackTransitiveDeps(depPath, absPath)
-	}
-
 	return nil
 }
 
-// trackTransitiveDeps recursively tracks dependencies.
-func (w *Watcher) trackTransitiveDeps(file, testFile string) {
-	deps, err := w.extractLoads(file)
+// trackTest parses testFile and records its direct and transitive deps.
+// Caller must hold w.mu.
+func (w *Watcher) trackTest(testFile string) error {
+	deps, err := w.extractLoads(testFile)
 	if err != nil {
-		return
+		return err
 	}
+	w.loads[testFile] = deps
 
+	visited := map[string]bool{testFile: true}
 	for _, dep := range deps {
-		depPath := w.resolveLoadPath(file, dep)
+		depPath := w.resolveLoadPath(testFile, dep)
 		if depPath == "" {
 			continue
 		}
+		w.trackDep(depPath, testFile, visited)
+	}
+	return nil
+}
 
-		// Add testFile as depending on this transitive dep
-		if w.dependencies[depPath] == nil {
-			w.dependencies[depPath] = make(map[string]bool)
-		}
-		w.dependencies[depPath][testFile] = true
+// trackDep records depPath as a dependency of testFile and recurses into its
+// loads. visited (keyed by absolute path) guards against load cycles.
+func (w *Watcher) trackDep(depPath, testFile string, visited map[string]bool) {
+	if w.dependencies[depPath] == nil {
+		w.dependencies[depPath] = make(map[string]bool)
+	}
+	w.dependencies[depPath][testFile] = true
+	_ = w.watchPath(depPath)
 
-		// Watch the file
-		if err := w.fsWatcher.Add(depPath); err != nil {
+	if visited[depPath] {
+		return
+	}
+	visited[depPath] = true
+
+	deps, err := w.extractLoads(depPath)
+	if err != nil {
+		return
+	}
+	for _, dep := range deps {
+		p := w.resolveLoadPath(depPath, dep)
+		if p == "" {
 			continue
 		}
-
-		// Avoid infinite loops by checking if we've processed this path for this test
-		alreadyTracked := false
-		for _, existing := range w.loads[depPath] {
-			if existing == dep {
-				alreadyTracked = true
-				break
-			}
-		}
-		if !alreadyTracked {
-			w.trackTransitiveDeps(depPath, testFile)
-		}
+		w.trackDep(p, testFile, visited)
 	}
 }
 
@@ -247,8 +246,12 @@ func (w *Watcher) Remove(testFile string) error {
 
 // Close stops the watcher and releases resources.
 func (w *Watcher) Close() error {
-	close(w.done)
-	return w.fsWatcher.Close()
+	var err error
+	w.closeOnce.Do(func() {
+		close(w.done)
+		err = w.fsWatcher.Close()
+	})
+	return err
 }
 
 // run processes filesystem events.
@@ -264,6 +267,12 @@ func (w *Watcher) run() {
 			}
 
 			// Ignore non-modify events for now (could expand later)
+			if event.Op&(fsnotify.Remove|fsnotify.Rename) != 0 {
+				// Atomic saves replace the inode; re-arm the watch.
+				if _, err := os.Stat(event.Name); err == nil {
+					_ = w.fsWatcher.Add(event.Name)
+				}
+			}
 			if event.Op&(fsnotify.Write|fsnotify.Create) == 0 {
 				continue
 			}
@@ -274,7 +283,7 @@ func (w *Watcher) run() {
 			if !ok {
 				return
 			}
-			w.Errors <- err
+			w.sendErr(err)
 		}
 	}
 }
@@ -286,7 +295,7 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 
 	absPath, err := filepath.Abs(event.Name)
 	if err != nil {
-		w.Errors <- fmt.Errorf("resolve absolute path for event %s: %w", event.Name, err)
+		w.sendErr(fmt.Errorf("resolve absolute path for event %s: %w", event.Name, err))
 		return
 	}
 
@@ -315,10 +324,9 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 	}
 
 	if len(affected) > 0 {
-		w.Events <- WatchEvent{
-			File:          absPath,
-			Op:            event.Op,
-			AffectedTests: affected,
+		select {
+		case w.Events <- WatchEvent{File: absPath, Op: event.Op, AffectedTests: affected}:
+		case <-w.done:
 		}
 	}
 }
@@ -342,7 +350,7 @@ func (w *Watcher) AffectedTestFiles(file string) []string {
 
 	absPath, err := filepath.Abs(file)
 	if err != nil {
-		w.Errors <- fmt.Errorf("resolve absolute path for %s: %w", file, err)
+		w.sendErr(fmt.Errorf("resolve absolute path for %s: %w", file, err))
 		return nil
 	}
 
@@ -372,8 +380,9 @@ func (w *Watcher) AffectedTestFiles(file string) []string {
 	return affected
 }
 
-// RefreshDependencies re-parses a file and updates its dependencies.
-// Call this after a file is modified to update the dependency graph.
+// RefreshDependencies re-parses a file and updates the dependency graph.
+// The file may be a watched test file or a helper loaded by one; in the
+// latter case every test depending on it is re-tracked.
 func (w *Watcher) RefreshDependencies(file string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -383,41 +392,23 @@ func (w *Watcher) RefreshDependencies(file string) error {
 		return err
 	}
 
-	// Only refresh if it's a watched test file
-	if !w.testFiles[absPath] {
-		return nil
+	tests := map[string]bool{}
+	if w.testFiles[absPath] {
+		tests[absPath] = true
+	}
+	for t := range w.dependencies[absPath] {
+		tests[t] = true
 	}
 
-	// Remove old dependency tracking
-	oldLoads := w.loads[absPath]
-	for _, dep := range oldLoads {
-		depPath := w.resolveLoadPath(absPath, dep)
-		if depPath != "" && w.dependencies[depPath] != nil {
-			delete(w.dependencies[depPath], absPath)
+	var firstErr error
+	for t := range tests {
+		for _, set := range w.dependencies {
+			delete(set, t)
+		}
+		delete(w.loads, t)
+		if err := w.trackTest(t); err != nil && firstErr == nil {
+			firstErr = err
 		}
 	}
-
-	// Re-extract and track new dependencies
-	deps, err := w.extractLoads(absPath)
-	if err != nil {
-		return err
-	}
-
-	w.loads[absPath] = deps
-
-	for _, dep := range deps {
-		depPath := w.resolveLoadPath(absPath, dep)
-		if depPath == "" {
-			continue
-		}
-
-		if w.dependencies[depPath] == nil {
-			w.dependencies[depPath] = make(map[string]bool)
-		}
-		w.dependencies[depPath][absPath] = true
-
-		_ = w.fsWatcher.Add(depPath)
-	}
-
-	return nil
+	return firstErr
 }

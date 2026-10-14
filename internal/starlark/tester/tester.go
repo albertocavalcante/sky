@@ -274,6 +274,11 @@ func (r *Runner) RunFile(filename string, src []byte) (*FileResult, error) {
 	// TODO(upstream): Simplify once OnExec is merged upstream.
 	r.setupCoverageHook(thread)
 
+	// Register executable lines up front so unexecuted lines count as missing.
+	if r.coverage != nil {
+		_ = r.coverage.RegisterSource(filename, src)
+	}
+
 	globals, err := starlark.ExecFile(thread, filename, src, predeclared)
 	if err != nil {
 		return nil, fmt.Errorf("executing %s: %w", filename, err)
@@ -335,7 +340,7 @@ func (r *Runner) RunFile(filename string, src []byte) (*FileResult, error) {
 					continue
 				}
 
-				testResult := r.runParametrizedTest(thread, virtualName, fn, setupFn, teardownFn, predeclared, fixtureRegistry, pc.caseDict)
+				testResult := r.runParametrizedTest(thread, virtualName, filename, fn, setupFn, teardownFn, predeclared, fixtureRegistry, pc.caseDict)
 				testResult.File = filename
 
 				// Handle xfail
@@ -409,6 +414,7 @@ func (r *Runner) RunFile(filename string, src []byte) (*FileResult, error) {
 
 			// Clear test-scoped fixture cache between tests
 			fixtureRegistry.ClearTestCache()
+			r.mock.Reset()
 
 			// Fail-fast: stop after first failure
 			if r.opts.FailFast && !testResult.Passed {
@@ -693,8 +699,12 @@ func (r *Runner) matchesMarkerFilter(testMeta TestMeta) bool {
 func (r *Runner) matchesFilter(name string) bool {
 	// Check TestNames first (from :: syntax)
 	if len(r.opts.TestNames) > 0 {
+		base := name
+		if i := strings.IndexByte(name, '['); i >= 0 {
+			base = name[:i] // parametrized: test_x[case] matches test_x
+		}
 		for _, allowed := range r.opts.TestNames {
-			if name == allowed {
+			if name == allowed || base == allowed {
 				return true
 			}
 		}
@@ -712,8 +722,7 @@ func (r *Runner) matchesFilter(name string) bool {
 	negate := false
 	if strings.HasPrefix(strings.ToLower(filter), "not ") {
 		negate = true
-		filter = strings.TrimPrefix(filter, "not ")
-		filter = strings.TrimPrefix(filter, "NOT ")
+		filter = strings.TrimSpace(filter[len("not "):])
 	}
 
 	// Simple substring match (case-insensitive)
@@ -882,6 +891,7 @@ func (r *Runner) extractTestParams(globals starlark.StringDict) map[string][]par
 func (r *Runner) runParametrizedTest(
 	_ *starlark.Thread,
 	name string,
+	filename string,
 	testFn *starlark.Function,
 	setupFn *starlark.Function,
 	teardownFn *starlark.Function,
@@ -897,6 +907,12 @@ func (r *Runner) runParametrizedTest(
 
 	// EXPERIMENTAL: Enable coverage collection for this test thread
 	r.setupCoverageHook(testThread)
+
+	// Set up snapshot manager in thread local storage
+	if r.snapshot != nil {
+		r.snapshot.SetContext(filename, name)
+		testThread.SetLocal(SnapshotManagerKey, r.snapshot)
+	}
 
 	// Set up timeout cancellation if configured
 	var timer *time.Timer
