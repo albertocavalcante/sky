@@ -36,42 +36,26 @@ func (h *GitHubHandler) Handle(results *TestResults, stdout, stderr io.Writer) e
 
 // writeAnnotations outputs GitHub workflow commands for PR annotations.
 func (h *GitHubHandler) writeAnnotations(results *TestResults, w io.Writer) {
-	for _, file := range results.Files {
+	for _, file := range results.Results {
 		// Make path relative for cleaner annotations
-		relPath := file.Path
+		relPath := file.File
 		if cwd, err := os.Getwd(); err == nil {
-			if rel, err := filepath.Rel(cwd, file.Path); err == nil {
+			if rel, err := filepath.Rel(cwd, file.File); err == nil {
 				relPath = rel
 			}
 		}
 
 		for _, test := range file.Tests {
-			if test.Skipped {
-				// Notice for skipped tests
-				if test.Line > 0 {
-					printf(w, "::notice file=%s,line=%d::%s skipped\n",
-						relPath, test.Line, test.Name)
-				} else {
-					printf(w, "::notice file=%s::%s skipped\n",
-						relPath, test.Name)
-				}
-			} else if !test.Passed {
-				// Error for failed tests
-				errMsg := test.Error
-				if errMsg == "" {
-					errMsg = "test failed"
-				}
-				// Escape newlines and special characters for workflow command
-				errMsg = escapeAnnotation(errMsg)
-
-				if test.Line > 0 {
-					printf(w, "::error file=%s,line=%d::%s: %s\n",
-						relPath, test.Line, test.Name, errMsg)
-				} else {
-					printf(w, "::error file=%s::%s: %s\n",
-						relPath, test.Name, errMsg)
-				}
+			if test.Passed {
+				continue
 			}
+			errMsg := test.Error
+			if errMsg == "" {
+				errMsg = "test failed"
+			}
+			printf(w, "::error file=%s::%s\n",
+				escapeProperty(relPath),
+				escapeData(test.Name+": "+errMsg))
 		}
 	}
 }
@@ -107,8 +91,8 @@ func (h *GitHubHandler) writeSummary(results *TestResults) error {
 	println(f)
 
 	// Duration
-	if results.Duration != "" {
-		printf(f, "⏱️ Duration: %s\n", results.Duration)
+	if results.DurationMS > 0 {
+		printf(f, "⏱️ Duration: %s\n", results.Duration())
 		println(f)
 	}
 
@@ -118,10 +102,10 @@ func (h *GitHubHandler) writeSummary(results *TestResults) error {
 		println(f, "<summary>❌ Failed Tests</summary>")
 		println(f)
 		println(f, "```")
-		for _, file := range results.Files {
+		for _, file := range results.Results {
 			for _, test := range file.Tests {
-				if !test.Passed && !test.Skipped {
-					printf(f, "%s::%s\n", filepath.Base(file.Path), test.Name)
+				if !test.Passed {
+					printf(f, "%s::%s\n", filepath.Base(file.File), test.Name)
 					if test.Error != "" {
 						printf(f, "  %s\n", test.Error)
 					}
@@ -155,15 +139,23 @@ func (h *GitHubHandler) writeOutputs(results *TestResults) error {
 	// discard the (n, err) returns.
 	printf(f, "passed=%d\n", passed)
 	printf(f, "failed=%d\n", failed)
-	printf(f, "coverage=0\n") // TODO: Pass coverage from skytest
+	printf(f, "coverage=%.1f\n", h.Config.Coverage)
 
 	return nil
 }
 
-// escapeAnnotation escapes special characters for GitHub workflow commands.
-func escapeAnnotation(s string) string {
+// escapeData escapes a workflow command message.
+func escapeData(s string) string {
 	s = strings.ReplaceAll(s, "%", "%25")
 	s = strings.ReplaceAll(s, "\r", "%0D")
 	s = strings.ReplaceAll(s, "\n", "%0A")
+	return s
+}
+
+// escapeProperty escapes a workflow command property value.
+func escapeProperty(s string) string {
+	s = escapeData(s)
+	s = strings.ReplaceAll(s, ":", "%3A")
+	s = strings.ReplaceAll(s, ",", "%2C")
 	return s
 }
