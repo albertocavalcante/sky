@@ -29,10 +29,18 @@ go_library(
 go_test(
     name = "tester_test",
     srcs = [
+        "coverage_regress_test.go",
+        "misc_regress_test.go",
         "mock_test.go",
+        "review2_regress_test.go",
+        "runner_regress_test.go",
         "tester_test.go",
+        "watcher_regress_test.go",
         "watcher_test.go",
     ],
     embed = [":tester"],
-    deps = ["@net_starlark_go//starlark"],
+    deps = [
+        "@com_github_fsnotify_fsnotify//:fsnotify",
+        "@net_starlark_go//starlark",
+    ],
 )
