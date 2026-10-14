@@ -221,3 +221,36 @@ func TestRun_NonexistentFile(t *testing.T) {
 		t.Error("RunWithIO(nonexistent file) returned 0, want non-zero")
 	}
 }
+
+func TestRun_BadFormatKeepsExistingOutput(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "lib.star")
+	if err := os.WriteFile(src, []byte("def f():\n    \"\"\"Doc.\"\"\"\n    pass\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "out.md")
+	if err := os.WriteFile(out, []byte("precious"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-format", "nope", "-o", out, src}, nil, &stdout, &stderr)
+	if code != 2 {
+		t.Errorf("code = %d, want 2", code)
+	}
+	if b, _ := os.ReadFile(out); string(b) != "precious" {
+		t.Errorf("existing output clobbered: %q", b)
+	}
+	// Successful run replaces the file and leaves no temp files.
+	stdout.Reset()
+	stderr.Reset()
+	if code := RunWithIO(context.Background(), []string{"-o", out, src}, nil, &stdout, &stderr); code != 0 {
+		t.Fatalf("code = %d: %s", code, stderr.String())
+	}
+	if b, _ := os.ReadFile(out); string(b) == "precious" {
+		t.Error("output not replaced")
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 2 {
+		t.Errorf("unexpected leftover files: %v", entries)
+	}
+}
