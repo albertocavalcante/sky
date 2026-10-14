@@ -309,10 +309,20 @@ func topologicalSort(rules []*Rule) ([]*Rule, error) {
 
 	for _, rule := range rules {
 		ruleMap[rule.Name] = rule
+	}
+
+	for _, rule := range rules {
 		if _, exists := inDegree[rule.Name]; !exists {
 			inDegree[rule.Name] = 0
 		}
 		for _, req := range rule.Requires {
+			// A requirement that is not part of the list being sorted
+			// (e.g. disabled) imposes no ordering and is skipped; counting it
+			// would leave the dependent with a permanent in-degree and
+			// produce a bogus cycle error.
+			if _, ok := ruleMap[req.Name]; !ok {
+				continue
+			}
 			deps[req.Name] = append(deps[req.Name], rule)
 			inDegree[rule.Name]++
 		}
