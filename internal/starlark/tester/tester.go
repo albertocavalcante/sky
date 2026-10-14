@@ -699,8 +699,12 @@ func (r *Runner) matchesMarkerFilter(testMeta TestMeta) bool {
 func (r *Runner) matchesFilter(name string) bool {
 	// Check TestNames first (from :: syntax)
 	if len(r.opts.TestNames) > 0 {
+		base := name
+		if i := strings.IndexByte(name, '['); i >= 0 {
+			base = name[:i] // parametrized: test_x[case] matches test_x
+		}
 		for _, allowed := range r.opts.TestNames {
-			if name == allowed {
+			if name == allowed || base == allowed {
 				return true
 			}
 		}
@@ -718,8 +722,7 @@ func (r *Runner) matchesFilter(name string) bool {
 	negate := false
 	if strings.HasPrefix(strings.ToLower(filter), "not ") {
 		negate = true
-		filter = strings.TrimPrefix(filter, "not ")
-		filter = strings.TrimPrefix(filter, "NOT ")
+		filter = strings.TrimSpace(filter[len("not "):])
 	}
 
 	// Simple substring match (case-insensitive)
