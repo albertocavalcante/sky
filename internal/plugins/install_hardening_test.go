@@ -147,3 +147,72 @@ func TestMarketplace_ContinuesPastFetchErrors(t *testing.T) {
 		t.Fatalf("want error mentioning fetch failure, got %v", err)
 	}
 }
+
+func TestInstall_CleanupDoesNotDeleteOtherStore(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "bin")
+	writeTestFile(t, bin, "x")
+	a := NewStore(filepath.Join(dir, "a"))
+	if _, err := a.InstallFromURL(context.Background(), "foo", bin, "", "", "", TypeExecutable); err != nil {
+		t.Fatal(err)
+	}
+	// Copy A's catalog into B, so it records A's binary path.
+	b := NewStore(filepath.Join(dir, "b"))
+	if err := b.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(a.PluginsFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(b.PluginsFile(), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.InstallFromURL(context.Background(), "foo", bin, "", "", "", TypeWasm); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(a.PluginPath("foo", TypeExecutable)); err != nil {
+		t.Fatalf("store A binary deleted by store B install: %v", err)
+	}
+}
+
+func TestInstall_PathAliasKeepsDest(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	bin := filepath.Join(dir, "bin")
+	writeTestFile(t, bin, "x")
+	rel := NewStore("root")
+	if _, err := rel.InstallFromURL(context.Background(), "foo", bin, "", "", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	abs := NewStore(filepath.Join(dir, "root"))
+	p, err := abs.InstallFromURL(context.Background(), "foo", bin, "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(p.Path); err != nil {
+		t.Fatalf("freshly installed binary removed: %v", err)
+	}
+}
+
+func TestInstallFromPath_RemovesPreviousBinaryOfOtherType(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "bin")
+	writeTestFile(t, bin, "x")
+	s := NewStore(filepath.Join(dir, "root"))
+	if _, err := s.InstallFromPath("foo", bin, "", TypeExecutable); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.InstallFromPath("foo", bin, "", TypeWasm); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(s.PluginPath("foo", TypeExecutable)); !os.IsNotExist(err) {
+		t.Fatalf("previous binary should be removed, stat err=%v", err)
+	}
+	entries, _ := os.ReadDir(s.PluginsDir())
+	for _, e := range entries {
+		if strings.Contains(e.Name(), "-tmp-") {
+			t.Fatalf("leftover temp %s", e.Name())
+		}
+	}
+}
