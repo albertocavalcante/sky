@@ -16,9 +16,9 @@ inputs:
     required: false
     default: 'false'
   coverage-threshold:
-    description: 'Minimum coverage percentage (0 to disable)'
+    description: 'Minimum coverage percentage. Empty (default) defers to coverage.fail_under in the sky config; 0 explicitly disables the check. Requires coverage collection (coverage: true); a report with no measured lines fails the step instead of passing.'
     required: false
-    default: '0'
+    default: ''
   annotations:
     description: 'Enable GitHub annotations'
     required: false
@@ -104,7 +104,7 @@ runs:
         fi
 
         CI_FLAGS=("--annotations=$INPUT_ANNOTATIONS" "--summary=$INPUT_SUMMARY")
-        if [ -n "$INPUT_COVERAGE_THRESHOLD" ] && [ "$INPUT_COVERAGE_THRESHOLD" != "0" ]; then
+        if [ -n "$INPUT_COVERAGE_THRESHOLD" ]; then
           CI_FLAGS+=("--coverage-threshold=$INPUT_COVERAGE_THRESHOLD")
         fi
 
