@@ -255,21 +255,26 @@ func (c *Checker) findUnusedBindings(f *syntax.File) []Diagnostic {
 			return true
 		})
 	}
+	markParams := func(params []syntax.Expr) {
+		for _, p := range params {
+			switch p := p.(type) {
+			case *syntax.Ident:
+				skip[p] = true
+			case *syntax.UnaryExpr: // *args, **kwargs
+				markIdents(p.X)
+			case *syntax.BinaryExpr: // name=default
+				if id, ok := p.X.(*syntax.Ident); ok {
+					skip[id] = true
+				}
+			}
+		}
+	}
 	syntax.Walk(f, func(n syntax.Node) bool {
 		switch n := n.(type) {
 		case *syntax.DefStmt:
-			for _, p := range n.Params {
-				switch p := p.(type) {
-				case *syntax.Ident:
-					skip[p] = true
-				case *syntax.UnaryExpr: // *args, **kwargs
-					markIdents(p.X)
-				case *syntax.BinaryExpr: // name=default
-					if id, ok := p.X.(*syntax.Ident); ok {
-						skip[id] = true
-					}
-				}
-			}
+			markParams(n.Params)
+		case *syntax.LambdaExpr:
+			markParams(n.Params)
 		case *syntax.ForStmt:
 			markIdents(n.Vars)
 		case *syntax.ForClause:

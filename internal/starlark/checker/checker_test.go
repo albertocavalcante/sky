@@ -216,3 +216,21 @@ func TestResult_Counts(t *testing.T) {
 		t.Errorf("WarningCount() = %d, want 1", got)
 	}
 }
+
+func TestChecker_LambdaParamsNotReportedUnused(t *testing.T) {
+	src := `
+def foo():
+    f = lambda unused, d=1, *args, **kw: 1
+    return f
+`
+	c := New(DefaultOptions())
+	diags, err := c.CheckFile("test.star", []byte(src))
+	if err != nil {
+		t.Fatalf("CheckFile failed: %v", err)
+	}
+	for _, d := range diags {
+		if d.Code == "unused" {
+			t.Errorf("unexpected unused diagnostic: %v", d)
+		}
+	}
+}
