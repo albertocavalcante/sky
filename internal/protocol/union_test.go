@@ -92,3 +92,41 @@ func TestUnionTextEditVariants(t *testing.T) {
 		t.Fatalf("got %T, want AnnotatedTextEdit", u.Value)
 	}
 }
+
+func TestUnionDocumentFilterAlias(t *testing.T) {
+	var f Or_NotebookCellTextDocumentFilter_TextDocumentFilter
+	if err := json.Unmarshal([]byte(`{"scheme":"file"}`), &f); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := f.Value.(TextDocumentFilter); !ok {
+		t.Fatalf("got %T, want TextDocumentFilter", f.Value)
+	}
+	if sc, ok := f.Value.(TextDocumentFilter).Value.(TextDocumentFilterScheme); !ok || sc.Scheme != "file" {
+		t.Fatalf("lost scheme: %#v", f.Value)
+	}
+	var n Or_NotebookCellTextDocumentFilter_TextDocumentFilter
+	if err := json.Unmarshal([]byte(`{"notebook":"jupyter"}`), &n); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := n.Value.(NotebookCellTextDocumentFilter); !ok {
+		t.Fatalf("got %T, want NotebookCellTextDocumentFilter", n.Value)
+	}
+}
+
+func TestUnionOptionalKeyTieBreak(t *testing.T) {
+	var u Or_NotebookDocumentSyncOptions_NotebookDocumentSyncRegistrationOptions
+	if err := json.Unmarshal([]byte(`{"notebookSelector":[],"id":"x"}`), &u); err != nil {
+		t.Fatal(err)
+	}
+	r, ok := u.Value.(NotebookDocumentSyncRegistrationOptions)
+	if !ok || r.Id != "x" {
+		t.Fatalf("got %#v, want registration options with id", u.Value)
+	}
+	var o Or_NotebookDocumentSyncOptions_NotebookDocumentSyncRegistrationOptions
+	if err := json.Unmarshal([]byte(`{"notebookSelector":[]}`), &o); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := o.Value.(NotebookDocumentSyncOptions); !ok {
+		t.Fatalf("got %T, want plain options", o.Value)
+	}
+}

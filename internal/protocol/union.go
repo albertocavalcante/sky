@@ -20,3 +20,36 @@ func unionScore(x []byte, required ...string) int {
 	}
 	return len(required)
 }
+
+// keySet describes the required and optional JSON keys of one struct variant.
+type keySet struct {
+	required, optional []string
+}
+
+// unionRank scores x against the best matching key set. It returns -1 if no
+// set matches (x is not an object or lacks a required key). Otherwise the
+// rank is dominated by the number of required keys, with the number of
+// optional keys present breaking ties between equally specific variants.
+func unionRank(x []byte, sets ...keySet) int {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(x, &m); err != nil || m == nil {
+		return -1
+	}
+	best := -1
+sets:
+	for _, s := range sets {
+		for _, k := range s.required {
+			if _, ok := m[k]; !ok {
+				continue sets
+			}
+		}
+		r := len(s.required) * 1024
+		for _, k := range s.optional {
+			if _, ok := m[k]; ok {
+				r++
+			}
+		}
+		best = max(best, r)
+	}
+	return best
+}
