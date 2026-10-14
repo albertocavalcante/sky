@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/albertocavalcante/sky/internal/atomicfile"
 	"github.com/albertocavalcante/sky/internal/skyconfig"
 	"github.com/albertocavalcante/sky/internal/starlark/coverage"
 	"github.com/albertocavalcante/sky/internal/starlark/tester"
@@ -334,9 +335,14 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	// front so a failed or empty collection can never be mistaken for fresh
 	// data by a consumer such as sky-ci.
 	var coverageRunner *tester.Runner
+	coverageMode := os.FileMode(0o666) // umask applies to a new report
 	if effectiveCoverage {
 		opts.CoverageCollector = coverage.NewCollector()
 		coverageRunner = tester.New(opts)
+		// Remember the stale report's permissions so the fresh one keeps them.
+		if fi, err := os.Stat(effectiveCoverageOut); err == nil {
+			coverageMode = fi.Mode().Perm()
+		}
 		if err := os.Remove(effectiveCoverageOut); err != nil && !os.IsNotExist(err) {
 			writef(stderr, "skytest: removing stale coverage file %s: %v\n", effectiveCoverageOut, err)
 			return exitError
@@ -389,7 +395,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	// EXPERIMENTAL: Coverage collection requires starlark-go-x with OnExec hook.
 	// TODO(upstream): Remove experimental note once OnExec is merged.
 	if effectiveCoverage && coverageRunner != nil {
-		if err := writeCoverageReport(coverageRunner, effectiveCoverageOut, stderr); err != nil {
+		if err := writeCoverageReport(coverageRunner, effectiveCoverageOut, coverageMode, stderr); err != nil {
 			writef(stderr, "skytest: coverage: %v\n", err)
 			// Don't fail the run for coverage errors, just warn
 		}
@@ -406,7 +412,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 
 // writeCoverageReport writes the coverage data to a JSON file.
 // EXPERIMENTAL: Coverage data is only collected when starlark-go-x OnExec hook is enabled.
-func writeCoverageReport(runner *tester.Runner, outPath string, stderr io.Writer) error {
+func writeCoverageReport(runner *tester.Runner, outPath string, perm os.FileMode, stderr io.Writer) error {
 	report := runner.CoverageReport()
 	if report != nil && report.TotalLines == 0 {
 		// Written for tooling that inspects it, but total_lines is 0: consumers
@@ -426,13 +432,8 @@ func writeCoverageReport(runner *tester.Runner, outPath string, stderr io.Writer
 		return fmt.Errorf("marshaling coverage: %w", err)
 	}
 
-	// Write to a temp file and rename so readers never see a partial report.
-	tmp := outPath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return fmt.Errorf("writing %s: %w", outPath, err)
-	}
-	if err := os.Rename(tmp, outPath); err != nil {
-		_ = os.Remove(tmp)
+	// Write to a unique temp file and rename so readers never see a partial report.
+	if err := atomicfile.Write(outPath, data, perm); err != nil {
 		return fmt.Errorf("writing %s: %w", outPath, err)
 	}
 
