@@ -186,28 +186,33 @@ func (s *Store) savePlugins(plugins []Plugin) error {
 // UpsertPlugin inserts or replaces a plugin entry.
 func (s *Store) UpsertPlugin(plugin Plugin) error {
 	return s.withWriteLock(func() error {
-		if err := ValidateName(plugin.Name); err != nil {
-			return err
-		}
-
-		plugins, err := s.loadPluginsNL()
-		if err != nil {
-			return err
-		}
-
-		replaced := false
-		for i := range plugins {
-			if plugins[i].Name == plugin.Name {
-				plugins[i] = plugin
-				replaced = true
-				break
-			}
-		}
-		if !replaced {
-			plugins = append(plugins, plugin)
-		}
-		return s.savePlugins(plugins)
+		return s.upsertPluginNL(plugin)
 	})
+}
+
+// upsertPluginNL upserts a plugin; the caller must hold the write lock.
+func (s *Store) upsertPluginNL(plugin Plugin) error {
+	if err := ValidateName(plugin.Name); err != nil {
+		return err
+	}
+
+	plugins, err := s.loadPluginsNL()
+	if err != nil {
+		return err
+	}
+
+	replaced := false
+	for i := range plugins {
+		if plugins[i].Name == plugin.Name {
+			plugins[i] = plugin
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		plugins = append(plugins, plugin)
+	}
+	return s.savePlugins(plugins)
 }
 
 // FindPlugin returns the plugin entry if installed.
