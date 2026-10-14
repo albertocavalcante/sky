@@ -1,6 +1,7 @@
 package index
 
 import (
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -34,7 +35,7 @@ func (idx *Index) BuildLoadGraph() *LoadGraph {
 		for _, load := range f.Loads {
 			// Resolve package-relative labels (":x.bzl") against the loading
 			// file's package so they are not confused with root-package files.
-			module := resolveRelativeLabel(f.Path, load.Module)
+			module := resolveRelativeLabel(idx.packageDir(f.Path), load.Module)
 			modules = append(modules, module)
 			key := canonicalLabel(module)
 			g.Reverse[key] = append(g.Reverse[key], f.Path)
@@ -59,17 +60,43 @@ func (g *LoadGraph) LoadedBy(module string) []string {
 	return g.Reverse[canonicalLabel(module)]
 }
 
+// packageDir returns the slash-separated directory of the Bazel package that
+// contains file: the nearest ancestor directory holding a BUILD or BUILD.bazel
+// file (indexed or on disk). When there is none (plain Starlark trees), it
+// falls back to the file's own directory. The caller must hold idx.mu.
+func (idx *Index) packageDir(file string) string {
+	file = filepath.ToSlash(file)
+	dir := path.Dir(file)
+	for d := dir; ; d = path.Dir(d) {
+		prefix := d + "/"
+		if d == "." {
+			prefix = ""
+		}
+		for _, name := range []string{"BUILD.bazel", "BUILD"} {
+			if _, ok := idx.files[prefix+name]; ok {
+				return strings.TrimSuffix(prefix, "/")
+			}
+			if st, err := os.Stat(filepath.Join(idx.root, filepath.FromSlash(prefix+name))); err == nil && !st.IsDir() {
+				return strings.TrimSuffix(prefix, "/")
+			}
+		}
+		if d == "." || d == "/" {
+			break
+		}
+	}
+	if dir == "." {
+		return ""
+	}
+	return dir
+}
+
 // resolveRelativeLabel resolves a package-relative label (":x.bzl") against
-// the package of the loading file. Other labels are returned unchanged.
-func resolveRelativeLabel(from, module string) string {
+// the given package directory. Other labels are returned unchanged.
+func resolveRelativeLabel(pkgDir, module string) string {
 	if !strings.HasPrefix(module, ":") {
 		return module
 	}
-	dir := path.Dir(filepath.ToSlash(from))
-	if dir == "." {
-		dir = ""
-	}
-	return "//" + dir + module
+	return "//" + pkgDir + module
 }
 
 // canonicalLabel normalizes a module reference to the "//pkg:name" form.

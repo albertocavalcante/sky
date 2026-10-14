@@ -49,3 +49,22 @@ func TestLoadGraph_RelativeLabelAndPathLookup(t *testing.T) {
 		t.Errorf("AllLoads(top.bzl) = %v, want utils and lib/base", all)
 	}
 }
+
+func TestLoadGraph_RelativeLabelUsesEnclosingBuildPackage(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, "pkg/BUILD", "pkg/base.bzl", "pkg/sub/a.bzl")
+	if err := writeContent(root, "pkg/sub/a.bzl", `load(":base.bzl", "x")`+"\n"); err != nil {
+		t.Fatal(err)
+	}
+	idx := New(root)
+	if _, errs := idx.AddPattern("//..."); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	g := idx.BuildLoadGraph()
+	if got := g.LoadedBy("//pkg:base.bzl"); len(got) != 1 || got[0] != "pkg/sub/a.bzl" {
+		t.Errorf("LoadedBy(//pkg:base.bzl) = %v", got)
+	}
+	if got := g.LoadedBy("//pkg/sub:base.bzl"); len(got) != 0 {
+		t.Errorf("LoadedBy(//pkg/sub:base.bzl) = %v, want none", got)
+	}
+}
