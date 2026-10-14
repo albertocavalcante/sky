@@ -73,7 +73,13 @@ func (d *Driver) RunFile(path string) ([]Finding, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading file: %w", err)
 	}
+	return d.RunContent(path, content)
+}
 
+// RunContent executes all enabled rules on content as if it were the file at
+// path. Nothing is read from disk, so findings always describe exactly the
+// given bytes (used by editors linting unsaved buffers).
+func (d *Driver) RunContent(path string, content []byte) ([]Finding, error) {
 	// Classify the file to determine its kind
 	classification, err := d.classifier.Classify(path)
 	if err != nil {

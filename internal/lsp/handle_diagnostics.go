@@ -3,7 +3,6 @@ package lsp
 import (
 	"context"
 	"log"
-	"os"
 
 	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/albertocavalcante/sky/internal/starlark/checker"
@@ -53,20 +52,10 @@ func (s *Server) publishDiagnostics(ctx context.Context, uri string, content str
 	log.Printf("published %d diagnostics for %s", len(diagnostics), path)
 }
 
-// lintBuffer lints a document. The linter driver can only lint files on disk
-// (it has no in-memory entry point), so findings are only valid for the buffer
-// when it is identical to the on-disk content. When the buffer has unsaved
-// edits (or the file does not exist) linting is skipped rather than reporting
-// findings whose offsets do not correspond to the buffer.
+// lintBuffer lints the in-memory document content. Findings always describe
+// exactly the given bytes, never the on-disk file.
 func (s *Server) lintBuffer(path, content string) ([]linter.Finding, error) {
-	disk, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	if string(disk) != content {
-		return nil, nil
-	}
-	return s.lintDriver.RunFile(path)
+	return s.lintDriver.RunContent(path, []byte(content))
 }
 
 // lintFindingToDiagnostic converts a linter finding to an LSP diagnostic.
