@@ -32,23 +32,67 @@ func (s *Server) handleDidOpen(ctx context.Context, params json.RawMessage) (any
 	return nil, nil
 }
 
+// contentChange is a single textDocument/didChange content change. It is
+// decoded locally (rather than via the generated protocol union) so that a
+// missing "range" (full-document replacement) can be told apart from an
+// explicit zero range.
+type contentChange struct {
+	Range *protocol.Range `json:"range"`
+	Text  string          `json:"text"`
+}
+
+type didChangeParams struct {
+	TextDocument   protocol.VersionedTextDocumentIdentifier `json:"textDocument"`
+	ContentChanges []contentChange                          `json:"contentChanges"`
+}
+
+// applyContentChange applies one change to content. A change without a range
+// replaces the whole document; otherwise the range (UTF-16 positions) is
+// replaced with the change text.
+func applyContentChange(content string, c contentChange) string {
+	if c.Range == nil {
+		return c.Text
+	}
+	start := positionToOffset(content, int(c.Range.Start.Line), int(c.Range.Start.Character))
+	end := positionToOffset(content, int(c.Range.End.Line), int(c.Range.End.Character))
+	if end < start {
+		start, end = end, start
+	}
+	return content[:start] + c.Text + content[end:]
+}
+
 func (s *Server) handleDidChange(ctx context.Context, params json.RawMessage) (any, error) {
-	var p protocol.DidChangeTextDocumentParams
+	var p didChangeParams
 	if err := json.Unmarshal(params, &p); err != nil {
 		return nil, err
 	}
 
+	uri := p.TextDocument.Uri
+	var content string
+	var found bool
+
 	s.mu.Lock()
-	if doc, ok := s.documents[p.TextDocument.Uri]; ok {
-		doc.Version = p.TextDocument.Version
-		// Full sync - take the last change
-		if len(p.ContentChanges) > 0 {
-			doc.Content = p.ContentChanges[len(p.ContentChanges)-1].Value.(protocol.TextDocumentContentChangeWholeDocument).Text
+	if doc, ok := s.documents[uri]; ok {
+		content = doc.Content
+		for _, c := range p.ContentChanges {
+			content = applyContentChange(content, c)
 		}
+		// Documents are immutable snapshots: readers may hold the old
+		// pointer outside the lock, so publish a fresh value.
+		s.documents[uri] = &Document{
+			URI:     doc.URI,
+			Version: p.TextDocument.Version,
+			Content: content,
+		}
+		found = true
 	}
 	s.mu.Unlock()
 
-	log.Printf("didChange: %s v%d", p.TextDocument.Uri, p.TextDocument.Version)
+	log.Printf("didChange: %s v%d", uri, p.TextDocument.Version)
+
+	if found {
+		s.publishDiagnostics(ctx, uri, content)
+	}
 	return nil, nil
 }
 
@@ -65,8 +109,8 @@ func (s *Server) handleDidClose(ctx context.Context, params json.RawMessage) (an
 	log.Printf("didClose: %s", p.TextDocument.Uri)
 
 	// Clear diagnostics for closed document
-	if s.conn != nil {
-		if err := s.conn.Notify(ctx, "textDocument/publishDiagnostics", protocol.PublishDiagnosticsParams{
+	if conn := s.getConn(); conn != nil {
+		if err := conn.Notify(ctx, "textDocument/publishDiagnostics", protocol.PublishDiagnosticsParams{
 			Uri:         p.TextDocument.Uri,
 			Diagnostics: []protocol.Diagnostic{},
 		}); err != nil {
@@ -87,18 +131,22 @@ func (s *Server) handleDidSave(ctx context.Context, params json.RawMessage) (any
 
 	// Get document content (either from save params or our cache)
 	var content string
+	var known bool
 	if p.Text != "" {
 		content = p.Text
+		known = true
 	} else {
 		s.mu.RLock()
 		if doc, ok := s.documents[p.TextDocument.Uri]; ok {
 			content = doc.Content
+			known = true
 		}
 		s.mu.RUnlock()
 	}
 
-	// Run diagnostics
-	if content != "" {
+	// Always publish for a known document, even when empty, so stale
+	// diagnostics are replaced (an emptied file must clear them).
+	if known {
 		s.publishDiagnostics(ctx, p.TextDocument.Uri, content)
 	}
 

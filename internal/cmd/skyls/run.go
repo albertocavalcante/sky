@@ -99,7 +99,16 @@ func RunWithIO(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 	log.Printf("skyls: starting server")
 
 	// Run the server
-	if err := conn.Run(ctx); err != nil && ctx.Err() == nil {
+	// Run returns on EOF, error, or when "exit" cancels ctx, and waits for
+	// in-flight handlers before returning.
+	err := conn.Run(ctx)
+
+	// Per the LSP spec, exit after shutdown is 0, otherwise 1.
+	if code, exited := server.ExitStatus(); exited {
+		log.Printf("skyls: server stopped (exit code %d)", code)
+		return code
+	}
+	if err != nil && ctx.Err() == nil {
 		writef(stderr, "skyls: %v\n", err)
 		return exitError
 	}

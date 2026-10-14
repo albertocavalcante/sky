@@ -65,33 +65,14 @@ func (s *Server) handleCompletion(ctx context.Context, params json.RawMessage) (
 }
 
 // getCompletionPrefix extracts the identifier prefix at the cursor position.
+// character is a UTF-16 column.
 func getCompletionPrefix(content string, line, character int) string {
-	// Find the target line without allocating a slice for all lines
-	lineStart := 0
-	currentLine := 0
-	for i, ch := range content {
-		if currentLine == line {
-			lineStart = i
-			break
-		}
-		if ch == '\n' {
-			currentLine++
-		}
-	}
-	if currentLine < line {
+	lineContent, ok := lineText(content, line)
+	if !ok {
 		return "" // line number exceeds content
 	}
-
-	// Find line end
-	lineEnd := lineStart
-	for lineEnd < len(content) && content[lineEnd] != '\n' {
-		lineEnd++
-	}
-
-	lineContent := content[lineStart:lineEnd]
-	if character > len(lineContent) {
-		character = len(lineContent)
-	}
+	lineContent = strings.TrimSuffix(lineContent, "\r")
+	character = utf16ColToByte(lineContent, character)
 
 	// Walk backwards to find the start of the identifier
 	start := character
