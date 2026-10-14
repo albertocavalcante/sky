@@ -328,9 +328,19 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	// Create a single runner for coverage reporting (if enabled)
 	// Note: We create per-file runners for execution to support :: syntax,
 	// but use a single runner to aggregate coverage data.
+	// The collector is shared with every per-file runner (opts is copied by
+	// value but the collector is a pointer), so the report reflects the tests
+	// that actually ran. A stale report from an earlier run is removed up
+	// front so a failed or empty collection can never be mistaken for fresh
+	// data by a consumer such as sky-ci.
 	var coverageRunner *tester.Runner
 	if effectiveCoverage {
+		opts.CoverageCollector = coverage.NewCollector()
 		coverageRunner = tester.New(opts)
+		if err := os.Remove(effectiveCoverageOut); err != nil && !os.IsNotExist(err) {
+			writef(stderr, "skytest: removing stale coverage file %s: %v\n", effectiveCoverageOut, err)
+			return exitError
+		}
 	}
 
 	// Select reporter
@@ -373,10 +383,9 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		return exitError
 	}
 
-	// Report summary
-	reporter.ReportSummary(stdout, result)
-
-	// Write coverage output if enabled
+	// Write coverage output before the summary: `skytest -json -coverage |
+	// sky-ci` treats the end of the JSON as "run complete", so the coverage
+	// file must already be fully on disk by then.
 	// EXPERIMENTAL: Coverage collection requires starlark-go-x with OnExec hook.
 	// TODO(upstream): Remove experimental note once OnExec is merged.
 	if effectiveCoverage && coverageRunner != nil {
@@ -385,6 +394,9 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 			// Don't fail the run for coverage errors, just warn
 		}
 	}
+
+	// Report summary
+	reporter.ReportSummary(stdout, result)
 
 	if result.HasFailures() {
 		return exitFailed
@@ -396,6 +408,11 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 // EXPERIMENTAL: Coverage data is only collected when starlark-go-x OnExec hook is enabled.
 func writeCoverageReport(runner *tester.Runner, outPath string, stderr io.Writer) error {
 	report := runner.CoverageReport()
+	if report != nil && report.TotalLines == 0 {
+		// Written for tooling that inspects it, but total_lines is 0: consumers
+		// (sky-ci) treat that as "no coverage data", not as 100%.
+		writeln(stderr, "skytest: coverage: no lines were instrumented (starlark-go-x OnExec hook not enabled); report has total_lines=0")
+	}
 	if report == nil {
 		writeln(stderr, "skytest: coverage: no data collected (starlark-go-x OnExec hook not enabled)")
 		writeln(stderr, "         To enable, uncomment the replace directive in go.mod:")
@@ -409,8 +426,13 @@ func writeCoverageReport(runner *tester.Runner, outPath string, stderr io.Writer
 		return fmt.Errorf("marshaling coverage: %w", err)
 	}
 
-	// Write to file
-	if err := os.WriteFile(outPath, data, 0o644); err != nil {
+	// Write to a temp file and rename so readers never see a partial report.
+	tmp := outPath + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return fmt.Errorf("writing %s: %w", outPath, err)
+	}
+	if err := os.Rename(tmp, outPath); err != nil {
+		_ = os.Remove(tmp)
 		return fmt.Errorf("writing %s: %w", outPath, err)
 	}
 
