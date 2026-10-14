@@ -209,7 +209,7 @@ type Runner struct {
 	mock     *MockManager
 
 	covMu   sync.Mutex
-	covSeen map[syntax.Position]bool
+	covSeen map[covFuncKey]bool
 }
 
 // New creates a new test runner.

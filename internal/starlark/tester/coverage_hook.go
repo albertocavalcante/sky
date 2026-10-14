@@ -19,7 +19,18 @@ import (
 	"go.starlark.net/syntax"
 )
 
+// covFuncKey identifies a compiled function (position plus name).
+type covFuncKey struct {
+	pos  syntax.Position
+	name string
+}
+
 // maxProbePC bounds the pc scan used to enumerate a function's line table.
+//
+// LIMITS: starlark-go exposes neither a function's code length nor its nested
+// Funcode list (both are in internal/compile), so the scan is bounded and
+// functions that are defined but never instantiated or called (nested defs,
+// or lines beyond this bound) are only counted once they execute.
 const maxProbePC = 1 << 13
 
 // registerFunctionCoverage registers every line the compiler attributes to
@@ -31,10 +42,12 @@ func (r *Runner) registerFunctionCoverage(fn *starlark.Function) {
 	if r.coverage == nil {
 		return
 	}
-	key := fn.Position()
+	// Position alone is not an identity: a module whose first statement is a
+	// def shares its initializer's position with that function.
+	key := covFuncKey{pos: fn.Position(), name: fn.Name()}
 	r.covMu.Lock()
 	if r.covSeen == nil {
-		r.covSeen = make(map[syntax.Position]bool)
+		r.covSeen = make(map[covFuncKey]bool)
 	}
 	seen := r.covSeen[key]
 	r.covSeen[key] = true

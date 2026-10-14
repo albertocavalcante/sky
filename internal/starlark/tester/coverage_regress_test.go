@@ -51,7 +51,7 @@ func TestCoverageFullyExecutedFunctionHasNoMissingLines(t *testing.T) {
 func TestCoverageUntakenBranchInConftestIsMissing(t *testing.T) {
 	dir := t.TempDir()
 	conf := filepath.Join(dir, "conftest.star")
-	src := "def fixture_f():\n    if False:\n        return g(1)\n    return 1\n\ndef g(a):\n    return a\n"
+	src := "def fixture_f():\n    if False:\n        return len(\"a\")\n    return 1\n"
 	if err := os.WriteFile(conf, []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,17 @@ func TestCoverageUntakenBranchInConftestIsMissing(t *testing.T) {
 	if fc == nil {
 		t.Fatalf("conftest not tracked: %v", rep.FilePaths())
 	}
-	if rep.TotalLines == rep.CoveredLines || fc.Lines.CoveredLines == fc.Lines.TotalLines {
-		t.Errorf("conftest untaken branch not reported missing: %v", fc.Lines.Hits)
+	if n, ok := fc.Lines.Hits[3]; !ok || n != 0 {
+		t.Errorf("conftest untaken line 3 not registered with 0 hits: %v", fc.Lines.Hits)
+	}
+}
+
+func TestCoverageFirstFunctionUntakenBranchIsMissing(t *testing.T) {
+	// The file starts with a def, so its position equals the module initializer's.
+	src := "def test_a():\n    if False:\n        return len(\"a\")\n    assert.eq(1, 1)\n"
+	r := covRun(t, "", "first.star", src, DefaultOptions())
+	fc := r.CoverageReport().GetFile("first.star")
+	if n, ok := fc.Lines.Hits[3]; !ok || n != 0 {
+		t.Errorf("untaken branch line 3 not registered with 0 hits: %v", fc.Lines.Hits)
 	}
 }
