@@ -147,6 +147,11 @@ type junitTestCase struct {
 	Time      float64       `xml:"time,attr"`
 	Failure   *junitFailure `xml:"failure,omitempty"`
 	Error     *junitError   `xml:"error,omitempty"`
+	Skipped   *junitSkipped `xml:"skipped,omitempty"`
+}
+
+type junitSkipped struct {
+	Message string `xml:"message,attr,omitempty"`
 }
 
 type junitFailure struct {
@@ -187,13 +192,23 @@ func (r *JUnitReporter) ReportSummary(w io.Writer, result *RunResult) {
 				Time:      t.Duration.Seconds(),
 			}
 
-			if !t.Passed && t.Error != nil {
+			switch {
+			case t.Skipped:
+				tc.Skipped = &junitSkipped{Message: t.SkipReason}
+			case !t.Passed && t.Error != nil:
 				suite.Failures++
 				tc.Failure = &junitFailure{
 					Message: t.Error.Error(),
 					Type:    "AssertionError",
 					Content: t.Error.Error(),
 				}
+			case !t.Passed && t.XPass:
+				suite.Failures++
+				msg := "unexpected pass (XPASS)"
+				if t.XFailReason != "" {
+					msg += ": " + t.XFailReason
+				}
+				tc.Failure = &junitFailure{Message: msg, Type: "XPass", Content: msg}
 			}
 
 			suite.TestCases = append(suite.TestCases, tc)
