@@ -166,6 +166,27 @@ func TestSkippedTestsUseAuthoritativeCounts(t *testing.T) {
 	}
 }
 
+func TestPartialOrInconsistentAggregateCannotHideFailures(t *testing.T) {
+	const tests = `"results":[{"file":"a","tests":[{"name":"t","passed":false}]}]`
+	for name, in := range map[string]string{
+		"total only":          `{"total":1,` + tests + `}`,
+		"null failed":         `{"passed":0,"failed":null,"total":1,` + tests + `}`,
+		"zero failed":         `{"passed":0,"failed":0,"total":1,` + tests + `}`,
+		"inconsistent counts": `{"passed":5,"failed":0,"total":9,` + tests + `}`,
+	} {
+		var r TestResults
+		if err := json.Unmarshal([]byte(in), &r); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if !r.HasFailures() {
+			t.Errorf("%s: failure hidden", name)
+		}
+		if _, failed, _, _ := r.Summary(); failed != 1 {
+			t.Errorf("%s: failed = %d, want 1", name, failed)
+		}
+	}
+}
+
 // firstWriteChecker runs check just before the first byte is written.
 type firstWriteChecker struct {
 	bytes.Buffer
