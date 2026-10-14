@@ -181,7 +181,7 @@ func parseTestConfig(d *starlark.Dict, cfg *TestConfig) error {
 		if err != nil {
 			return fmt.Errorf("invalid timeout %q: %w", s, err)
 		}
-		cfg.Timeout = Duration{dur}
+		cfg.Timeout = Duration{Duration: dur, Set: true}
 	}
 
 	// parallel
