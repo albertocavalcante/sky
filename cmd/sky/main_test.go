@@ -82,3 +82,16 @@ func TestPluginSearch_DoubleDashLiteralQuery(t *testing.T) {
 		t.Fatalf("--help after -- was treated as a flag: %q", errb.String())
 	}
 }
+
+func TestParseInterspersed_DoubleDashAsFlagValue(t *testing.T) {
+	fs := flag.NewFlagSet("t", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	path := fs.String("path", "", "")
+	wasm := fs.Bool("wasm", false, "")
+	if err := parseInterspersed(fs, []string{"--path", "--", "foo", "--wasm"}); err != nil {
+		t.Fatal(err)
+	}
+	if *path != "--" || !*wasm || !reflect.DeepEqual(fs.Args(), []string{"foo"}) {
+		t.Fatalf("path=%q wasm=%v args=%v", *path, *wasm, fs.Args())
+	}
+}

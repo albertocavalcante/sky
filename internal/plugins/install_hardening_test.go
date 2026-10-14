@@ -338,3 +338,33 @@ func TestUpdatePluginMetadata_SkipsReinstalledPlugin(t *testing.T) {
 		t.Fatalf("entry clobbered: %+v", got)
 	}
 }
+
+func TestInstall_CleanupDoesNotDeleteSymlinkOutsideStore(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "bin")
+	writeTestFile(t, bin, "x")
+	s := NewStore(filepath.Join(dir, "root"))
+	p, err := s.InstallFromURL(context.Background(), "foo", bin, "", "", "", TypeExecutable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Catalog now points at a symlink outside the store that targets the binary.
+	link := filepath.Join(dir, "outside-link")
+	if err := os.Symlink(p.Path, link); err != nil {
+		t.Skip("symlinks unsupported")
+	}
+	data, err := os.ReadFile(s.PluginsFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = []byte(strings.ReplaceAll(string(data), filepath.ToSlash(p.Path), filepath.ToSlash(link)))
+	if err := os.WriteFile(s.PluginsFile(), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.InstallFromURL(context.Background(), "foo", bin, "", "", "", TypeWasm); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(link); err != nil {
+		t.Fatalf("symlink outside store deleted: %v", err)
+	}
+}
