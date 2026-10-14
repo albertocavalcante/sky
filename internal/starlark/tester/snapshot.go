@@ -67,24 +67,39 @@ func (sm *SnapshotManager) snapshotDir() string {
 	return filepath.Join(dir, "__snapshots__", name)
 }
 
+// snapshotNameReplacer maps characters that are invalid in file names on common
+// operating systems to underscores. It defines the legacy snapshot file name.
+var snapshotNameReplacer = strings.NewReplacer(
+	"/", "_", "\\", "_", ":", "_", "*", "_", "?", "_", "\"", "_", "<", "_", ">", "_", "|", "_",
+)
+
 // snapshotPath returns the full path for a named snapshot.
+//
+// New baselines use an encoded, length-bounded name. A baseline written before
+// that scheme (the raw test name, unbounded) is still found and used: ignoring
+// it would make Compare create a fresh baseline and pass a changed value without
+// update mode.
 func (sm *SnapshotManager) snapshotPath(name string) string {
-	// Sanitize name for filesystem by replacing characters that are invalid on common operating systems.
-	// This includes forward/back slashes and Windows-invalid chars: : * ? " < > |
-	r := strings.NewReplacer(
-		"/", "_",
-		"\\", "_",
-		":", "_",
-		"*", "_",
-		"?", "_",
-		"\"", "_",
-		"<", "_",
-		">", "_",
-		"|", "_",
-	)
-	safeName := r.Replace(name)
-	file := boundSnapshotFileName(encodeFileComponent(sm.testName) + "__" + safeName + ".snap")
-	return filepath.Join(sm.snapshotDir(), file)
+	safeName := snapshotNameReplacer.Replace(name)
+	current := filepath.Join(sm.snapshotDir(), boundSnapshotFileName(encodeFileComponent(sm.testName)+"__"+safeName+".snap"))
+	if legacy := sm.legacySnapshotPath(safeName); legacy != "" && legacy != current {
+		if info, err := os.Stat(legacy); err == nil && info.Mode().IsRegular() {
+			return legacy
+		}
+	}
+	return current
+}
+
+// legacySnapshotPath is where a baseline lived before names were encoded. It
+// returns "" when the raw test name would resolve outside the snapshot
+// directory: encoding exists to prevent that, so such a path is never used.
+func (sm *SnapshotManager) legacySnapshotPath(safeName string) string {
+	dir := sm.snapshotDir()
+	path := filepath.Join(dir, sm.testName+"__"+safeName+".snap")
+	if rel, err := filepath.Rel(dir, path); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return ""
+	}
+	return path
 }
 
 // Compare compares a value against its snapshot.
