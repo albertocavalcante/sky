@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 	"time"
 
@@ -43,7 +44,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	switch args[0] {
-	case "version":
+	case "version", "--version", "-v":
 		writef(stdout, "sky %s\n", version.String())
 		return 0
 	case "plugin":
@@ -96,7 +97,14 @@ func runCoreCommand(name string, args []string, stdout, stderr io.Writer) int {
 	if err := cmd.Run(); err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			return exitErr.ExitCode()
+			if code := exitErr.ExitCode(); code >= 0 {
+				return code
+			}
+			// Killed by a signal: follow the shell convention of 128+signal.
+			if ws, ok := exitErr.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+				return 128 + int(ws.Signal())
+			}
+			return 1
 		}
 		writef(stderr, "sky: %v\n", err)
 		return 1
@@ -119,6 +127,26 @@ func findCoreBinary(name string) (string, error) {
 
 	// Fall back to PATH lookup
 	return exec.LookPath(name)
+}
+
+// parseInterspersed parses flags that may appear before, between, or after
+// positional arguments (Go's flag package stops at the first positional).
+// After it returns, fs.Args() holds the positional arguments in order.
+func parseInterspersed(fs *flag.FlagSet, args []string) error {
+	var positional []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			return err
+		}
+		rest := fs.Args()
+		if len(rest) == 0 {
+			break
+		}
+		positional = append(positional, rest[0])
+		args = rest[1:]
+	}
+	// Re-parse so fs.Args() reports the collected positionals.
+	return fs.Parse(positional)
 }
 
 func runPlugin(args []string, stdout, stderr io.Writer) int {
@@ -188,7 +216,7 @@ func runPluginInstall(args []string, stdout, stderr io.Writer) int {
 	versionFlag := fs.String("version", "", "plugin version metadata")
 	sha := fs.String("sha256", "", "expected sha256 for --url downloads")
 	typeFlag := fs.String("type", "", "plugin type (exe|wasm)")
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return 2
 	}
 
@@ -249,7 +277,7 @@ func runPluginInstall(args []string, stdout, stderr io.Writer) int {
 func runPluginRemove(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("remove", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {
@@ -275,7 +303,7 @@ func runPluginRemove(args []string, stdout, stderr io.Writer) int {
 func runPluginInspect(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("inspect", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {
@@ -331,7 +359,7 @@ func runPluginSearch(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("search", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	marketplace := fs.String("marketplace", "", "marketplace name (optional)")
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {
@@ -413,7 +441,7 @@ func runMarketplaceList(stdout, stderr io.Writer) int {
 func runMarketplaceAdd(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("marketplace add", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 2 {
@@ -444,7 +472,7 @@ func runMarketplaceAdd(args []string, stdout, stderr io.Writer) int {
 func runMarketplaceRemove(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("marketplace remove", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {
@@ -643,7 +671,7 @@ func runPluginInit(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	wasm := fs.Bool("wasm", false, "create a WASM plugin template")
-	if err := fs.Parse(args); err != nil {
+	if err := parseInterspersed(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {
