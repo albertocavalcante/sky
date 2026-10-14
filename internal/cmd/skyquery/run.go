@@ -108,8 +108,12 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		for _, e := range errs {
 			writef(stderr, "skyquery: warning: %v\n", e)
 		}
-		if !keepGoing && count == 0 {
-			writeln(stderr, "skyquery: no files indexed")
+		if !keepGoing {
+			if count == 0 {
+				writeln(stderr, "skyquery: no files indexed")
+			} else {
+				writeln(stderr, "skyquery: parse errors found (use --keep_going to continue)")
+			}
 			return exitError
 		}
 	}
