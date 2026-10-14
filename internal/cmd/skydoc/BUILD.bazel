@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/albertocavalcante/sky/internal/cmd/skydoc",
     visibility = ["//:__subpackages__"],
     deps = [
+        "//internal/atomicfile",
         "//internal/starlark/docgen",
         "//internal/version",
     ],

@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/albertocavalcante/sky/internal/cmd/skycov",
     visibility = ["//:__subpackages__"],
     deps = [
+        "//internal/atomicfile",
         "//internal/starlark/coverage",
         "//internal/version",
     ],
