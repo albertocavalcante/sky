@@ -123,7 +123,12 @@ type stdioConn struct {
 	io.Writer
 }
 
+// Close interrupts a blocked read on stdin (when it is closable) so the
+// connection's reader goroutine can finish.
 func (s *stdioConn) Close() error {
+	if c, ok := s.Reader.(io.Closer); ok {
+		return c.Close()
+	}
 	return nil
 }
 

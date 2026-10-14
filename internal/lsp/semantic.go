@@ -254,7 +254,7 @@ func tokenizeComment(comment build.Comment) []SemanticToken {
 	tokens = append(tokens, SemanticToken{
 		Line:      uint32(start.Line - 1), // 0-based
 		StartChar: uint32(start.LineRune - 1),
-		Length:    uint32(len(text)),
+		Length:    uint32(utf8.RuneCountInString(text)), // converted to UTF-16 later
 		Type:      TokenComment,
 		Modifiers: 0,
 	})

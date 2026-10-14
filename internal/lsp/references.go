@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strings"
 
 	"github.com/bazelbuild/buildtools/build"
 
@@ -169,10 +170,17 @@ func collectIdentRefs(content string, file *build.File, targetName string) []ide
 			for _, id := range e.To {
 				decl[id] = true
 			}
+			// From names are the exported symbols of another file, not
+			// occurrences of a local name (and share a span with To when
+			// there is no alias).
+			for _, id := range e.From {
+				skip[id] = true
+			}
 		}
 	})
 
 	// Pass 2: emit occurrences.
+	li := newLineIndex(content)
 	var refs []identRef
 	seen := map[[2]int]bool{}
 	add := func(start, end build.Position, isDecl bool) {
@@ -185,11 +193,11 @@ func collectIdentRefs(content string, file *build.File, targetName string) []ide
 			Range: protocol.Range{
 				Start: protocol.Position{
 					Line:      uint32(start.Line - 1),
-					Character: uint32(runeColToUTF16(lineOf(content, start.Line-1), start.LineRune-1)),
+					Character: uint32(runeColToUTF16(li.line(start.Line-1), start.LineRune-1)),
 				},
 				End: protocol.Position{
 					Line:      uint32(end.Line - 1),
-					Character: uint32(runeColToUTF16(lineOf(content, end.Line-1), end.LineRune-1)),
+					Character: uint32(runeColToUTF16(li.line(end.Line-1), end.LineRune-1)),
 				},
 			},
 			IsDecl: isDecl,
@@ -213,6 +221,99 @@ func collectIdentRefs(content string, file *build.File, targetName string) []ide
 	})
 
 	return refs
+}
+
+// lineIndex splits content into lines once so position conversion is not
+// quadratic in the file size.
+type lineIndex struct{ lines []string }
+
+func newLineIndex(content string) *lineIndex {
+	return &lineIndex{lines: strings.Split(content, "\n")}
+}
+
+// line returns the 0-based line without its "\r", or "" when out of range.
+func (li *lineIndex) line(n int) string {
+	if n < 0 || n >= len(li.lines) {
+		return ""
+	}
+	return strings.TrimSuffix(li.lines[n], "\r")
+}
+
+// collectRenameRefs returns the references to targetName plus, when
+// targetName is a parameter of a def in the file, the keyword-argument
+// labels (f(name=...)) at call sites of that function in the same file.
+// Calls in other files cannot be resolved here and are not renamed.
+func collectRenameRefs(content string, file *build.File, targetName string) []identRef {
+	refs := collectIdentRefs(content, file, targetName)
+
+	funcs := map[string]bool{}
+	build.Walk(file, func(expr build.Expr, _ []build.Expr) {
+		def, ok := expr.(*build.DefStmt)
+		if !ok {
+			return
+		}
+		for _, p := range def.Params {
+			if paramName(p) == targetName {
+				funcs[def.Name] = true
+			}
+		}
+	})
+	if len(funcs) == 0 {
+		return refs
+	}
+
+	li := newLineIndex(content)
+	seen := map[[2]int]bool{}
+	for _, r := range refs {
+		seen[[2]int{int(r.Range.Start.Line), int(r.Range.Start.Character)}] = true
+	}
+	build.Walk(file, func(expr build.Expr, _ []build.Expr) {
+		call, ok := expr.(*build.CallExpr)
+		if !ok {
+			return
+		}
+		fn, ok := call.X.(*build.Ident)
+		if !ok || !funcs[fn.Name] {
+			return
+		}
+		for _, arg := range call.List {
+			as, ok := arg.(*build.AssignExpr)
+			if !ok {
+				continue
+			}
+			id, ok := as.LHS.(*build.Ident)
+			if !ok || id.Name != targetName {
+				continue
+			}
+			start, end := id.Span()
+			sc := uint32(runeColToUTF16(li.line(start.Line-1), start.LineRune-1))
+			ec := uint32(runeColToUTF16(li.line(end.Line-1), end.LineRune-1))
+			key := [2]int{start.Line - 1, int(sc)}
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			refs = append(refs, identRef{Range: protocol.Range{
+				Start: protocol.Position{Line: uint32(start.Line - 1), Character: sc},
+				End:   protocol.Position{Line: uint32(end.Line - 1), Character: ec},
+			}})
+		}
+	})
+	return refs
+}
+
+// paramName returns the name bound by a def parameter expression
+// (name, name=default, *name, **name).
+func paramName(e build.Expr) string {
+	switch v := e.(type) {
+	case *build.Ident:
+		return v.Name
+	case *build.AssignExpr:
+		return paramName(v.LHS)
+	case *build.UnaryExpr:
+		return paramName(v.X)
+	}
+	return ""
 }
 
 // defNamePosition locates the name of a def statement. DefStmt.Name is a

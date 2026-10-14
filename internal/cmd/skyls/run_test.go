@@ -70,3 +70,11 @@ func TestEOFWithoutExitIsClean(t *testing.T) {
 		t.Errorf("exit code = %d, want 0", code)
 	}
 }
+
+// EOF inside a declared Content-Length is a protocol error, not a clean stop.
+func TestTruncatedFrameIsError(t *testing.T) {
+	in := frame(initMsg) + "Content-Length: 50\r\n\r\n{\"jsonrpc\""
+	if code, _ := runWith(t, strings.NewReader(in)); code != 1 {
+		t.Errorf("exit code = %d, want 1", code)
+	}
+}

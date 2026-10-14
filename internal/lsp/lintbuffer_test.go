@@ -6,26 +6,18 @@ import (
 	"testing"
 )
 
-// The linter only reads from disk, so findings must never be reported for a
-// buffer that differs from the file (offsets would not line up).
-func TestLintBuffer_SkipsDirtyBuffers(t *testing.T) {
+// Linting uses the in-memory buffer, so offsets always match the document even
+// when it differs from (or is missing on) disk.
+func TestLintBuffer_LintsGivenContent(t *testing.T) {
 	s := NewServer(nil)
 	path := filepath.Join(t.TempDir(), "BUILD")
-	disk := "x = 1\n"
-	if err := os.WriteFile(path, []byte(disk), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("x = 1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
-	if _, err := s.lintBuffer(path, disk); err != nil {
+	if _, err := s.lintBuffer(path, "x = 1\n"); err != nil {
 		t.Errorf("clean buffer: %v", err)
 	}
-
-	findings, err := s.lintBuffer(path, "# edited\nx = 1\n")
-	if err != nil || findings != nil {
-		t.Errorf("dirty buffer: findings=%v err=%v, want nil,nil", findings, err)
-	}
-
-	if _, err := s.lintBuffer(filepath.Join(t.TempDir(), "missing"), "x"); err == nil {
-		t.Error("missing file should report an error")
+	if _, err := s.lintBuffer(path, "# edited\nx = 1\n"); err != nil {
+		t.Errorf("dirty buffer: %v", err)
 	}
 }
