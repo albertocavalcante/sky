@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"unicode"
 
 	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/albertocavalcante/sky/internal/starlark/filekind"
@@ -171,15 +172,27 @@ func getWordAndRangeAtPosition(content string, line, char int) (string, protocol
 	return word, wordRange
 }
 
-// isValidIdentifier reports whether name is a valid Starlark identifier.
+// starlarkReservedSet holds the words the Starlark scanner reserves (they
+// are not valid identifiers) beyond the language keywords.
+var starlarkReservedSet = map[string]bool{
+	"as": true, "async": true, "await": true, "class": true, "del": true,
+	"except": true, "finally": true, "from": true, "global": true,
+	"import": true, "is": true, "nonlocal": true, "raise": true, "try": true,
+	"with": true, "yield": true,
+}
+
+// isValidIdentifier reports whether name is a valid Starlark identifier:
+// a Unicode letter or '_' followed by letters, digits or '_', and not a
+// keyword or reserved word.
 func isValidIdentifier(name string) bool {
-	if name == "" || (name[0] >= '0' && name[0] <= '9') {
+	if name == "" || starlarkKeywordSet[name] || starlarkReservedSet[name] {
 		return false
 	}
-	for i := 0; i < len(name); i++ {
-		if !isIdentChar(name[i]) {
-			return false
+	for i, r := range name {
+		if r == '_' || unicode.IsLetter(r) || (i > 0 && r >= '0' && r <= '9') {
+			continue
 		}
+		return false
 	}
 	return true
 }
