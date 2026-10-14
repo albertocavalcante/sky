@@ -44,13 +44,15 @@ func NewMockManager() *MockManager {
 	}
 }
 
-// Reset clears all mock configurations and call history.
+// Reset clears all mock configurations and call history. Wrappers stay
+// registered (with fresh state) because file-scoped fixtures may keep
+// returning them to later tests.
 func (mm *MockManager) Reset() {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
-	mm.mocks = make(map[*MockWrapper]*mockConfig)
-	mm.wrapped = make(map[starlark.Value]*MockWrapper)
-	mm.nextID = 0
+	for w := range mm.mocks {
+		mm.mocks[w] = &mockConfig{returnValues: make(map[string]starlark.Value)}
+	}
 }
 
 // Wrap wraps a callable to track calls and allow configuration.
