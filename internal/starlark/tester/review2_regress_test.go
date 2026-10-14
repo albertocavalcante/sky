@@ -99,7 +99,11 @@ func TestWatcherHandleEventNoDeadlockWithRefresh(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	// Prove no stuck lock: write lock must be acquirable.
 	ok := make(chan struct{})
-	go func() { w.mu.Lock(); w.mu.Unlock(); close(ok) }()
+	go func() {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		close(ok)
+	}()
 	select {
 	case <-ok:
 	case <-time.After(2 * time.Second):

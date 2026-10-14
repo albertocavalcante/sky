@@ -57,7 +57,7 @@ func TestClientResponsesAreIgnored(t *testing.T) {
 // outbound queue cap is exceeded, instead of growing memory without bound.
 func TestOverloadedClientIsDisconnected(t *testing.T) {
 	pr, pw := io.Pipe()
-	defer pw.Close()
+	defer func() { _ = pw.Close() }()
 	w := &stallWriter{Reader: pr, release: make(chan struct{})}
 	defer close(w.release)
 	var conn *Conn

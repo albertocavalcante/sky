@@ -204,7 +204,8 @@ func TestRunCancelJoinsReaderGoroutine(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	cancel()
 	select {
-	case <-errc:
+	case err := <-errc:
+		t.Logf("Run returned: %v", err)
 	case <-time.After(2 * time.Second):
 		t.Fatal("Run did not return")
 	}

@@ -56,7 +56,7 @@ func TestExitWithoutShutdownIsOne(t *testing.T) {
 // exit must terminate Run even though stdin stays open (blocked in read).
 func TestExitReturnsWhileStdinStaysOpen(t *testing.T) {
 	pr, pw := io.Pipe()
-	defer pw.Close()
+	defer func() { _ = pw.Close() }()
 	go func() {
 		_, _ = io.WriteString(pw, frame(initMsg)+frame(shutdownMsg)+frame(exitMsg))
 	}()

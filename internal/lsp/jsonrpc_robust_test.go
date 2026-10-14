@@ -212,7 +212,8 @@ func TestRunReturnsPromptlyOnCancelWhileBlockedInRead(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	cancel()
 	select {
-	case <-done:
+	case err := <-done:
+		t.Logf("Run returned: %v", err)
 	case <-time.After(2 * time.Second):
 		t.Fatal("Run did not return after cancellation")
 	}
