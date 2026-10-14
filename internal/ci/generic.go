@@ -31,8 +31,8 @@ func (h *GenericHandler) Handle(results *TestResults, stdout, stderr io.Writer) 
 	}
 	printf(stdout, "Total:   %d\n", total)
 
-	if results.Duration != "" {
-		printf(stdout, "Duration: %s\n", results.Duration)
+	if results.DurationMS > 0 {
+		printf(stdout, "Duration: %s\n", results.Duration())
 	}
 	println(stdout)
 
@@ -40,10 +40,10 @@ func (h *GenericHandler) Handle(results *TestResults, stdout, stderr io.Writer) 
 	if failed > 0 {
 		println(stdout, "Failed Tests:")
 		println(stdout, strings.Repeat("-", 40))
-		for _, file := range results.Files {
+		for _, file := range results.Results {
 			for _, test := range file.Tests {
-				if !test.Passed && !test.Skipped {
-					printf(stdout, "  %s::%s\n", filepath.Base(file.Path), test.Name)
+				if !test.Passed {
+					printf(stdout, "  %s::%s\n", filepath.Base(file.File), test.Name)
 					if test.Error != "" {
 						printf(stdout, "    %s\n", test.Error)
 					}

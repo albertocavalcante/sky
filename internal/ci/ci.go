@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/albertocavalcante/sky/internal/skyconfig"
 )
 
 // Exit codes
@@ -40,6 +42,8 @@ type Handler interface {
 type Config struct {
 	System            System
 	CoverageThreshold float64
+	CoverageFile      string
+	Coverage          float64 // measured coverage percentage, if available
 	Annotations       bool
 	Summary           bool
 	Quiet             bool
@@ -58,6 +62,7 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	fs.StringVar(&systemFlag, "system", "", "CI system (github, gitlab, circleci, azure, generic); auto-detected if not set")
 	fs.Float64Var(&cfg.CoverageThreshold, "coverage-threshold", 0, "fail if coverage below threshold (0 to disable)")
+	fs.StringVar(&cfg.CoverageFile, "coverage-file", "coverage.json", "skytest coverage JSON file used for --coverage-threshold")
 	fs.BoolVar(&cfg.Annotations, "annotations", true, "enable PR annotations")
 	fs.BoolVar(&cfg.Summary, "summary", true, "write job summary")
 	fs.BoolVar(&cfg.Quiet, "quiet", false, "suppress stdout output")
@@ -105,6 +110,34 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return exitError
 	}
 
+	// Config file provides defaults for the threshold (coverage.fail_under)
+	// and coverage file (coverage.output); explicit flags win, including an
+	// explicit --coverage-threshold=0 which disables the check.
+	set := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
+	if !set["coverage-threshold"] || !set["coverage-file"] {
+		if skycfg, _, err := skyconfig.DiscoverConfig(""); err != nil {
+			printf(stderr, "sky-ci: warning: loading config: %v\n", err)
+		} else if skycfg != nil {
+			if !set["coverage-threshold"] {
+				cfg.CoverageThreshold = skycfg.Test.Coverage.FailUnder
+			}
+			if !set["coverage-file"] && skycfg.Test.Coverage.Output != "" {
+				cfg.CoverageFile = skycfg.Test.Coverage.Output
+			}
+		}
+	}
+
+	// Load coverage (required when a threshold is set, optional otherwise)
+	coverageKnown := false
+	if cov, err := readCoverage(cfg.CoverageFile); err == nil {
+		cfg.Coverage = cov
+		coverageKnown = true
+	} else if cfg.CoverageThreshold > 0 {
+		printf(stderr, "sky-ci: --coverage-threshold set but coverage unavailable: %v\n", err)
+		return exitError
+	}
+
 	// Get handler for the CI system
 	handler := getHandler(cfg)
 
@@ -116,6 +149,11 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 	// Check for test failures
 	if results.HasFailures() {
+		return exitFailed
+	}
+
+	if cfg.CoverageThreshold > 0 && coverageKnown && cfg.Coverage < cfg.CoverageThreshold {
+		printf(stderr, "sky-ci: coverage %.1f%% is below threshold %.1f%%\n", cfg.Coverage, cfg.CoverageThreshold)
 		return exitFailed
 	}
 
@@ -166,4 +204,25 @@ func getHandler(cfg Config) Handler {
 	default:
 		return &GenericHandler{Config: cfg, Name: "Generic"}
 	}
+}
+
+// readCoverage reads the total percentage from a skytest coverage JSON file.
+func readCoverage(path string) (float64, error) {
+	if path == "" {
+		return 0, fmt.Errorf("no coverage file specified")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	var c struct {
+		Percentage *float64 `json:"percentage"`
+	}
+	if err := json.Unmarshal(data, &c); err != nil {
+		return 0, fmt.Errorf("parsing %s: %w", path, err)
+	}
+	if c.Percentage == nil {
+		return 0, fmt.Errorf("%s has no percentage field", path)
+	}
+	return *c.Percentage, nil
 }

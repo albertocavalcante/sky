@@ -202,3 +202,40 @@ func TestRun_NonexistentFile(t *testing.T) {
 		t.Error("RunWithIO(nonexistent file) returned 0, want non-zero")
 	}
 }
+
+func TestRun_NoPathIsError(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := RunWithIO(context.Background(), []string{"-min", "99"}, nil, &stdout, &stderr); code != 2 {
+		t.Errorf("no path: code = %d, want 2", code)
+	}
+	if stdout.Len() > 0 {
+		t.Error("demo report must not be printed without --demo")
+	}
+}
+
+func TestRun_Demo(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := RunWithIO(context.Background(), []string{"--demo"}, nil, &stdout, &stderr); code != 0 {
+		t.Errorf("--demo: code = %d, stderr: %s", code, stderr.String())
+	}
+	if stdout.Len() == 0 {
+		t.Error("--demo should print the sample report")
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := RunWithIO(context.Background(), []string{"--demo", "-min", "50"}, nil, &stdout, &stderr); code != 2 {
+		t.Errorf("--demo with -min: code = %d, want 2", code)
+	}
+}
+
+func TestRun_BadFormatDoesNotCreateOutput(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "out.txt")
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"--demo", "-format", "nope", "-o", out}, nil, &stdout, &stderr)
+	if code != 2 {
+		t.Errorf("code = %d, want 2", code)
+	}
+	if _, err := os.Stat(out); err == nil {
+		t.Error("output file created despite invalid format")
+	}
+}

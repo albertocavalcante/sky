@@ -62,8 +62,10 @@ runs:
 
     - name: Install sky tools
       shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
       run: |
-        version="${{ inputs.version }}"
+        version="$INPUT_VERSION"
         if [ -z "$version" ]; then
           version="${GITHUB_ACTION_REF:-main}"
         fi
@@ -72,27 +74,42 @@ runs:
 
     # Pipeline pattern: skytest outputs JSON, sky-ci transforms to GitHub format
     # This is cross-platform - bash is available on all GitHub runners
+    # Inputs are passed via env vars (never interpolated into the script) to
+    # avoid shell injection.
     - name: Run tests
       id: test
       shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_RECURSIVE: ${{ inputs.recursive }}
+        INPUT_FAIL_FAST: ${{ inputs.fail-fast }}
+        INPUT_TIMEOUT: ${{ inputs.timeout }}
+        INPUT_COVERAGE: ${{ inputs.coverage }}
+        INPUT_COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
+        INPUT_ANNOTATIONS: ${{ inputs.annotations }}
+        INPUT_SUMMARY: ${{ inputs.summary }}
       run: |
-        FLAGS=""
-        if [ "${{ inputs.recursive }}" = "true" ]; then
-          FLAGS="$FLAGS -r"
+        FLAGS=()
+        if [ "$INPUT_RECURSIVE" = "true" ]; then
+          FLAGS+=(-r)
         fi
-        if [ "${{ inputs.fail-fast }}" = "true" ]; then
-          FLAGS="$FLAGS -x"
+        if [ "$INPUT_FAIL_FAST" = "true" ]; then
+          FLAGS+=(-x)
         fi
-        if [ "${{ inputs.timeout }}" != "" ]; then
-          FLAGS="$FLAGS -timeout=${{ inputs.timeout }}"
+        if [ -n "$INPUT_TIMEOUT" ]; then
+          FLAGS+=("-timeout=$INPUT_TIMEOUT")
+        fi
+        if [ "$INPUT_COVERAGE" = "true" ]; then
+          FLAGS+=(-coverage)
+        fi
+
+        CI_FLAGS=("--annotations=$INPUT_ANNOTATIONS" "--summary=$INPUT_SUMMARY")
+        if [ -n "$INPUT_COVERAGE_THRESHOLD" ] && [ "$INPUT_COVERAGE_THRESHOLD" != "0" ]; then
+          CI_FLAGS+=("--coverage-threshold=$INPUT_COVERAGE_THRESHOLD")
         fi
 
         # Run tests and pipe to CI reporter
-        # shellcheck disable=SC2086
-        skytest -json $FLAGS "${{ inputs.path }}" | sky-ci \
-          --annotations=${{ inputs.annotations }} \
-          --summary=${{ inputs.summary }} \
-          --coverage-threshold=${{ inputs.coverage-threshold }}
+        skytest -json "${FLAGS[@]}" -- "$INPUT_PATH" | sky-ci "${CI_FLAGS[@]}"
 
 branding:
   icon: 'check-circle'

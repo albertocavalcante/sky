@@ -91,7 +91,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	fs.StringVar(&filterFlag, "k", "", "filter tests by name pattern (supports 'not' prefix)")
 	fs.StringVar(&markerFilter, "m", "", "filter tests by marker (supports 'not' prefix, e.g., '-m slow', '-m \"not slow\"')")
 	fs.Var(&preludeFlags, "prelude", "prelude file to load before tests (can be specified multiple times)")
-	fs.DurationVar(&timeoutFlag, "timeout", 0, "timeout per test (0 to use config default)")
+	fs.DurationVar(&timeoutFlag, "timeout", 0, "timeout per test (0 disables; default: from config or 30s)")
 	fs.BoolVar(&bailFlag, "bail", false, "stop on first test failure")
 	fs.BoolVar(&bailShortFlag, "x", false, "stop on first test failure (short for --bail)")
 	// EXPERIMENTAL: Coverage collection requires starlark-go-x with OnExec hook.
@@ -234,12 +234,15 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	// Apply config defaults, then CLI overrides
 	// Timeout: CLI > config > default (30s)
 	effectiveTimeout := cfg.Test.Timeout.Duration
-	if effectiveTimeout == 0 {
+	if effectiveTimeout == 0 && !cfg.Test.Timeout.Set {
 		effectiveTimeout = 30 * time.Second
 	}
-	if timeoutFlag != 0 {
-		effectiveTimeout = timeoutFlag
-	}
+	// An explicit --timeout (including 0, which disables timeouts) wins.
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "timeout" {
+			effectiveTimeout = timeoutFlag
+		}
+	})
 
 	// Parallel: CLI > config > default (empty = sequential)
 	effectiveParallel := cfg.Test.Parallel

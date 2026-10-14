@@ -2044,3 +2044,26 @@ func TestRun_JUnitWithCoverage(t *testing.T) {
 		t.Error("expected coverage file to be created")
 	}
 }
+
+func TestRun_ExplicitTimeoutZeroOverridesConfig(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "sky.toml")
+	if err := os.WriteFile(cfgPath, []byte("[test]\ntimeout = \"20ms\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "test_slowish.star")
+	content := "def test_slowish():\n    x = 0\n    for i in range(5000000):\n        x = x + 1\n    assert.eq(x, 5000000)\n"
+	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if code := RunWithIO(context.Background(), []string{"--config", cfgPath, file}, nil, &stdout, &stderr); code == 0 {
+		t.Fatalf("config timeout 20ms should fail slow test; stdout: %s", stdout.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := RunWithIO(context.Background(), []string{"--config", cfgPath, "--timeout=0", file}, nil, &stdout, &stderr); code != 0 {
+		t.Errorf("--timeout=0 should disable timeout, got %d\nstdout: %s\nstderr: %s", code, stdout.String(), stderr.String())
+	}
+}

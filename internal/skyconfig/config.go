@@ -97,12 +97,16 @@ type LintConfig struct {
 // Duration wraps time.Duration for TOML/JSON string parsing.
 type Duration struct {
 	time.Duration
+	// Set reports whether the value was explicitly specified, so that an
+	// explicit zero ("0s") can be distinguished from "unset".
+	Set bool
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler for Duration.
 func (d *Duration) UnmarshalText(text []byte) error {
 	if len(text) == 0 {
 		d.Duration = 0
+		d.Set = false
 		return nil
 	}
 	dur, err := time.ParseDuration(string(text))
@@ -110,6 +114,7 @@ func (d *Duration) UnmarshalText(text []byte) error {
 		return fmt.Errorf("invalid duration %q: %w", string(text), err)
 	}
 	d.Duration = dur
+	d.Set = true
 	return nil
 }
 
@@ -125,7 +130,7 @@ func (d Duration) MarshalText() ([]byte, error) {
 func DefaultConfig() *Config {
 	return &Config{
 		Test: TestConfig{
-			Timeout:  Duration{30 * time.Second},
+			Timeout:  Duration{Duration: 30 * time.Second},
 			Parallel: "",
 			Prefix:   "test_",
 		},
@@ -302,7 +307,7 @@ func (c *Config) Merge(other *Config) {
 	}
 
 	// Merge test config
-	if other.Test.Timeout.Duration != 0 {
+	if other.Test.Timeout.Duration != 0 || other.Test.Timeout.Set {
 		c.Test.Timeout = other.Test.Timeout
 	}
 	if other.Test.Parallel != "" {

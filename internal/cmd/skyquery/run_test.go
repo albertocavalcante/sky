@@ -231,3 +231,27 @@ func TestRun_NoQuery(t *testing.T) {
 		t.Error("RunWithIO() with no args produced no output")
 	}
 }
+
+func TestRun_KeepGoing(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "good.star"), []byte("x = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bad.star"), []byte("def (:\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if code := RunWithIO(context.Background(), []string{"-workspace", dir, "files(//...)"}, nil, &stdout, &stderr); code == 0 {
+		t.Errorf("parse errors without --keep_going should be non-zero\nstderr: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := RunWithIO(context.Background(), []string{"-workspace", dir, "--keep_going", "files(//...)"}, nil, &stdout, &stderr); code != 0 {
+		t.Errorf("--keep_going returned %d, want 0\nstderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "good.star") {
+		t.Errorf("missing good.star in output: %s", stdout.String())
+	}
+}

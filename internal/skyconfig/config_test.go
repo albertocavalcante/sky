@@ -676,12 +676,12 @@ timeout = "30s"
 
 func TestConfigMerge(t *testing.T) {
 	base := DefaultConfig()
-	base.Test.Timeout = Duration{30 * time.Second}
+	base.Test.Timeout = Duration{Duration: 30 * time.Second}
 	base.Test.Parallel = "auto"
 
 	other := &Config{
 		Test: TestConfig{
-			Timeout:  Duration{60 * time.Second},
+			Timeout:  Duration{Duration: 60 * time.Second},
 			Prelude:  []string{"helpers.star"},
 			FailFast: true,
 		},
@@ -727,5 +727,22 @@ func TestDuration(t *testing.T) {
 				t.Errorf("UnmarshalText(%q) = %v, want %v", tt.input, d.Duration, tt.want)
 			}
 		})
+	}
+}
+
+func TestMerge_ExplicitZeroTimeout(t *testing.T) {
+	base := DefaultConfig()
+	other := &Config{}
+	if err := other.Test.Timeout.UnmarshalText([]byte("0s")); err != nil {
+		t.Fatal(err)
+	}
+	base.Merge(other)
+	if base.Test.Timeout.Duration != 0 || !base.Test.Timeout.Set {
+		t.Errorf("explicit 0s timeout lost in merge: %+v", base.Test.Timeout)
+	}
+	base = DefaultConfig()
+	base.Merge(&Config{})
+	if base.Test.Timeout.Duration != 30*time.Second {
+		t.Errorf("unset timeout should keep default, got %v", base.Test.Timeout)
 	}
 }
