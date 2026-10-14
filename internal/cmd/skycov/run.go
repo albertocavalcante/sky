@@ -1,12 +1,14 @@
 package skycov
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/albertocavalcante/sky/internal/starlark/coverage"
@@ -35,6 +37,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		sourceFlag  string
 		versionFlag bool
 		verboseFlag bool
+		demoFlag    bool
 	)
 
 	fs := flag.NewFlagSet("skycov", flag.ContinueOnError)
@@ -45,6 +48,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	fs.StringVar(&sourceFlag, "source", "", "source directory for relative paths")
 	fs.BoolVar(&versionFlag, "version", false, "print version and exit")
 	fs.BoolVar(&verboseFlag, "v", false, "verbose output")
+	fs.BoolVar(&demoFlag, "demo", false, "show a built-in sample report instead of reading coverage data")
 
 	fs.Usage = func() {
 		writeln(stderr, "Usage: skycov [flags] <coverage-data>")
@@ -94,42 +98,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		return exitOK
 	}
 
-	// For now, generate a demo report since we don't have real coverage data
-	inputFiles := fs.Args()
-	var report *coverage.Report
-
-	if len(inputFiles) == 0 {
-		// Demo mode: show what output looks like
-		report = demoReport()
-		if verboseFlag {
-			writeln(stderr, "skycov: no input files, showing demo output")
-		}
-	} else {
-		// Try to load coverage data (JSON format)
-		var err error
-		report, err = loadCoverageData(inputFiles[0])
-		if err != nil {
-			writef(stderr, "skycov: %v\n", err)
-			writeln(stderr)
-			writeln(stderr, "Note: Coverage collection is not yet implemented.")
-			writeln(stderr, "Run 'skycov --help' for more information.")
-			return exitError
-		}
-	}
-
-	// Select output writer
-	var w io.Writer = stdout
-	if outputFlag != "" {
-		f, err := os.Create(outputFlag)
-		if err != nil {
-			writef(stderr, "skycov: %v\n", err)
-			return exitError
-		}
-		defer func() { _ = f.Close() }()
-		w = f
-	}
-
-	// Select reporter
+	// Validate the format before touching any input or output.
 	var reporter coverage.Reporter
 	switch formatFlag {
 	case "text":
@@ -147,8 +116,44 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		return exitError
 	}
 
-	// Generate report
-	if err := reporter.Report(w, report); err != nil {
+	inputFiles := fs.Args()
+	var report *coverage.Report
+
+	switch {
+	case demoFlag:
+		if minFlag > 0 {
+			writeln(stderr, "skycov: -min cannot be combined with --demo")
+			return exitError
+		}
+		report = demoReport()
+	case len(inputFiles) == 0:
+		writeln(stderr, "skycov: missing coverage data file (use --demo to show sample output)")
+		fs.Usage()
+		return exitError
+	default:
+		var err error
+		report, err = loadCoverageData(inputFiles[0])
+		if err != nil {
+			writef(stderr, "skycov: %v\n", err)
+			writeln(stderr)
+			writeln(stderr, "Note: Coverage collection is not yet implemented.")
+			writeln(stderr, "Run 'skycov --help' for more information.")
+			return exitError
+		}
+	}
+
+	// Render fully in memory so a render error never leaves a partial file.
+	var buf bytes.Buffer
+	if err := reporter.Report(&buf, report); err != nil {
+		writef(stderr, "skycov: %v\n", err)
+		return exitError
+	}
+	if outputFlag != "" {
+		if err := writeFileAtomic(outputFlag, buf.Bytes()); err != nil {
+			writef(stderr, "skycov: %v\n", err)
+			return exitError
+		}
+	} else if _, err := stdout.Write(buf.Bytes()); err != nil {
 		writef(stderr, "skycov: %v\n", err)
 		return exitError
 	}
@@ -241,4 +246,32 @@ func writef(w io.Writer, format string, args ...any) {
 
 func writeln(w io.Writer, args ...any) {
 	_, _ = fmt.Fprintln(w, args...)
+}
+
+// writeFileAtomic writes data to a temp file in the destination directory and
+// renames it into place, so the destination is never left truncated.
+func writeFileAtomic(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".skycov-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(name)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(name)
+		return err
+	}
+	if err := os.Chmod(name, 0o644); err != nil {
+		_ = os.Remove(name)
+		return err
+	}
+	if err := os.Rename(name, path); err != nil {
+		_ = os.Remove(name)
+		return err
+	}
+	return nil
 }
