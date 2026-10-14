@@ -3,6 +3,7 @@ package lsp
 import (
 	"net/url"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"unicode/utf8"
 )
@@ -169,7 +170,13 @@ func uriToPath(uri string) string {
 
 // pathToURI converts a file path to a file:// URI, percent-encoding as needed.
 func pathToURI(path string) string {
-	p := strings.ReplaceAll(path, "\\", "/")
+	p := path
+	// Backslashes are separators only for Windows-style paths (drive letter
+	// or UNC); on Unix they are literal filename characters and get
+	// percent-encoded by url.URL.
+	if runtime.GOOS == "windows" || isWindowsStylePath(path) {
+		p = strings.ReplaceAll(path, "\\", "/")
+	}
 	if len(p) >= 2 && p[1] == ':' && isASCIILetter(p[0]) {
 		p = "/" + p
 	}
@@ -182,6 +189,10 @@ func pathToURI(path string) string {
 		p = "/" + p
 	}
 	return (&url.URL{Scheme: "file", Path: p}).String()
+}
+
+func isWindowsStylePath(p string) bool {
+	return (len(p) >= 2 && p[1] == ':' && isASCIILetter(p[0])) || strings.HasPrefix(p, `\\`)
 }
 
 func isASCIILetter(b byte) bool {
