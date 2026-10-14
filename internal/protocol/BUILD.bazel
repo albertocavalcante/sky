@@ -2,7 +2,10 @@ load("@rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "protocol",
-    srcs = ["protocol.go"],
+    srcs = [
+        "protocol.go",
+        "union.go",
+    ],
     importpath = "github.com/albertocavalcante/sky/internal/protocol",
     visibility = ["//:__subpackages__"],
 )
