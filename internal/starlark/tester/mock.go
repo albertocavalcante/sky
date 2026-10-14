@@ -15,7 +15,7 @@ const MockManagerKey = "skytest.mock_manager"
 // MockManager tracks all mocks and their configurations for a test.
 type MockManager struct {
 	mu      sync.Mutex
-	mocks   map[*MockWrapper]*mockConfig
+	gen     uint64
 	nextID  int
 	wrapped map[starlark.Value]*MockWrapper
 }
@@ -39,20 +39,30 @@ type mockCall struct {
 // NewMockManager creates a new mock manager.
 func NewMockManager() *MockManager {
 	return &MockManager{
-		mocks:   make(map[*MockWrapper]*mockConfig),
 		wrapped: make(map[starlark.Value]*MockWrapper),
 	}
 }
 
-// Reset clears all mock configurations and call history. Wrappers stay
-// registered (with fresh state) because file-scoped fixtures may keep
-// returning them to later tests.
+// Reset clears all mock configurations and call history in O(1) by bumping a
+// generation; each wrapper lazily drops its state on next use. Wrappers keep
+// working (with fresh state) because file-scoped fixtures may keep returning
+// them to later tests, but the manager stops referencing them so discarded
+// wrappers (e.g. one per parametrized case) can be collected.
 func (mm *MockManager) Reset() {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
-	for w := range mm.mocks {
-		mm.mocks[w] = &mockConfig{returnValues: make(map[string]starlark.Value)}
+	mm.gen++
+	mm.wrapped = make(map[starlark.Value]*MockWrapper)
+}
+
+// config returns the wrapper's state for the current generation.
+// The caller must hold mm.mu.
+func (mm *MockManager) config(w *MockWrapper) *mockConfig {
+	if w.cfg == nil || w.gen != mm.gen {
+		w.cfg = &mockConfig{returnValues: make(map[string]starlark.Value)}
+		w.gen = mm.gen
 	}
+	return w.cfg
 }
 
 // Wrap wraps a callable to track calls and allow configuration.
@@ -76,10 +86,6 @@ func (mm *MockManager) Wrap(fn starlark.Value) (*MockWrapper, error) {
 		wrapped: fn,
 		manager: mm,
 	}
-
-	mm.mocks[wrapper] = &mockConfig{
-		returnValues: make(map[string]starlark.Value),
-	}
 	mm.wrapped[fn] = wrapper
 
 	return wrapper, nil
@@ -89,7 +95,7 @@ func (mm *MockManager) Wrap(fn starlark.Value) (*MockWrapper, error) {
 func (mm *MockManager) recordCall(wrapper *MockWrapper, args starlark.Tuple, kwargs []starlark.Tuple) {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
-	cfg := mm.mocks[wrapper]
+	cfg := mm.config(wrapper)
 	if cfg != nil {
 		cfg.calls = append(cfg.calls, mockCall{args: args, kwargs: kwargs})
 	}
@@ -99,7 +105,7 @@ func (mm *MockManager) recordCall(wrapper *MockWrapper, args starlark.Tuple, kwa
 func (mm *MockManager) setReturn(wrapper *MockWrapper, value starlark.Value) {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
-	cfg := mm.mocks[wrapper]
+	cfg := mm.config(wrapper)
 	if cfg != nil {
 		cfg.returnValue = value
 	}
@@ -109,7 +115,7 @@ func (mm *MockManager) setReturn(wrapper *MockWrapper, value starlark.Value) {
 func (mm *MockManager) setReturnForArgs(wrapper *MockWrapper, argsKey string, value starlark.Value) {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
-	cfg := mm.mocks[wrapper]
+	cfg := mm.config(wrapper)
 	if cfg != nil {
 		cfg.returnValues[argsKey] = value
 	}
@@ -119,7 +125,7 @@ func (mm *MockManager) setReturnForArgs(wrapper *MockWrapper, argsKey string, va
 func (mm *MockManager) getReturn(wrapper *MockWrapper, args starlark.Tuple) starlark.Value {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
-	cfg := mm.mocks[wrapper]
+	cfg := mm.config(wrapper)
 	if cfg == nil {
 		return nil
 	}
@@ -138,7 +144,7 @@ func (mm *MockManager) getReturn(wrapper *MockWrapper, args starlark.Tuple) star
 func (mm *MockManager) wasCalled(wrapper *MockWrapper) bool {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
-	cfg := mm.mocks[wrapper]
+	cfg := mm.config(wrapper)
 	return cfg != nil && len(cfg.calls) > 0
 }
 
@@ -146,7 +152,7 @@ func (mm *MockManager) wasCalled(wrapper *MockWrapper) bool {
 func (mm *MockManager) callCount(wrapper *MockWrapper) int {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
-	cfg := mm.mocks[wrapper]
+	cfg := mm.config(wrapper)
 	if cfg == nil {
 		return 0
 	}
@@ -157,7 +163,7 @@ func (mm *MockManager) callCount(wrapper *MockWrapper) int {
 func (mm *MockManager) getCalls(wrapper *MockWrapper) []mockCall {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
-	cfg := mm.mocks[wrapper]
+	cfg := mm.config(wrapper)
 	if cfg == nil {
 		return nil
 	}
@@ -180,6 +186,9 @@ type MockWrapper struct {
 	id      int
 	wrapped starlark.Value
 	manager *MockManager
+	// cfg and gen are guarded by manager.mu.
+	cfg *mockConfig
+	gen uint64
 }
 
 // String implements starlark.Value.

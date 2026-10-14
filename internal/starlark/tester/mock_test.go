@@ -259,3 +259,47 @@ func TestNewMockFixture(t *testing.T) {
 		}
 	}
 }
+
+func TestMockResetDoesNotRetainDiscardedWrappers(t *testing.T) {
+	mm := NewMockManager()
+	for i := 0; i < 50; i++ {
+		fn := starlark.NewBuiltin("f", func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
+			return starlark.None, nil
+		})
+		if _, err := mm.Wrap(fn); err != nil {
+			t.Fatal(err)
+		}
+		mm.Reset()
+	}
+	mm.mu.Lock()
+	n := len(mm.wrapped)
+	mm.mu.Unlock()
+	if n != 0 {
+		t.Errorf("manager retains %d registrations after reset; want 0", n)
+	}
+}
+
+func TestMockWrapperSurvivesResetWithFreshState(t *testing.T) {
+	mm := NewMockManager()
+	fn := starlark.NewBuiltin("f", func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
+		return starlark.MakeInt(1), nil
+	})
+	w, err := mm.Wrap(fn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mm.setReturn(w, starlark.MakeInt(7))
+	if _, err := w.CallInternal(&starlark.Thread{}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	mm.Reset()
+	if mm.callCount(w) != 0 || mm.getReturn(w, nil) != nil {
+		t.Fatal("state not cleared by reset")
+	}
+	if _, err := w.CallInternal(&starlark.Thread{}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if mm.callCount(w) != 1 {
+		t.Errorf("surviving wrapper did not record call after reset: %d", mm.callCount(w))
+	}
+}
