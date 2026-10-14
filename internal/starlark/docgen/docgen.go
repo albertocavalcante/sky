@@ -109,6 +109,7 @@ func ExtractFile(filename string, src []byte, opts Options) (*ModuleDoc, error) 
 	}
 
 	// Extract functions and globals
+	globalIdx := make(map[string]int)
 	for _, stmt := range f.Stmts {
 		switch s := stmt.(type) {
 		case *syntax.DefStmt:
@@ -118,8 +119,15 @@ func ExtractFile(filename string, src []byte, opts Options) (*ModuleDoc, error) 
 			}
 
 		case *syntax.AssignStmt:
-			// Only simple assignments (x = value)
-			if ident, ok := s.LHS.(*syntax.Ident); ok {
+			// Only simple assignments (x = value); augmented assignments
+			// (x += value) are not new definitions.
+			if ident, ok := s.LHS.(*syntax.Ident); ok && s.Op == syntax.EQ {
+				// A reassignment updates the existing entry instead of
+				// emitting a duplicate global.
+				if i, seen := globalIdx[ident.Name]; seen {
+					doc.Globals[i].Value = truncateValue(s.RHS)
+					continue
+				}
 				globalDoc := GlobalDoc{
 					Name:      ident.Name,
 					Value:     truncateValue(s.RHS),
@@ -127,6 +135,7 @@ func ExtractFile(filename string, src []byte, opts Options) (*ModuleDoc, error) 
 					IsPrivate: strings.HasPrefix(ident.Name, "_"),
 				}
 				if opts.IncludePrivate || !globalDoc.IsPrivate {
+					globalIdx[globalDoc.Name] = len(doc.Globals)
 					doc.Globals = append(doc.Globals, globalDoc)
 				}
 			}
