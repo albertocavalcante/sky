@@ -32,8 +32,11 @@ func (r *TestResults) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*r = TestResults(p)
-	_, hasTotal := keys["total"]
-	r.hasAggregate = hasTotal
+	present := func(k string) bool {
+		v, ok := keys[k]
+		return ok && string(v) != "null"
+	}
+	r.hasAggregate = present("passed") && present("failed") && present("total")
 	return nil
 }
 
@@ -73,14 +76,13 @@ func (r *TestResults) Summary() (passed, failed, skipped, total int) {
 			}
 		}
 	}
-	if !r.hasAggregate {
+	// Only trust the aggregate when it is complete and consistent with the
+	// individual results; otherwise a partial or stale aggregate could hide
+	// failures that the per-test entries show.
+	if !r.hasAggregate || r.Failed != tFailed || r.Passed > tPassed || r.Total != r.Passed+r.Failed {
 		return tPassed, tFailed, 0, tPassed + tFailed
 	}
-	passed, failed = r.Passed, r.Failed
-	total = r.Total
-	if total == 0 {
-		total = passed + failed
-	}
+	passed, failed, total = r.Passed, r.Failed, r.Total
 	if extra := tPassed - passed; extra > 0 {
 		skipped = extra
 	}

@@ -68,7 +68,7 @@ jobs:
 | -------------------- | ------------------------------------------------ | -------- |
 | `path`               | Path to test files                               | `.`      |
 | `recursive`          | Search directories recursively                   | `true`   |
-| `coverage-threshold` | Minimum coverage percentage (0 to disable)       | `0`      |
+| `coverage-threshold` | Minimum coverage percentage (empty defers to config `coverage.fail_under`; `0` disables) | `''` |
 | `annotations`        | Enable GitHub annotations                        | `true`   |
 | `summary`            | Write to job summary                             | `true`   |
 | `version`            | Sky module version, branch, or commit hash       | action ref |
