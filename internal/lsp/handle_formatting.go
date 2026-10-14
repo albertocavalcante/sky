@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"strings"
 
 	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/albertocavalcante/sky/internal/starlark/filekind"
@@ -44,17 +43,13 @@ func (s *Server) handleFormatting(ctx context.Context, params json.RawMessage) (
 	}
 
 	// Return a single edit that replaces the entire document
-	lines := strings.Count(doc.Content, "\n")
-	lastLineLen := len(doc.Content)
-	if idx := strings.LastIndex(doc.Content, "\n"); idx >= 0 {
-		lastLineLen = len(doc.Content) - idx - 1
-	}
+	endLine, endChar := offsetToPosition(doc.Content, len(doc.Content))
 
 	return []protocol.TextEdit{
 		{
 			Range: protocol.Range{
 				Start: protocol.Position{Line: 0, Character: 0},
-				End:   protocol.Position{Line: uint32(lines), Character: uint32(lastLineLen)},
+				End:   protocol.Position{Line: endLine, Character: endChar},
 			},
 			NewText: formattedStr,
 		},
