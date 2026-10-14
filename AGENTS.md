@@ -39,13 +39,18 @@ make gazelle # Generate/update BUILD.bazel files
 1. Git: `git branch --show-current` before commit. `git add <file>` explicitly, never `git add .`.
 2. Formatting: run `just format` (Go) and `just format-sh` (shell) before commit.
 3. Lint: run `just lint` (Go) and `just lint-sh` (shell) before commit.
+4. Bug fixes: write the failing regression test first and confirm it fails.
+5. Never edit generated code by hand; change the generator and regenerate.
+6. Do not push or open a PR unless the user asked. Never `git push --force`.
 
 ## READ BEFORE ACTING
 
-| IF task involves...            | THEN read                      |
-| ------------------------------ | ------------------------------ |
-| Creating branch, committing PR | `.agent/rules/git-workflow.md` |
-| Writing tests, naming, style   | `.agent/rules/code-quality.md` |
+| IF task involves...           | THEN read                       |
+| ----------------------------- | ------------------------------- |
+| Creating branch, committing   | `.agent/rules/git-workflow.md`  |
+| Opening or updating a PR      | `.agent/rules/pull-requests.md` |
+| Writing tests, naming, style  | `.agent/rules/code-quality.md`  |
+| Addressing PR review feedback | `.agent/workflows/review.md`    |
 
 ## Repository Layout
 
