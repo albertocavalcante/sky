@@ -25,6 +25,7 @@ go_test(
         "discovery_test.go",
         "extract_test.go",
         "glob_test.go",
+        "graph_norm_test.go",
         "graph_test.go",
         "index_test.go",
         "types_test.go",

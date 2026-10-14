@@ -49,6 +49,10 @@ func writeTree(t *testing.T, root string, files ...string) {
 	}
 }
 
+func writeContent(root, name, content string) error {
+	return os.WriteFile(filepath.Join(root, name), []byte(content), 0o644)
+}
+
 func TestDiscoverGlobPatterns(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, "a.bzl", "lib/a.bzl", "lib/sub/x.bzl", "lib/x.bzl", "MODULE.bazel", "pkg/BUILD.bazel", "pkg/test_a.bzl", "pkg/b.bzl")
