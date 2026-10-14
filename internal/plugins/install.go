@@ -124,9 +124,15 @@ func samePath(a, b string) bool {
 }
 
 // ownsBinary reports whether path is a file directly inside this store's
-// plugins directory.
+// plugins directory (by its own location, not its symlink target).
 func (s *Store) ownsBinary(path string) bool {
-	return filepath.Dir(canonicalPath(path)) == canonicalPath(s.PluginsDir())
+	// Do not follow the final component: it may be a symlink that lives
+	// outside the store but points into it.
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	return canonicalPath(filepath.Dir(abs)) == canonicalPath(s.PluginsDir())
 }
 
 // downloadIdleTimeout aborts a download whose body makes no progress for this long.
@@ -154,14 +160,13 @@ func newDownloadClient() *http.Client {
 
 // idleReader cancels the request when no bytes arrive within the timeout.
 type idleReader struct {
-	r      io.Reader
-	timer  *time.Timer
-	d      time.Duration
-	cancel context.CancelFunc
+	r     io.Reader
+	timer *time.Timer
+	d     time.Duration
 }
 
 func newIdleReader(r io.Reader, d time.Duration, cancel context.CancelFunc) *idleReader {
-	return &idleReader{r: r, d: d, cancel: cancel, timer: time.AfterFunc(d, cancel)}
+	return &idleReader{r: r, d: d, timer: time.AfterFunc(d, cancel)}
 }
 
 func (i *idleReader) Read(p []byte) (int, error) {
