@@ -100,3 +100,26 @@ func TestRename_DefaultsResolveInEnclosingScope(t *testing.T) {
 		})
 	}
 }
+
+func TestRename_FirstComprehensionIterableResolvesOutside(t *testing.T) {
+	tests := []struct {
+		name    string
+		code    string
+		old     string
+		newName string
+		refused bool
+	}{
+		{"first iterable captured by loop var", "x = 1\nr = [len([]) for len in [len]]\n", "x", "len", true},
+		{"first iterable sees renamed global", "x = [1, 2]\nr = [y for y in x]\n", "x", "y", false},
+		{"dict comprehension first iterable", "x = [1, 2]\nr = {y: 1 for y in x}\n", "x", "y", false},
+		{"nested comprehension in first iterable", "x = [1, 2]\nr = [z for z in [y for y in x]]\n", "x", "y", false},
+		{"later iterable is inside", "x = [1, 2]\nr = [y for w in [[1]] for y in x]\n", "x", "y", true},
+		{"condition is inside", "x = 1\nr = [y for y in [1, 2] if y != x]\n", "x", "y", true},
+		{"body is inside", "x = 1\nr = [y + x for y in [1, 2]]\n", "x", "y", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			checkRenameByExecution(t, tt.code, tt.old, tt.newName, tt.refused)
+		})
+	}
+}

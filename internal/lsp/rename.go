@@ -261,8 +261,9 @@ func renameCapture(file *build.File, oldName, newName string) string {
 		return append(out, file)
 	}
 	// useChain is chain for a use: path is the ancestors of the node followed
-	// by the node itself. A parameter default is evaluated in the scope
-	// enclosing the def or lambda, so that scope is left out of its chain.
+	// by the node itself. A parameter default and the first iterable of a
+	// comprehension are evaluated in the scope enclosing the def, lambda or
+	// comprehension, so that scope is left out of their chain.
 	useChain := func(path []build.Expr) []any {
 		out := []any{}
 		for i := len(path) - 2; i >= 0; i-- {
@@ -396,7 +397,8 @@ func renameCapture(file *build.File, oldName, newName string) string {
 
 // evaluatedOutside reports whether the node at the end of path, which lies
 // below the scope node path[i], is evaluated in the scope enclosing path[i]
-// rather than inside it: a parameter default of a def or lambda.
+// rather than inside it: a parameter default of a def or lambda, or the first
+// iterable of a comprehension.
 func evaluatedOutside(path []build.Expr, i int) bool {
 	if i+2 >= len(path) {
 		return false
@@ -407,6 +409,12 @@ func evaluatedOutside(path []build.Expr, i int) bool {
 		return isDefault(scope.Params, child, next)
 	case *build.LambdaExpr:
 		return isDefault(scope.Params, child, next)
+	case *build.Comprehension:
+		if len(scope.Clauses) == 0 || child != scope.Clauses[0] {
+			return false
+		}
+		fc, ok := child.(*build.ForClause)
+		return ok && next == fc.X
 	}
 	return false
 }
