@@ -639,6 +639,12 @@ func runTests(
 	result := &tester.RunResult{}
 	start := time.Now()
 
+	// One registry per run, shared by the per-file runners, so snapshot names
+	// that share a file are detected across files too.
+	if opts.SnapshotOwners == nil {
+		opts.SnapshotOwners = tester.NewSnapshotOwners()
+	}
+
 	for _, file := range files {
 		src, err := os.ReadFile(file)
 		if err != nil {
@@ -725,6 +731,12 @@ func runSequential(
 	result := &tester.RunResult{}
 	start := time.Now()
 
+	// One registry per run, shared by the per-file runners, so snapshot names
+	// that share a file are detected across files too.
+	if opts.SnapshotOwners == nil {
+		opts.SnapshotOwners = tester.NewSnapshotOwners()
+	}
+
 	for _, file := range files {
 		src, err := os.ReadFile(file)
 		if err != nil {
@@ -796,6 +808,12 @@ func runParallel(
 	stdout, _ io.Writer,
 ) (*tester.RunResult, error) {
 	start := time.Now()
+
+	// One registry per run, shared by the per-file runners, so snapshot names
+	// that share a file are detected across files too.
+	if opts.SnapshotOwners == nil {
+		opts.SnapshotOwners = tester.NewSnapshotOwners()
+	}
 
 	// Channel for file paths to process
 	jobs := make(chan string, len(files))

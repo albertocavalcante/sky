@@ -2067,3 +2067,28 @@ func TestRun_ExplicitTimeoutZeroOverridesConfig(t *testing.T) {
 		t.Errorf("--timeout=0 should disable timeout, got %d\nstdout: %s\nstderr: %s", code, stdout.String(), stderr.String())
 	}
 }
+
+// test_pair.star and test_pair.bzl share one snapshot directory and are run by
+// separate per-file runners; "a/b" and "a_b" resolve to the same snapshot file.
+// The run must report that instead of letting the second file reuse the first
+// file's baseline.
+func TestRun_SnapshotCollisionAcrossFiles(t *testing.T) {
+	dir := t.TempDir()
+	first := filepath.Join(dir, "test_pair.star")
+	second := filepath.Join(dir, "test_pair.bzl")
+	if err := os.WriteFile(first, []byte("def test_value():\n    assert.snapshot(\"v1\", \"a/b\")\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(second, []byte("def test_value():\n    assert.snapshot(\"v2\", \"a_b\")\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{first, second}, nil, &stdout, &stderr)
+	if code != exitFailed {
+		t.Fatalf("exit = %d, want %d\nstdout:\n%s\nstderr:\n%s", code, exitFailed, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "map to the same file") {
+		t.Errorf("output does not report the collision:\n%s", stdout.String())
+	}
+}
