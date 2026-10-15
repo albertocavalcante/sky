@@ -201,6 +201,9 @@ func (s *Store) upsertPluginNL(plugin Plugin) error {
 		return err
 	}
 
+	// Work on a copy: plugins may be the cached slice, which must not change
+	// if the save below fails.
+	plugins = append([]Plugin(nil), plugins...)
 	replaced := false
 	for i := range plugins {
 		if plugins[i].Name == plugin.Name {

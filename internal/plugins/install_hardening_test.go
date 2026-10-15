@@ -368,3 +368,46 @@ func TestInstall_CleanupDoesNotDeleteSymlinkOutsideStore(t *testing.T) {
 		t.Fatalf("symlink outside store deleted: %v", err)
 	}
 }
+
+func TestInstall_FailedReinstallKeepsPreviousBinary(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("directory permission bits do not restrict writes on Windows")
+	}
+	dir := t.TempDir()
+	v1 := filepath.Join(dir, "v1")
+	v2 := filepath.Join(dir, "v2")
+	writeTestFile(t, v1, "one")
+	writeTestFile(t, v2, "two")
+	root := filepath.Join(dir, "root")
+	s := NewStore(root)
+	p, err := s.InstallFromPath("foo", v1, "1", TypeExecutable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A read-only root makes the catalog write fail (the lock file exists
+	// already) while the plugins directory stays writable.
+	if err := os.Chmod(root, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(root, 0o755) })
+	if f, err := os.CreateTemp(root, "probe-"); err == nil {
+		_ = f.Close()
+		t.Skip("read-only directory is still writable (running as root?)")
+	}
+
+	if _, err := s.InstallFromPath("foo", v2, "2", TypeExecutable); err == nil {
+		t.Fatal("reinstall should fail when the catalog cannot be written")
+	}
+	got, err := os.ReadFile(p.Path)
+	if err != nil || string(got) != "one" {
+		t.Fatalf("previous binary lost: %q, %v", got, err)
+	}
+	cur, err := s.FindPlugin("foo")
+	if err != nil || cur == nil || cur.Version != "1" {
+		t.Fatalf("catalog does not match the binary: %+v, %v", cur, err)
+	}
+	entries, _ := os.ReadDir(s.PluginsDir())
+	if len(entries) != 1 {
+		t.Fatalf("leftover files in plugins dir: %v", entries)
+	}
+}

@@ -88,11 +88,22 @@ func (s *Store) commitInstall(tmpName string, plugin Plugin) error {
 		if err := os.Chmod(tmpName, 0o755); err != nil {
 			return fmt.Errorf("chmod plugin: %w", err)
 		}
+		// Park the live binary under a backup name so a failed catalog write
+		// can put it back; the catalog and the binary must never disagree.
+		backup, err := s.parkBinary(dest, plugin.Name)
+		if err != nil {
+			return err
+		}
 		if err := os.Rename(tmpName, dest); err != nil {
+			restoreBinary(backup, dest)
 			return fmt.Errorf("install plugin: %w", err)
 		}
 		if err := s.upsertPluginNL(plugin); err != nil {
+			restoreBinary(backup, dest)
 			return err
+		}
+		if backup != "" {
+			_ = os.Remove(backup)
 		}
 		if oldPath != "" && s.ownsBinary(oldPath) && !samePath(oldPath, dest) {
 			if err := os.Remove(oldPath); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -101,6 +112,37 @@ func (s *Store) commitInstall(tmpName string, plugin Plugin) error {
 		}
 		return nil
 	})
+}
+
+// parkBinary moves an existing file at dest to a unique backup name in the
+// plugins directory and returns that name, or "" when dest does not exist.
+func (s *Store) parkBinary(dest, name string) (string, error) {
+	if _, err := os.Lstat(dest); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", fmt.Errorf("stat plugin: %w", err)
+	}
+	f, err := os.CreateTemp(s.PluginsDir(), name+"-bak-")
+	if err != nil {
+		return "", fmt.Errorf("create backup: %w", err)
+	}
+	backup := f.Name()
+	_ = f.Close()
+	if err := os.Rename(dest, backup); err != nil {
+		_ = os.Remove(backup)
+		return "", fmt.Errorf("back up previous plugin binary: %w", err)
+	}
+	return backup, nil
+}
+
+// restoreBinary undoes parkBinary, replacing whatever is at dest.
+func restoreBinary(backup, dest string) {
+	if backup == "" {
+		_ = os.Remove(dest)
+		return
+	}
+	_ = os.Rename(backup, dest)
 }
 
 // canonicalPath returns an absolute path with symlinks resolved as far as the
