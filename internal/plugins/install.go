@@ -95,7 +95,10 @@ func (s *Store) commitInstall(tmpName string, plugin Plugin) error {
 			return err
 		}
 		if err := os.Rename(tmpName, dest); err != nil {
-			restoreBinary(backup, dest)
+			// dest was never touched; just drop the backup.
+			if backup != "" {
+				_ = os.Remove(backup)
+			}
 			return fmt.Errorf("install plugin: %w", err)
 		}
 		if err := s.upsertPluginNL(plugin); err != nil {
@@ -114,8 +117,11 @@ func (s *Store) commitInstall(tmpName string, plugin Plugin) error {
 	})
 }
 
-// parkBinary moves an existing file at dest to a unique backup name in the
+// parkBinary backs up an existing file at dest under a unique name in the
 // plugins directory and returns that name, or "" when dest does not exist.
+// The live binary stays at dest the whole time (the backup is a hard link, or
+// a copy where links are unsupported) so a concurrent launch never sees the
+// path missing.
 func (s *Store) parkBinary(dest, name string) (string, error) {
 	if _, err := os.Lstat(dest); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -129,14 +135,21 @@ func (s *Store) parkBinary(dest, name string) (string, error) {
 	}
 	backup := f.Name()
 	_ = f.Close()
-	if err := os.Rename(dest, backup); err != nil {
-		_ = os.Remove(backup)
-		return "", fmt.Errorf("back up previous plugin binary: %w", err)
+	// Free the reserved name for os.Link; the write lock serialises installs.
+	if err := os.Remove(backup); err != nil {
+		return "", fmt.Errorf("create backup: %w", err)
+	}
+	if err := os.Link(dest, backup); err != nil {
+		if err := copyFile(dest, backup, 0o755); err != nil {
+			_ = os.Remove(backup)
+			return "", fmt.Errorf("back up previous plugin binary: %w", err)
+		}
 	}
 	return backup, nil
 }
 
-// restoreBinary undoes parkBinary, replacing whatever is at dest.
+// restoreBinary undoes a committed rename by atomically moving the backup
+// back over dest, or removing dest when there was no previous binary.
 func restoreBinary(backup, dest string) {
 	if backup == "" {
 		_ = os.Remove(dest)

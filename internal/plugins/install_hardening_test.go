@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -527,6 +528,62 @@ func TestInstall_FailedReinstallKeepsPreviousBinary(t *testing.T) {
 	cur, err := s.FindPlugin("foo")
 	if err != nil || cur == nil || cur.Version != "1" {
 		t.Fatalf("catalog does not match the binary: %+v, %v", cur, err)
+	}
+	entries, _ := os.ReadDir(s.PluginsDir())
+	if len(entries) != 1 {
+		t.Fatalf("leftover files in plugins dir: %v", entries)
+	}
+}
+
+// A reinstall must never make the published path disappear: a concurrent
+// launch of the plugin would fail with ENOENT.
+func TestInstall_ReinstallNeverLeavesDestMissing(t *testing.T) {
+	dir := t.TempDir()
+	v1 := filepath.Join(dir, "v1")
+	v2 := filepath.Join(dir, "v2")
+	writeTestFile(t, v1, "one")
+	writeTestFile(t, v2, "two")
+	s := NewStore(filepath.Join(dir, "root"))
+	p, err := s.InstallFromPath("foo", v1, "1", TypeExecutable)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var missing atomic.Int64
+	stop := make(chan struct{})
+	started := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		close(started)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			if _, err := os.Stat(p.Path); err != nil {
+				missing.Add(1)
+			}
+		}
+	}()
+	<-started
+	for i := 0; i < 300; i++ {
+		src := v1
+		if i%2 == 0 {
+			src = v2
+		}
+		if _, err := s.InstallFromPath("foo", src, "x", TypeExecutable); err != nil {
+			close(stop)
+			wg.Wait()
+			t.Fatal(err)
+		}
+	}
+	close(stop)
+	wg.Wait()
+	if n := missing.Load(); n != 0 {
+		t.Fatalf("plugin path was missing %d times during reinstalls", n)
 	}
 	entries, _ := os.ReadDir(s.PluginsDir())
 	if len(entries) != 1 {
