@@ -23,7 +23,9 @@ func CoverageMeets(covered, total int, threshold float64) bool {
 		return false
 	}
 	// covered*100/total >= t  <=>  covered*100 >= t*total
-	lhs := new(big.Rat).SetInt64(int64(covered) * 100)
+	// Multiply in big arithmetic: int64(covered)*100 wraps above ~9.2e16.
+	lhs := new(big.Rat).SetInt64(int64(covered))
+	lhs.Mul(lhs, big.NewRat(100, 1))
 	rhs := t.Mul(t, new(big.Rat).SetInt64(int64(total)))
 	return lhs.Cmp(rhs) >= 0
 }

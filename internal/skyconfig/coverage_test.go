@@ -72,3 +72,34 @@ func TestCoverageMeetsKnownCases(t *testing.T) {
 		}
 	}
 }
+
+// covered*100 must not be computed in int64: it wraps above ~9.2e16 lines.
+func TestCoverageMeetsHugeCounts(t *testing.T) {
+	if math.MaxInt < math.MaxInt64 {
+		t.Skip("int is narrower than 64 bits")
+	}
+	const e17, e18 = 100_000_000_000_000_000, 1_000_000_000_000_000_000
+	tests := []struct {
+		name           string
+		covered, total int
+		threshold      float64
+		want           bool
+	}{
+		{"1e17 of 1e17 at 80", e17, e17, 80, true},
+		{"1e17 of 1e17 at 100", e17, e17, 100, true},
+		{"1e18 of 1e18 at 100", e18, e18, 100, true},
+		{"1e17-1 of 1e17 at 100", e17 - 1, e17, 100, false},
+		{"MaxInt64 of MaxInt64 at 100", math.MaxInt64, math.MaxInt64, 100, true},
+		{"MaxInt64-1 of MaxInt64 at 100", math.MaxInt64 - 1, math.MaxInt64, 100, false},
+		{"half of MaxInt64 at 50.1", math.MaxInt64 / 2, math.MaxInt64, 50.1, false},
+		{"zero of 1e18 at 1", 0, e18, 1, false},
+		{"negative covered fails", -1, e18, 1, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := CoverageMeets(tt.covered, tt.total, tt.threshold); got != tt.want {
+				t.Errorf("CoverageMeets(%d, %d, %v) = %v, want %v", tt.covered, tt.total, tt.threshold, got, tt.want)
+			}
+		})
+	}
+}
