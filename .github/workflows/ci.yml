@@ -216,6 +216,43 @@ jobs:
           shfmt -d -i 2 -ci $(find . -name '*.sh' -not -path './vendor/*' -not -path './bazel-*')
 
   # ===========================================================================
+  # Job: Cross-platform vet (catches build-tag regressions without a runner
+  # per OS: vet type-checks every file selected by the target GOOS)
+  # ===========================================================================
+  cross-vet:
+    name: Vet (${{ matrix.goos }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [windows, darwin]
+    permissions:
+      contents: read
+      id-token: write   # OIDC federation for octo-sts (private module auth)
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-cst-private-auth
+
+      # actions/setup-go v6.2.0
+      - name: Setup Go
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Go vet
+        env:
+          GOOS: ${{ matrix.goos }}
+        run: go vet ./...
+
+  # ===========================================================================
   # Job 6: Security Scan (optional but recommended)
   # ===========================================================================
   security:
