@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -65,6 +66,46 @@ func TestAnnotationEscaping(t *testing.T) {
 	for _, want := range []string{"%3A", "%2C", "%0A", "%25", "%0D"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %s in %q", want, got)
+		}
+	}
+}
+
+// 57 of 100 lines is exactly 57%; 57/100*100 is 56.99999999999999 in float64.
+func TestCoverageThresholdExactEqualityPasses(t *testing.T) {
+	cov := filepath.Join(t.TempDir(), "cov.json")
+	if err := os.WriteFile(cov, []byte(`{"files":{},"total_lines":100,"covered_lines":57,"percentage": 57}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	const pass = `{"passed":1,"failed":0,"total":1,"files":1,"duration_ms":1,"results":[{"file":"a","duration_ms":1,"tests":[{"name":"t","passed":true,"duration_ms":1}]}]}`
+	var o, e bytes.Buffer
+	args := []string{"--system=generic", "--coverage-file=" + cov, "--coverage-threshold=57"}
+	if c := Run(args, strings.NewReader(pass), &o, &e); c != exitOK {
+		t.Errorf("57/100 at threshold 57: code=%d, stderr=%s", c, e.String())
+	}
+}
+
+// 64.4*250 is 16100.000000000002 in float64: 161 of 250 lines is exactly 64.4%
+// and must pass, 160 of 250 must still fail.
+func TestCoverageThresholdDecimalEquality(t *testing.T) {
+	const pass = `{"passed":1,"failed":0,"total":1,"files":1,"duration_ms":1,"results":[{"file":"a","duration_ms":1,"tests":[{"name":"t","passed":true,"duration_ms":1}]}]}`
+	tests := []struct {
+		covered int
+		pct     string
+		want    int
+	}{
+		{161, "64.4", exitOK},
+		{160, "64", exitFailed},
+	}
+	for _, tt := range tests {
+		cov := filepath.Join(t.TempDir(), "cov.json")
+		body := `{"files":{},"total_lines":250,"covered_lines":` + strconv.Itoa(tt.covered) + `,"percentage": ` + tt.pct + `}`
+		if err := os.WriteFile(cov, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var o, e bytes.Buffer
+		args := []string{"--system=generic", "--coverage-file=" + cov, "--coverage-threshold=64.4"}
+		if c := Run(args, strings.NewReader(pass), &o, &e); c != tt.want {
+			t.Errorf("%d/250 at threshold 64.4: code=%d, want %d, stderr=%s", tt.covered, c, tt.want, e.String())
 		}
 	}
 }

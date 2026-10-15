@@ -1,0 +1,16 @@
+{
+  "tier_a": [
+    "internal/lsp/jsonrpc*",
+    "internal/lsp/server.go",
+    "internal/plugins/install*",
+    "internal/plugins/store*",
+    "internal/protocol/*",
+    "tools/sync-protocol/*",
+    "internal/cmd/*/run.go",
+    "internal/ci/*",
+    "internal/atomicfile/*",
+    "internal/starlark/tester/snapshot*.go",
+    "sky-action/*"
+  ],
+  "max_b_lines": 400
+}

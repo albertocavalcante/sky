@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"unicode/utf8"
 
 	"github.com/bazelbuild/buildtools/build"
 
@@ -361,16 +362,24 @@ func getWordAtPosition(content string, line, char int) string {
 	}
 	pos := utf16ColToByte(lineContent, char)
 
-	// Find start of word (use package-level isIdentChar)
+	// Find start of word (runes, with the identifier rules rename uses)
 	start := pos
-	for start > 0 && isIdentChar(lineContent[start-1]) {
-		start--
+	for start > 0 {
+		r, size := utf8.DecodeLastRuneInString(lineContent[:start])
+		if !isIdentRune(r) {
+			break
+		}
+		start -= size
 	}
 
 	// Find end of word
 	end := pos
-	for end < len(lineContent) && isIdentChar(lineContent[end]) {
-		end++
+	for end < len(lineContent) {
+		r, size := utf8.DecodeRuneInString(lineContent[end:])
+		if !isIdentRune(r) {
+			break
+		}
+		end += size
 	}
 
 	if start == end {

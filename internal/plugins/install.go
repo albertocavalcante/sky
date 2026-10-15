@@ -88,11 +88,25 @@ func (s *Store) commitInstall(tmpName string, plugin Plugin) error {
 		if err := os.Chmod(tmpName, 0o755); err != nil {
 			return fmt.Errorf("chmod plugin: %w", err)
 		}
+		// Park the live binary under a backup name so a failed catalog write
+		// can put it back; the catalog and the binary must never disagree.
+		backup, err := s.parkBinary(dest, plugin.Name)
+		if err != nil {
+			return err
+		}
 		if err := os.Rename(tmpName, dest); err != nil {
+			if backup != "" {
+				// dest was never touched; just drop the backup.
+				_ = os.Remove(backup)
+			}
 			return fmt.Errorf("install plugin: %w", err)
 		}
 		if err := s.upsertPluginNL(plugin); err != nil {
+			restoreBinary(backup, dest)
 			return err
+		}
+		if backup != "" {
+			_ = os.Remove(backup)
 		}
 		if oldPath != "" && s.ownsBinary(oldPath) && !samePath(oldPath, dest) {
 			if err := os.Remove(oldPath); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -101,6 +115,57 @@ func (s *Store) commitInstall(tmpName string, plugin Plugin) error {
 		}
 		return nil
 	})
+}
+
+// parkBinary backs up an existing regular file at dest under a unique name in
+// the plugins directory and returns that name. The live binary stays at dest
+// the whole time (the backup is a hard link, or a copy where links are
+// unsupported) so a concurrent launch never sees the path missing.
+//
+// Anything that is not a regular file (symlink, device, directory, ...) gets
+// no backup: it is never followed or read, and the later os.Rename of the
+// staged file replaces it atomically (a symlink is swapped in one step; a
+// directory makes the rename fail before anything changes). Rollback of a
+// failed catalog write is therefore only provided for regular-file plugins.
+// An empty backup is returned when dest is absent or not a regular file.
+func (s *Store) parkBinary(dest, name string) (backup string, err error) {
+	info, err := os.Lstat(dest)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", fmt.Errorf("stat plugin: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", nil
+	}
+	f, err := os.CreateTemp(s.PluginsDir(), name+"-bak-")
+	if err != nil {
+		return "", fmt.Errorf("create backup: %w", err)
+	}
+	backup = f.Name()
+	_ = f.Close()
+	// Free the reserved name; the write lock serialises installs.
+	if err := os.Remove(backup); err != nil {
+		return "", fmt.Errorf("create backup: %w", err)
+	}
+	if err := os.Link(dest, backup); err != nil {
+		if err := copyFile(dest, backup, 0o755); err != nil {
+			_ = os.Remove(backup)
+			return "", fmt.Errorf("back up previous plugin binary: %w", err)
+		}
+	}
+	return backup, nil
+}
+
+// restoreBinary undoes a committed rename by atomically moving the backup
+// back over dest, or removing dest when there was no previous binary.
+func restoreBinary(backup, dest string) {
+	if backup == "" {
+		_ = os.Remove(dest)
+		return
+	}
+	_ = os.Rename(backup, dest)
 }
 
 // canonicalPath returns an absolute path with symlinks resolved as far as the
@@ -119,7 +184,15 @@ func canonicalPath(p string) string {
 	return abs
 }
 
+// samePath reports whether a and b name the same file. Existing paths are
+// compared with os.SameFile, since string comparison is wrong on
+// case-insensitive filesystems.
 func samePath(a, b string) bool {
+	if fa, err := os.Stat(a); err == nil {
+		if fb, err := os.Stat(b); err == nil {
+			return os.SameFile(fa, fb)
+		}
+	}
 	return canonicalPath(a) == canonicalPath(b)
 }
 
@@ -132,7 +205,15 @@ func (s *Store) ownsBinary(path string) bool {
 	if err != nil {
 		return false
 	}
-	return canonicalPath(filepath.Dir(abs)) == canonicalPath(s.PluginsDir())
+	dir, err := os.Stat(filepath.Dir(abs))
+	if err != nil {
+		return false
+	}
+	plugins, err := os.Stat(s.PluginsDir())
+	if err != nil {
+		return false
+	}
+	return os.SameFile(dir, plugins)
 }
 
 // downloadIdleTimeout aborts a download whose body makes no progress for this long.
