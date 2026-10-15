@@ -34,6 +34,7 @@ go_test(
         "mock_test.go",
         "review2_regress_test.go",
         "runner_regress_test.go",
+        "snapshot_legacy_test.go",
         "tester_test.go",
         "watcher_regress_test.go",
         "watcher_test.go",
