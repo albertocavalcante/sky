@@ -114,6 +114,16 @@ elif [ -s "$gh_path" ]; then
   fail "unknown ref: GITHUB_PATH was written"
 fi
 
+# 5. A version that looks like an option is rejected before git sees it.
+run_install opt --upload-pack=true "$tmp/unused/sky-action"
+if [ "$status" -eq 0 ]; then
+  fail "option-like version: expected failure"
+elif ! grep -q "must not start with '-'" <<<"$out"; then
+  fail "option-like version: unclear message: $out"
+elif [ -s "$gh_path" ]; then
+  fail "option-like version: GITHUB_PATH was written"
+fi
+
 if [ "$failures" -ne 0 ]; then
   echo "$failures failure(s)" >&2
   exit 1

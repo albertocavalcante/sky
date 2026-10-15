@@ -30,11 +30,17 @@ if [ -z "$version" ]; then
     exit 1
   fi
 else
+  case "$version" in
+    -*)
+      echo "error: version '$version' must not start with '-'" >&2
+      exit 1
+      ;;
+  esac
   src="$work/sky-src"
   rm -rf "$src"
   git init --quiet "$src"
   git -C "$src" remote add origin "$repo_url"
-  if ! git -C "$src" fetch --quiet --depth 1 origin "$version"; then
+  if ! git -C "$src" fetch --quiet --depth 1 -- origin "$version"; then
     echo "error: cannot fetch ref '$version' from $repo_url (use a branch, tag or full commit SHA)" >&2
     exit 1
   fi
