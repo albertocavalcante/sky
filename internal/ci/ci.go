@@ -4,6 +4,7 @@
 package ci
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -195,12 +196,48 @@ func detectSystem() System {
 
 // readResults reads and parses JSON test results from stdin.
 func readResults(r io.Reader) (*TestResults, error) {
-	var results TestResults
 	decoder := json.NewDecoder(r)
-	if err := decoder.Decode(&results); err != nil {
+	var raw json.RawMessage
+	if err := decoder.Decode(&raw); err != nil {
+		return nil, fmt.Errorf("parsing JSON: %w", err)
+	}
+	// Exactly one report: anything after it (a second report, garbage) could
+	// hide failures, so reject it rather than ignore it.
+	// Scan the remainder in fixed-size chunks: stop at the first
+	// non-whitespace byte and never buffer the stream (it may be endless).
+	if err := rejectTrailingData(io.MultiReader(decoder.Buffered(), r)); err != nil {
+		return nil, err
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &keys); err != nil {
+		return nil, fmt.Errorf("parsing JSON: report must be an object: %w", err)
+	}
+	if v, ok := keys["results"]; !ok || string(v) == "null" {
+		return nil, fmt.Errorf("invalid report: missing \"results\" array (not skytest -json output?)")
+	}
+	var results TestResults
+	if err := json.Unmarshal(raw, &results); err != nil {
 		return nil, fmt.Errorf("parsing JSON: %w", err)
 	}
 	return &results, nil
+}
+
+// rejectTrailingData returns an error at the first byte of r that is not JSON
+// whitespace, reading at most one chunk beyond it. Linear in the whitespace.
+func rejectTrailingData(r io.Reader) error {
+	var buf [4096]byte
+	for {
+		n, err := r.Read(buf[:])
+		if len(bytes.Trim(buf[:n], " \t\r\n")) != 0 {
+			return fmt.Errorf("unexpected data after the JSON report; expected exactly one skytest -json report")
+		}
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("reading input: %w", err)
+		}
+	}
 }
 
 // getHandler returns the appropriate handler for the CI system.

@@ -16,7 +16,10 @@ go_library(
 
 go_test(
     name = "ci_test",
-    srcs = ["ci_test.go"],
+    srcs = [
+        "ci_test.go",
+        "input_test.go",
+    ],
     embed = [":ci"],
     deps = ["//internal/cmd/skytest"],
 )
