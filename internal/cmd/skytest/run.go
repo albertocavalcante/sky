@@ -410,15 +410,11 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	// EXPERIMENTAL: Coverage collection requires starlark-go-x with OnExec hook.
 	// TODO(upstream): Remove experimental note once OnExec is merged.
 	if effectiveCoverage && coverageRunner != nil {
-		if err := writeCoverageReport(coverageRunner, effectiveCoverageOut, coverageMode, stderr); err != nil {
+		// A stale report's exact mode is applied to the temp file before the
+		// rename (no umask, no path-based chmod that could follow a symlink).
+		if err := writeCoverageReport(coverageRunner, effectiveCoverageOut, coverageMode, hadStaleReport, stderr); err != nil {
 			writef(stderr, "skytest: coverage: %v\n", err)
 			// Don't fail the run for coverage errors, just warn
-		} else if hadStaleReport {
-			// The helper applies the umask to the mode it is given; the stale
-			// report's exact mode is restored so a rerun does not tighten it.
-			if err := os.Chmod(effectiveCoverageOut, coverageMode); err != nil {
-				writef(stderr, "skytest: coverage: restoring mode of %s: %v\n", effectiveCoverageOut, err)
-			}
 		}
 	}
 
@@ -464,7 +460,9 @@ func checkCoverageThreshold(report *coverage.Report, threshold float64, enabled 
 
 // writeCoverageReport writes the coverage data to a JSON file.
 // EXPERIMENTAL: Coverage data is only collected when starlark-go-x OnExec hook is enabled.
-func writeCoverageReport(runner *tester.Runner, outPath string, perm os.FileMode, stderr io.Writer) error {
+//
+// With exact set, perm is applied as is; otherwise it is subject to the umask.
+func writeCoverageReport(runner *tester.Runner, outPath string, perm os.FileMode, exact bool, stderr io.Writer) error {
 	report := runner.CoverageReport()
 	if report != nil && report.TotalLines == 0 {
 		// Written for tooling that inspects it, but total_lines is 0: consumers
@@ -485,7 +483,11 @@ func writeCoverageReport(runner *tester.Runner, outPath string, perm os.FileMode
 	}
 
 	// Write to a unique temp file and rename so readers never see a partial report.
-	if err := atomicfile.Write(outPath, data, perm); err != nil {
+	write := atomicfile.Write
+	if exact {
+		write = atomicfile.WriteExact
+	}
+	if err := write(outPath, data, perm); err != nil {
 		return fmt.Errorf("writing %s: %w", outPath, err)
 	}
 

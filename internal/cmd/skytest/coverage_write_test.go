@@ -35,7 +35,7 @@ func TestWriteCoverageReportDoesNotUsePredictableTmp(t *testing.T) {
 	if err := os.Symlink(victim, out+".tmp"); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeCoverageReport(covRunner(t), out, 0o666, &bytes.Buffer{}); err != nil {
+	if err := writeCoverageReport(covRunner(t), out, 0o666, false, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := os.ReadFile(victim); string(b) != "keep" {
@@ -50,7 +50,7 @@ func TestWriteCoverageReportPreservesMode(t *testing.T) {
 	if err := os.WriteFile(out, []byte("old"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeCoverageReport(covRunner(t), out, 0o600, &bytes.Buffer{}); err != nil {
+	if err := writeCoverageReport(covRunner(t), out, 0o600, true, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	fi, _ := os.Stat(out)

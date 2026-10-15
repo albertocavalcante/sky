@@ -14,11 +14,19 @@ import (
 // An existing destination keeps its permission bits; a new one gets
 // perm subject to the process umask.
 func Write(path string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	mode, err := finalMode(dir, path, perm)
+	mode, err := finalMode(filepath.Dir(path), path, perm)
 	if err != nil {
 		return err
 	}
+	return WriteExact(path, data, mode)
+}
+
+// WriteExact atomically replaces path with data and gives the new file
+// exactly mode (no umask, no inspection of the existing destination). The
+// mode is set on the open temporary file before any content is written and
+// before the rename, so no path-based chmod is needed afterwards.
+func WriteExact(path string, data []byte, mode os.FileMode) error {
+	dir := filepath.Dir(path)
 	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
 	if err != nil {
 		return err
