@@ -4,6 +4,7 @@
 package ci
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -202,7 +203,13 @@ func readResults(r io.Reader) (*TestResults, error) {
 	}
 	// Exactly one report: anything after it (a second report, garbage) could
 	// hide failures, so reject it rather than ignore it.
-	if _, err := decoder.Token(); err != io.EOF {
+	// Read the remainder once (O(n)); Decoder.Token rescans buffered
+	// whitespace after every short read.
+	rest, err := io.ReadAll(io.MultiReader(decoder.Buffered(), r))
+	if err != nil {
+		return nil, fmt.Errorf("reading input: %w", err)
+	}
+	if len(bytes.Trim(rest, " \t\r\n")) != 0 {
 		return nil, fmt.Errorf("unexpected data after the JSON report; expected exactly one skytest -json report")
 	}
 	var keys map[string]json.RawMessage
