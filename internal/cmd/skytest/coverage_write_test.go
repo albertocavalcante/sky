@@ -4,6 +4,7 @@ package skytest
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,5 +59,33 @@ func TestWriteCoverageReportPreservesMode(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(out); !strings.Contains(string(b), "total_lines") {
 		t.Errorf("content not replaced: %q", b)
+	}
+}
+
+func TestRun_StaleReportKeepsExactModeUnderUmask(t *testing.T) {
+	old := syscall.Umask(0o077)
+	defer syscall.Umask(old)
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_a.star")
+	if err := os.WriteFile(file, []byte("def test_a():\n    pass\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "cov.json")
+	if err := os.WriteFile(out, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(out, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if code := RunWithIO(context.Background(), []string{"--coverage", "--coverprofile=" + out, file}, nil, &stdout, &stderr); code != exitOK {
+		t.Fatalf("exit = %d\nstderr: %s", code, stderr.String())
+	}
+	fi, err := os.Stat(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o644 {
+		t.Errorf("mode = %v, want 0644 (the stale report's mode)", fi.Mode().Perm())
 	}
 }
