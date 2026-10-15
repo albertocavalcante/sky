@@ -21,6 +21,12 @@ func TestInferExprType_Regressions(t *testing.T) {
 		{"set([\"a\"])", "set[str]"},
 		{"x.pop()", "Unknown"},
 		{"[1, 2].pop()", "int"},
+		{"dict(a=1)", "dict[str, int]"},
+		{"dict(a=1, b=2)", "dict[str, int]"},
+		{"dict(a=1, b=\"s\")", "dict[str, int | str]"},
+		{"dict(a=1, b=\"s\")[\"b\"]", "int | str"},
+		{"dict(a=1, b=x)", "dict[str, Unknown]"},
+		{"dict(a=x, b=1)", "dict[str, Unknown]"},
 	}
 	for _, tt := range tests {
 		got := InferExprType(parseExpr(t, tt.code)).String()

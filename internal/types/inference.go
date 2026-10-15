@@ -167,19 +167,27 @@ func inferCall(e *build.CallExpr) TypeRef {
 			if len(e.List) > 0 {
 				// Check if arguments are all keyword assignments
 				allKeyword := true
-				var valType TypeRef
+				var valTypes []TypeRef
 				for _, arg := range e.List {
-					if assign, ok := arg.(*build.AssignExpr); ok {
-						if valType == nil {
-							valType = InferExprType(assign.RHS)
-						}
-					} else {
+					assign, ok := arg.(*build.AssignExpr)
+					if !ok {
 						allKeyword = false
 						break
 					}
+					valType := InferExprType(assign.RHS)
+					if valType.IsUnknown() {
+						// One unknown value makes the whole value type unknown.
+						valTypes = []TypeRef{Unknown()}
+						continue
+					}
+					if len(valTypes) == 1 && valTypes[0].IsUnknown() {
+						continue
+					}
+					valTypes = append(valTypes, valType)
 				}
-				if allKeyword && valType != nil {
-					return Dict(Str(), valType)
+				if allKeyword && len(valTypes) > 0 {
+					// Every keyword contributes: dict(a=1, b="s") has int | str values.
+					return Dict(Str(), Union(valTypes...))
 				}
 			}
 		case "tuple":
