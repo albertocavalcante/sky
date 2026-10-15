@@ -99,7 +99,10 @@ func TestRun_FailUnderEqualToCoveragePasses(t *testing.T) {
 	}
 }
 
-func TestRun_FailUnderOneLineShortFails(t *testing.T) {
+// Guard, not proof: 160 of 250 (64%) also failed under the old float
+// comparison. TestRun_FailUnderEqualToCoveragePasses (161 of 250) is the case
+// that proves the exact comparison.
+func TestRun_FailUnderOneLineShortStillFails_Guard(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := RunWithIO(context.Background(), sizedGateFixture(t, "64.4", 160, 250), nil, &stdout, &stderr)
 	if strings.Contains(stderr.String(), "coverage unavailable") {
@@ -163,10 +166,11 @@ func TestCheckCoverageThreshold(t *testing.T) {
 	}{
 		{"below", &coverage.Report{TotalLines: 10, CoveredLines: 7}, 80, exitFailed, "below threshold"},
 		{"equal passes", &coverage.Report{TotalLines: 10, CoveredLines: 8}, 80, exitOK, ""},
+		// Proving cases: the float comparison wrongly failed these equalities.
 		// 57/100*100 is 56.99999999999999 in float64; exact equality passes.
 		{"exact equality 57 of 100", &coverage.Report{TotalLines: 100, CoveredLines: 57}, 57, exitOK, ""},
 		{"exact equality 161 of 250 at 64.4", &coverage.Report{TotalLines: 250, CoveredLines: 161}, 64.4, exitOK, ""},
-		{"one line short 160 of 250 at 64.4", &coverage.Report{TotalLines: 250, CoveredLines: 160}, 64.4, exitFailed, "below threshold"},
+		{"guard: 160 of 250 at 64.4 (old code also failed)", &coverage.Report{TotalLines: 250, CoveredLines: 160}, 64.4, exitFailed, "below threshold"},
 		{"one line short", &coverage.Report{TotalLines: 100, CoveredLines: 56}, 57, exitFailed, "below threshold"},
 		{"above passes", &coverage.Report{TotalLines: 10, CoveredLines: 10}, 80, exitOK, ""},
 		// Like sky-ci, zero measured lines is "unavailable", never 100%.
