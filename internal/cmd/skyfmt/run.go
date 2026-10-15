@@ -286,6 +286,11 @@ func expandPath(path string) ([]string, error) {
 	}
 
 	if !info.IsDir() {
+		// An explicit non-regular file (FIFO, device, socket) could block
+		// forever when read.
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("%s: not a regular file", path)
+		}
 		return []string{path}, nil
 	}
 
