@@ -64,16 +64,34 @@ jobs:
 
 ## Inputs
 
-| Input                | Description                                      | Default  |
-| -------------------- | ------------------------------------------------ | -------- |
-| `path`               | Path to test files                               | `.`      |
-| `recursive`          | Search directories recursively                   | `true`   |
-| `coverage-threshold` | Minimum coverage percentage (empty defers to config `coverage.fail_under`; `0` disables) | `''` |
-| `annotations`        | Enable GitHub annotations                        | `true`   |
-| `summary`            | Write to job summary                             | `true`   |
-| `version`            | Sky module version, branch, or commit hash       | action ref |
-| `fail-fast`          | Stop on first test failure                       | `false`  |
-| `timeout`            | Timeout per test (Go duration format, e.g., 30s) | `30s`    |
+| Input                | Description                                                                              | Default    |
+| -------------------- | ---------------------------------------------------------------------------------------- | ---------- |
+| `path`               | Path to test files                                                                       | `.`        |
+| `recursive`          | Search directories recursively                                                           | `true`     |
+| `coverage-threshold` | Minimum coverage percentage (empty defers to config `coverage.fail_under`; `0` disables) | `''`       |
+| `annotations`        | Enable GitHub annotations                                                                | `true`     |
+| `summary`            | Write to job summary                                                                     | `true`     |
+| `version`            | Sky branch, tag, or full commit SHA to build                                             | action ref |
+| `fail-fast`          | Stop on first test failure                                                               | `false`    |
+| `timeout`            | Timeout per test (Go duration format, e.g., 30s)                                         | `30s`      |
+
+## Installation
+
+The action builds `skytest` and `sky-ci` from source with `sky-action/install.sh`
+and adds them to `PATH`. It cannot use `go install ...@version`, because sky's
+`go.mod` has `replace` directives.
+
+- `version` empty (default): builds from the checkout of the action itself, so
+  the tools always match the ref in `uses:`.
+- `version` set: shallow-fetches that branch, tag, or **full** commit SHA (short
+  SHAs are not supported) from `github.com/albertocavalcante/sky` and builds it.
+- Go: set up from the action checkout's `go.mod`. If the requested `version`
+  needs a newer Go, the build downloads it (`GOTOOLCHAIN=auto`), so the runner
+  needs access to the Go toolchain download.
+- Credentials: `skytest` and `sky-ci` depend only on public modules, so no
+  private-module token is needed to build them.
+
+Offline test for the install logic: `just test-action-install`.
 
 ## Outputs
 

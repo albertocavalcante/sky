@@ -61,6 +61,10 @@ lint-sh:
     shellcheck $(find . -name '*.sh' -not -path './vendor/*' -not -path './bazel-*')
     shfmt -d -i 2 -ci $(find . -name '*.sh' -not -path './vendor/*' -not -path './bazel-*')
 
+# Test the GitHub Action install script (offline)
+test-action-install:
+    bash sky-action/install_test.sh
+
 # Update BUILD.bazel files via Gazelle
 gazelle:
     bazel run //:gazelle
