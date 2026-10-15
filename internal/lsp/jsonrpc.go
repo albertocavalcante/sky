@@ -166,8 +166,8 @@ const maxMessageSize = 64 << 20 // 64 MiB
 // Header limits. Legitimate headers are a few dozen bytes; anything larger
 // is hostile or corrupt, and the stream cannot be resynchronised.
 const (
-	maxHeaderLine  = 8 << 30  // one header line, including its terminator
-	maxHeaderBytes = 64 << 30 // all header lines of one message
+	maxHeaderLine  = 8 << 10  // one header line, including its terminator
+	maxHeaderBytes = 64 << 10 // all header lines of one message
 )
 
 // errHeaderTooLarge is returned when a header line or block exceeds its cap.
