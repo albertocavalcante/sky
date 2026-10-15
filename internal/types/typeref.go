@@ -295,13 +295,19 @@ func Union(types ...TypeRef) TypeRef {
 		}
 	}
 
-	// Remove duplicates (simple equality check)
-	seen := make(map[string]bool)
+	// Remove duplicates structurally. Comparing with Equal rather than
+	// rendering with String keeps this cheap for deeply nested types: String
+	// rebuilds the whole subtree for every candidate.
 	deduped := make([]TypeRef, 0, len(flat))
 	for _, t := range flat {
-		key := t.String()
-		if !seen[key] {
-			seen[key] = true
+		dup := false
+		for _, d := range deduped {
+			if d.Equal(t) {
+				dup = true
+				break
+			}
+		}
+		if !dup {
 			deduped = append(deduped, t)
 		}
 	}
