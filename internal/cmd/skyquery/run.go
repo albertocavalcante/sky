@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/albertocavalcante/sky/internal/starlark/query"
 	"github.com/albertocavalcante/sky/internal/starlark/query/index"
@@ -18,6 +19,34 @@ const (
 	exitOK    = 0
 	exitError = 1
 )
+
+// validateWorkspace checks that *workspace is a readable directory and
+// replaces it with the symlink-resolved path: recursive discovery does not
+// follow a symlink given as the root, so a linked workspace would otherwise
+// index nothing.
+func validateWorkspace(workspace *string) error {
+	info, err := os.Stat(*workspace)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("not a directory")
+	}
+	f, err := os.Open(*workspace)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	if _, err := f.Readdirnames(1); err != nil && err != io.EOF {
+		return err
+	}
+	resolved, err := filepath.EvalSymlinks(*workspace)
+	if err != nil {
+		return err
+	}
+	*workspace = resolved
+	return nil
+}
 
 // Run executes skyquery with the given arguments.
 // Returns exit code.
@@ -99,11 +128,8 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 
 	// An invalid workspace is a usage error, not a parse error: fail before
 	// indexing so --keep_going cannot hide it.
-	if info, err := os.Stat(workspace); err != nil {
+	if err := validateWorkspace(&workspace); err != nil {
 		writef(stderr, "skyquery: invalid workspace %q: %v\n", workspace, err)
-		return exitError
-	} else if !info.IsDir() {
-		writef(stderr, "skyquery: invalid workspace %q: not a directory\n", workspace)
 		return exitError
 	}
 

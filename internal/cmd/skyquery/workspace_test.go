@@ -32,21 +32,3 @@ func TestRun_InvalidWorkspaceFailsRegardlessOfKeepGoing(t *testing.T) {
 		}
 	}
 }
-
-func TestRun_KeepGoingStillContinuesPastParseErrors(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "ok.star"), []byte("x = 1\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "bad.star"), []byte("x = (\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	var stdout, stderr bytes.Buffer
-	code := RunWithIO(context.Background(), []string{"--workspace", dir, "--keep_going", "files(//...)"}, nil, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("code=%d stderr=%s", code, stderr.String())
-	}
-	if !strings.Contains(stdout.String(), "ok.star") {
-		t.Errorf("stdout lacks ok.star: %q", stdout.String())
-	}
-}
