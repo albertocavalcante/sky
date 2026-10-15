@@ -37,8 +37,16 @@ func validateWorkspace(workspace *string) error {
 		return err
 	}
 	defer func() { _ = f.Close() }()
-	if _, err := f.Readdirnames(1); err != nil && err != io.EOF {
+	names, err := f.Readdirnames(1)
+	if err != nil && err != io.EOF {
 		return err
+	}
+	// A directory that is listable but not searchable (mode r--) lets the
+	// listing succeed while every entry fails to stat or open.
+	if len(names) > 0 {
+		if _, err := os.Stat(filepath.Join(*workspace, names[0])); err != nil {
+			return err
+		}
 	}
 	resolved, err := filepath.EvalSymlinks(*workspace)
 	if err != nil {

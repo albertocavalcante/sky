@@ -42,6 +42,37 @@ func TestRun_UnreadableWorkspaceFailsRegardlessOfKeepGoing(t *testing.T) {
 	}
 }
 
+func TestRun_UntraversableWorkspaceFailsRegardlessOfKeepGoing(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	ws := filepath.Join(t.TempDir(), "readonly")
+	if err := os.Mkdir(ws, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ws, "a.star"), []byte("x = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Listable but not searchable: entries cannot be stat'ed or opened.
+	if err := os.Chmod(ws, 0o400); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(ws, 0o755) })
+
+	for _, extra := range [][]string{nil, {"--keep_going"}} {
+		args := append([]string{"--workspace", ws}, extra...)
+		args = append(args, "files(//...)")
+		var stdout, stderr bytes.Buffer
+		code := RunWithIO(context.Background(), args, nil, &stdout, &stderr)
+		if code == 0 {
+			t.Errorf("RunWithIO(%v) = 0, want non-zero; stderr=%q", args, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "invalid workspace") {
+			t.Errorf("RunWithIO(%v): stderr lacks the invalid-workspace message: %q", args, stderr.String())
+		}
+	}
+}
+
 func TestRun_SymlinkedWorkspace(t *testing.T) {
 	dir := t.TempDir()
 	real := filepath.Join(dir, "real")
