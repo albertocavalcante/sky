@@ -23,6 +23,7 @@ go_test(
     name = "index_test",
     srcs = [
         "discovery_edge_test.go",
+        "discovery_special_test.go",
         "discovery_test.go",
         "extract_test.go",
         "glob_test.go",

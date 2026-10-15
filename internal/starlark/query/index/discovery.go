@@ -84,8 +84,8 @@ func discoverBazelPattern(pattern string, root string) ([]string, error) {
 		return discoverInDirectory(filePath)
 	}
 
-	// Single file
-	if IsStarlarkFile(filepath.Base(filePath)) {
+	// Single file (regular files only: never open a FIFO, device or socket)
+	if info.Mode().IsRegular() && IsStarlarkFile(filepath.Base(filePath)) {
 		return []string{filePath}, nil
 	}
 
@@ -108,8 +108,8 @@ func discoverGlobPattern(pattern string, root string) ([]string, error) {
 			if !IsStarlarkFile(filepath.Base(match)) {
 				continue
 			}
-			// Follow symlinks but skip directories.
-			if st, err := os.Stat(match); err != nil || st.IsDir() {
+			// Follow symlinks; keep only regular files.
+			if !isFileCandidate(match) {
 				continue
 			}
 			result = append(result, match)
@@ -203,15 +203,28 @@ func discoverRecursiveGlob(root string, pattern string) ([]string, error) {
 }
 
 // isFileEntry reports whether a directory entry that is not itself a directory
-// is a usable file. Symlinks are followed: a link to a file is a file (it is
-// read through the link, like filepath.Glob matches), while a link to a
-// directory or a dangling link is skipped so it is never opened as a file.
+// is a candidate file. Only regular files qualify: FIFOs, devices and sockets
+// are skipped because reading them can block forever. Symlinks are followed
+// (a link to a file is read through the link, like filepath.Glob matches); a
+// link to a directory, to a non-regular file, or a dangling link is skipped.
 func isFileEntry(path string, entry os.DirEntry) bool {
 	if entry.Type()&os.ModeSymlink == 0 {
-		return true
+		return entry.Type().IsRegular()
 	}
+	return isFileCandidate(path)
+}
+
+// isFileCandidate stats path (following symlinks) and reports whether it
+// should be indexed. A target that does not exist is skipped silently. Any
+// other stat error (for example EACCES behind an unreadable directory) keeps
+// the path as a candidate, so indexing it reports the error to the user
+// instead of dropping the file without a trace.
+func isFileCandidate(path string) bool {
 	st, err := os.Stat(path)
-	return err == nil && !st.IsDir()
+	if err != nil {
+		return !os.IsNotExist(err)
+	}
+	return st.Mode().IsRegular()
 }
 
 // IsStarlarkFile checks if a filename is a Starlark file.
