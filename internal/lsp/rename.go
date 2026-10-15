@@ -116,7 +116,7 @@ func (s *Server) handleRename(ctx context.Context, params json.RawMessage) (any,
 			Message: "cannot rename: file has syntax errors",
 		}
 	}
-	refs, err := collectRenameRefs(doc.Content, file, word)
+	refs, err := collectRenameRefs(doc.Content, file, word, p.NewName)
 	if err != nil {
 		return nil, &ResponseError{Code: CodeRequestFailed, Message: err.Error()}
 	}

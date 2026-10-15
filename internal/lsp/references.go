@@ -385,8 +385,11 @@ func hasNamedParam(def *build.DefStmt, name string) bool {
 // reach the def unpacks **kwargs, the edit could silently break that call, so
 // an error is returned and the caller must refuse the rename. Calls through
 // attributes, loaded names and undefined globals are assumed to be foreign.
+// A rename is also refused when a resolved call already passes newName= as a
+// keyword next to targetName=, or when the callee takes **kwargs and a call
+// passes newName=, since the renamed parameter would then be bound twice.
 // Calls in other files cannot be seen and are not renamed.
-func collectRenameRefs(content string, file *build.File, targetName string) ([]identRef, error) {
+func collectRenameRefs(content string, file *build.File, targetName, newName string) ([]identRef, error) {
 	refs := collectIdentRefs(content, file, targetName)
 
 	bindings := collectBindings(file)
@@ -414,7 +417,7 @@ func collectRenameRefs(content string, file *build.File, targetName string) ([]i
 	for _, r := range refs {
 		seen[[2]int{int(r.Range.Start.Line), int(r.Range.Start.Character)}] = true
 	}
-	var unresolved string
+	var unresolved, conflict string
 	refuse := func(what string) {
 		if unresolved == "" {
 			unresolved = what
@@ -426,12 +429,18 @@ func collectRenameRefs(content string, file *build.File, targetName string) ([]i
 			return
 		}
 		var labels []*build.Ident
+		passesNew := false // some argument is labelled newName=
 		kwUnpack := false
 		for _, arg := range call.List {
 			switch a := arg.(type) {
 			case *build.AssignExpr:
-				if id, ok := a.LHS.(*build.Ident); ok && id.Name == targetName {
-					labels = append(labels, id)
+				if id, ok := a.LHS.(*build.Ident); ok {
+					switch id.Name {
+					case targetName:
+						labels = append(labels, id)
+					case newName:
+						passesNew = true
+					}
 				}
 			case *build.UnaryExpr:
 				if a.Op == "**" {
@@ -439,7 +448,8 @@ func collectRenameRefs(content string, file *build.File, targetName string) ([]i
 				}
 			}
 		}
-		if len(labels) == 0 && !kwUnpack {
+		rewrites := len(labels) > 0 || kwUnpack
+		if !rewrites && !passesNew {
 			return
 		}
 		switch fn := unwrapParens(call.X).(type) {
@@ -451,21 +461,32 @@ func collectRenameRefs(content string, file *build.File, targetName string) ([]i
 			case b == nil || (len(b.defs) == 0 && b.others == 0):
 				return // builtin, undefined global or loaded name: not a def in this file
 			case len(b.defs) == 1 && b.others == 0 && b.loads == 0:
-				if !hasNamedParam(b.defs[0], targetName) {
+				def := b.defs[0]
+				if !hasNamedParam(def, targetName) {
 					return // resolved to a def with a different signature
 				}
 				if kwUnpack {
 					refuse(fn.Name + "(**...)")
 					return // the unpacked keys cannot be inspected
 				}
+				// f(name=.., new=..) would pass the keyword twice, and a
+				// call passing new= into **kwargs would, after the rename,
+				// also bind the renamed parameter.
+				if passesNew && (len(labels) > 0 || hasKwargsParam(def)) && conflict == "" {
+					conflict = fmt.Sprintf("%s(%s=...) passes %q, which would collide with the renamed parameter", fn.Name, newName, newName)
+				}
 			default:
-				refuse(fn.Name + "(" + targetName + "=...)")
+				if rewrites {
+					refuse(fn.Name + "(" + targetName + "=...)")
+				}
 				return
 			}
 		default:
 			// Immediate lambdas, call results, subscripts and the like
 			// cannot be resolved statically.
-			refuse("(...)(" + targetName + "=...)")
+			if rewrites {
+				refuse("(...)(" + targetName + "=...)")
+			}
 			return
 		}
 		for _, id := range labels {
@@ -483,6 +504,9 @@ func collectRenameRefs(content string, file *build.File, targetName string) ([]i
 			}})
 		}
 	})
+	if conflict != "" {
+		return nil, fmt.Errorf("cannot rename parameter %q to %q: the call %s", targetName, newName, conflict)
+	}
 	if unresolved != "" {
 		return nil, fmt.Errorf("cannot safely rename parameter %q: the call %s cannot be resolved to a single function definition (the callee is shadowed, reassigned, aliased, a lambda or computed, or the call unpacks **kwargs), so its keyword argument could be left stale or wrongly changed", targetName, unresolved)
 	}
@@ -498,6 +522,16 @@ func unwrapParens(e build.Expr) build.Expr {
 		}
 		e = p.X
 	}
+}
+
+// hasKwargsParam reports whether def has a **kwargs parameter.
+func hasKwargsParam(def *build.DefStmt) bool {
+	for _, p := range def.Params {
+		if u, ok := p.(*build.UnaryExpr); ok && u.Op == "**" {
+			return true
+		}
+	}
+	return false
 }
 
 // paramName returns the name bound by a def parameter expression

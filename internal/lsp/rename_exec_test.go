@@ -123,3 +123,24 @@ func TestRename_FirstComprehensionIterableResolvesOutside(t *testing.T) {
 		})
 	}
 }
+
+func TestRename_KeywordLabelCollisions(t *testing.T) {
+	const def = "def f(name, **kwargs):\n    return (name, kwargs)\n"
+	tests := []struct {
+		name    string
+		code    string
+		refused bool
+	}{
+		{"extra label equals the new name", def + "r = f(1, label=2)\n", true},
+		{"call passes both old and new label", def + "r = f(name=1, label=2)\n", true},
+		{"unrelated extra label is fine", def + "r = f(name=1, other=2)\n", false},
+		{"plain call without kwargs conflict", def + "r = f(1, other=2)\n", false},
+		{"same label on a foreign callee is fine", def + "r = f(name=1)\nnative.cc_library(label=2)\n", false},
+		{"def without **kwargs", "def f(name, other=0):\n    return (name, other)\nr = f(name=1, other=2)\n", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			checkRenameByExecution(t, tt.code, "name", "label", tt.refused)
+		})
+	}
+}
