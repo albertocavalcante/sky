@@ -590,3 +590,78 @@ func TestInstall_ReinstallNeverLeavesDestMissing(t *testing.T) {
 		t.Fatalf("leftover files in plugins dir: %v", entries)
 	}
 }
+
+// reinstallOverSymlink points the plugin path at target (a symlink) and
+// reinstalls over it with a deadline so a regression cannot hang the suite.
+func reinstallOverSymlink(t *testing.T, target string) (*Store, string, error) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need privileges on Windows")
+	}
+	dir := t.TempDir()
+	v1 := filepath.Join(dir, "v1")
+	writeTestFile(t, v1, "new")
+	s := NewStore(filepath.Join(dir, "root"))
+	if err := s.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	dest := s.PluginPath("foo", TypeExecutable)
+	if err := os.Symlink(target, dest); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	type result struct{ err error }
+	done := make(chan result, 1)
+	go func() {
+		_, err := s.InstallFromPath("foo", v1, "1", TypeExecutable)
+		done <- result{err}
+	}()
+	select {
+	case r := <-done:
+		return s, dest, r.err
+	case <-time.After(10 * time.Second):
+		// Stop the runaway backup so the temp dir can be cleaned up.
+		t.Fatal("reinstall over a symlink did not finish (unbounded backup copy?)")
+		return nil, "", nil
+	}
+}
+
+func checkReplacedSymlink(t *testing.T, s *Store, dest string, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("reinstall over symlink: %v", err)
+	}
+	info, lerr := os.Lstat(dest)
+	if lerr != nil || !info.Mode().IsRegular() {
+		t.Fatalf("dest should be the new regular file: %v, %v", info, lerr)
+	}
+	if got, _ := os.ReadFile(dest); string(got) != "new" {
+		t.Fatalf("dest content = %q", got)
+	}
+	entries, _ := os.ReadDir(s.PluginsDir())
+	if len(entries) != 1 {
+		t.Fatalf("leftover files in plugins dir: %v", entries)
+	}
+}
+
+func TestInstall_ReinstallOverSymlinkToFile(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "real")
+	writeTestFile(t, target, "old")
+	s, dest, err := reinstallOverSymlink(t, target)
+	checkReplacedSymlink(t, s, dest, err)
+	if got, _ := os.ReadFile(target); string(got) != "old" {
+		t.Fatalf("symlink target was modified: %q", got)
+	}
+}
+
+func TestInstall_ReinstallOverDanglingSymlink(t *testing.T) {
+	s, dest, err := reinstallOverSymlink(t, filepath.Join(t.TempDir(), "missing"))
+	checkReplacedSymlink(t, s, dest, err)
+}
+
+func TestInstall_ReinstallOverSymlinkToDevZero(t *testing.T) {
+	if _, err := os.Stat("/dev/zero"); err != nil {
+		t.Skip("no /dev/zero")
+	}
+	s, dest, err := reinstallOverSymlink(t, "/dev/zero")
+	checkReplacedSymlink(t, s, dest, err)
+}
