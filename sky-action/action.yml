@@ -28,7 +28,7 @@ inputs:
     required: false
     default: 'true'
   version:
-    description: 'Sky module version, branch, or commit hash to install. Defaults to the action ref.'
+    description: 'Sky branch, tag, or full commit SHA to build. Defaults to the action ref.'
     required: false
     default: ''
   fail-fast:
