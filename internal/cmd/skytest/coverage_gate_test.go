@@ -78,6 +78,9 @@ func TestCheckCoverageThreshold(t *testing.T) {
 	}{
 		{"below", &coverage.Report{TotalLines: 10, CoveredLines: 7}, 80, exitFailed, "below threshold"},
 		{"equal passes", &coverage.Report{TotalLines: 10, CoveredLines: 8}, 80, exitOK, ""},
+		// 57/100*100 is 56.99999999999999 in float64; exact equality passes.
+		{"exact equality 57 of 100", &coverage.Report{TotalLines: 100, CoveredLines: 57}, 57, exitOK, ""},
+		{"one line short", &coverage.Report{TotalLines: 100, CoveredLines: 56}, 57, exitFailed, "below threshold"},
 		{"above passes", &coverage.Report{TotalLines: 10, CoveredLines: 10}, 80, exitOK, ""},
 		// Like sky-ci, zero measured lines is "unavailable", never 100%.
 		{"zero lines", &coverage.Report{}, 80, exitError, "coverage unavailable"},

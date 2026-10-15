@@ -450,8 +450,10 @@ func checkCoverageThreshold(report *coverage.Report, threshold float64, enabled 
 		writef(stderr, "skytest: coverage.fail_under=%.1f set but coverage unavailable: no lines were measured (starlark-go-x OnExec hook not enabled)\n", threshold)
 		return exitError
 	}
-	pct := float64(report.CoveredLines) / float64(report.TotalLines) * 100
-	if pct < threshold {
+	// Compare covered*100 with threshold*total: dividing first rounds 57/100
+	// to 0.57 and the product to 56.99999999999999, failing an exact match.
+	if float64(report.CoveredLines)*100 < threshold*float64(report.TotalLines) {
+		pct := float64(report.CoveredLines) / float64(report.TotalLines) * 100
 		writef(stderr, "skytest: coverage %.1f%% is below threshold %.1f%%\n", pct, threshold)
 		return exitFailed
 	}
