@@ -161,7 +161,15 @@ func canonicalPath(p string) string {
 	return abs
 }
 
+// samePath reports whether a and b name the same file. Existing paths are
+// compared with os.SameFile, since string comparison is wrong on
+// case-insensitive filesystems.
 func samePath(a, b string) bool {
+	if fa, err := os.Stat(a); err == nil {
+		if fb, err := os.Stat(b); err == nil {
+			return os.SameFile(fa, fb)
+		}
+	}
 	return canonicalPath(a) == canonicalPath(b)
 }
 
@@ -174,7 +182,15 @@ func (s *Store) ownsBinary(path string) bool {
 	if err != nil {
 		return false
 	}
-	return canonicalPath(filepath.Dir(abs)) == canonicalPath(s.PluginsDir())
+	dir, err := os.Stat(filepath.Dir(abs))
+	if err != nil {
+		return false
+	}
+	plugins, err := os.Stat(s.PluginsDir())
+	if err != nil {
+		return false
+	}
+	return os.SameFile(dir, plugins)
 }
 
 // downloadIdleTimeout aborts a download whose body makes no progress for this long.

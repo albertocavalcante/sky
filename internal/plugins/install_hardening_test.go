@@ -369,6 +369,21 @@ func TestInstall_CleanupDoesNotDeleteSymlinkOutsideStore(t *testing.T) {
 	}
 }
 
+func TestOwnsBinary_CaseInsensitiveFilesystem(t *testing.T) {
+	dir := t.TempDir()
+	s := NewStore(filepath.Join(dir, "root"))
+	if err := s.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	other := filepath.Join(dir, "ROOT", "plugins")
+	if _, err := os.Stat(other); err != nil {
+		t.Skip("filesystem is case-sensitive")
+	}
+	if !s.ownsBinary(filepath.Join(other, "foo")) {
+		t.Fatal("differently-cased path to the plugins directory must be owned")
+	}
+}
+
 func TestInstall_FailedReinstallKeepsPreviousBinary(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("directory permission bits do not restrict writes on Windows")
