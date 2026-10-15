@@ -130,3 +130,87 @@ func TestUnionOptionalKeyTieBreak(t *testing.T) {
 		t.Fatalf("got %T, want plain options", o.Value)
 	}
 }
+
+func TestUnionOptionalFieldsOmittedWhenAbsent(t *testing.T) {
+	tests := map[string]any{
+		"SemanticTokensOptions":              SemanticTokensOptions{},
+		"ClientSemanticTokensOptions":        ClientSemanticTokensRequestOptions{},
+		"NotebookDocumentFilterNotebookType": NotebookDocumentFilterNotebookType{},
+	}
+	for name, v := range tests {
+		b, err := json.Marshal(v)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(b, &m); err != nil {
+			t.Fatal(err)
+		}
+		for k, raw := range m {
+			if string(raw) == "null" {
+				t.Errorf("%s: absent field %q re-marshaled as null: %s", name, k, b)
+			}
+		}
+	}
+	// A present value must still be emitted.
+	b, err := json.Marshal(SemanticTokensOptions{Range: Or_Literal_bool{Value: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	if string(m["range"]) != "true" {
+		t.Errorf("range = %s, want true (%s)", m["range"], b)
+	}
+}
+
+func TestUnionRoundTripOmitsAbsentFields(t *testing.T) {
+	in := `{"legend":{"tokenTypes":[],"tokenModifiers":[]}}`
+	var o SemanticTokensOptions
+	if err := json.Unmarshal([]byte(in), &o); err != nil {
+		t.Fatal(err)
+	}
+	b, err := json.Marshal(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != in {
+		t.Errorf("round trip = %s, want %s", b, in)
+	}
+}
+
+func TestUnionContentChangeRejectsMalformed(t *testing.T) {
+	for _, in := range []string{
+		`{}`,
+		`{"text":"x","range":"bad"}`,
+		`{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}}`,
+		`"x"`,
+		`[]`,
+	} {
+		var c TextDocumentContentChangeEvent
+		if err := json.Unmarshal([]byte(in), &c); err == nil {
+			t.Errorf("%s accepted as %#v, want error", in, c.Value)
+		}
+	}
+	// Valid forms stay valid.
+	for in, want := range map[string]string{
+		`{"text":"x"}`: "whole",
+		`{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"rangeLength":1,"text":"x"}`: "partial",
+		`{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"text":""}`:                  "partial",
+	} {
+		var c TextDocumentContentChangeEvent
+		if err := json.Unmarshal([]byte(in), &c); err != nil {
+			t.Errorf("%s: %v", in, err)
+			continue
+		}
+		got := "whole"
+		if _, ok := c.Value.(TextDocumentContentChangePartial); ok {
+			got = "partial"
+		}
+		if got != want {
+			t.Errorf("%s: got %s, want %s", in, got, want)
+		}
+	}
+}
