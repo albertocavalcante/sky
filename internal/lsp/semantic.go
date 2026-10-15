@@ -22,6 +22,7 @@ func (s *Server) handleSemanticTokensFull(ctx context.Context, params json.RawMe
 	// Copy content while holding lock to avoid data race
 	s.mu.RLock()
 	doc, ok := s.documents[p.TextDocument.Uri]
+	overlapping := s.overlappingTokens
 	var content string
 	if ok {
 		content = doc.Content
@@ -35,7 +36,7 @@ func (s *Server) handleSemanticTokensFull(ctx context.Context, params json.RawMe
 	log.Printf("semanticTokens/full: %s", p.TextDocument.Uri)
 
 	// Tokenize the content
-	tokens := tokenizeContent(content)
+	tokens := tokenizeContentWith(content, overlapping)
 
 	// Encode to LSP format
 	encoded := encodeTokens(tokens)
@@ -55,6 +56,7 @@ func (s *Server) handleSemanticTokensRange(ctx context.Context, params json.RawM
 	// Copy content while holding lock to avoid data race
 	s.mu.RLock()
 	doc, ok := s.documents[p.TextDocument.Uri]
+	overlapping := s.overlappingTokens
 	var content string
 	if ok {
 		content = doc.Content
@@ -71,7 +73,7 @@ func (s *Server) handleSemanticTokensRange(ctx context.Context, params json.RawM
 		p.Range.End.Line, p.Range.End.Character)
 
 	// Tokenize the content
-	tokens := tokenizeContent(content)
+	tokens := tokenizeContentWith(content, overlapping)
 
 	// Filter to range
 	filtered := filterTokensInRange(tokens, p.Range)
@@ -84,8 +86,33 @@ func (s *Server) handleSemanticTokensRange(ctx context.Context, params json.RawM
 	}, nil
 }
 
-// tokenizeContent parses Starlark content and returns semantic tokens.
+// tokenizeContent parses Starlark content and returns semantic tokens for a
+// client that does not support overlapping tokens.
 func tokenizeContent(content string) []SemanticToken {
+	return tokenizeContentWith(content, false)
+}
+
+// dropDuplicateRanges keeps one token per exact range. Tokens must be sorted.
+// A declaration is preferred over a string at the same range (the local name
+// of an unaliased load is also its quoted export name).
+func dropDuplicateRanges(tokens []SemanticToken) []SemanticToken {
+	out := tokens[:0]
+	for _, t := range tokens {
+		if n := len(out); n > 0 && out[n-1].Line == t.Line && out[n-1].StartChar == t.StartChar && out[n-1].Length == t.Length {
+			if out[n-1].Type == TokenString {
+				out[n-1] = t
+			}
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
+}
+
+// tokenizeContentWith parses Starlark content and returns semantic tokens.
+// Unless the client advertised overlappingTokenSupport, no two tokens share a
+// range.
+func tokenizeContentWith(content string, overlapping bool) []SemanticToken {
 	var tokens []SemanticToken
 
 	// Parse the file
@@ -123,6 +150,9 @@ func tokenizeContent(content string) []SemanticToken {
 
 	// Sort tokens by position (line, then character)
 	sortTokens(tokens)
+	if !overlapping {
+		tokens = dropDuplicateRanges(tokens)
+	}
 
 	return tokensToUTF16(tokens, content)
 }

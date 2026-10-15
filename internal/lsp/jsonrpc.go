@@ -24,6 +24,18 @@ type Request struct {
 	ID      *json.RawMessage `json:"id,omitempty"` // nil for notifications
 	Method  string           `json:"method"`
 	Params  json.RawMessage  `json:"params,omitempty"`
+
+	// snapshot is set by a requestPreparer on the read loop, before the
+	// request is dispatched, and is private to the handler.
+	snapshot any
+}
+
+// requestPreparer is implemented by handlers that need to capture state at
+// the moment a request is received. PrepareRequest runs on the read loop,
+// before the request is dispatched to its goroutine, so it observes every
+// earlier notification (didOpen, didChange, ...) and no later one.
+type requestPreparer interface {
+	PrepareRequest(req *Request)
 }
 
 // Response is a JSON-RPC response. On success the "result" member is always
@@ -151,6 +163,33 @@ var ErrOutput = errors.New("lsp output failed")
 // maxMessageSize caps the Content-Length we are willing to allocate.
 const maxMessageSize = 64 << 20 // 64 MiB
 
+// Header limits. Legitimate headers are a few dozen bytes; anything larger
+// is hostile or corrupt, and the stream cannot be resynchronised.
+const (
+	maxHeaderLine  = 8 << 10  // one header line, including its terminator
+	maxHeaderBytes = 64 << 10 // all header lines of one message
+)
+
+// errHeaderTooLarge is returned when a header line or block exceeds its cap.
+var errHeaderTooLarge = errors.New("header exceeds size limit")
+
+// readHeaderLine reads one line, failing with errHeaderTooLarge as soon as
+// it holds more than limit bytes rather than buffering it whole.
+func (c *Conn) readHeaderLine(limit int) (string, error) {
+	var line []byte
+	for {
+		chunk, err := c.reader.ReadSlice('\n')
+		line = append(line, chunk...)
+		if len(line) > limit {
+			return "", fmt.Errorf("reading header: %w (limit %d bytes)", errHeaderTooLarge, limit)
+		}
+		if errors.Is(err, bufio.ErrBufferFull) {
+			continue
+		}
+		return string(line), err
+	}
+}
+
 // errBadBody marks a message whose framing was fine but whose body was not
 // valid JSON-RPC. The stream is still in sync, so the server can continue.
 type errBadBody struct {
@@ -182,8 +221,8 @@ func isOrdered(req *Request) bool {
 
 // Run reads and handles messages until EOF, error or ctx cancellation.
 // Notifications and lifecycle messages are handled in order on the read loop;
-// other requests run concurrently. Run waits for in-flight handlers before
-// returning.
+// other requests run concurrently. On return Run cancels the context passed
+// to handlers, then waits for in-flight handlers.
 func (c *Conn) Run(parent context.Context) (err error) {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
@@ -214,6 +253,9 @@ func (c *Conn) Run(parent context.Context) (err error) {
 
 	defer func() {
 		close(stop)
+		// Cancel before waiting: a handler blocked on ctx.Done() would
+		// otherwise keep Run (and so EOF handling) from ever returning.
+		cancel()
 		c.wg.Wait()
 		if !c.flush(flushGrace) {
 			// Pending output could not be delivered: interrupt the blocked
@@ -265,6 +307,9 @@ func (c *Conn) Run(parent context.Context) (err error) {
 				c.handleRequest(ctx, req)
 				continue
 			}
+			if p, ok := c.handler.(requestPreparer); ok {
+				p.PrepareRequest(req)
+			}
 			c.wg.Add(1)
 			go func() {
 				defer c.wg.Done()
@@ -291,8 +336,10 @@ func (c *Conn) readMessage() (*Request, error) {
 	// Read headers
 	contentLength := -1
 	sawHeader := false
+	headerBytes := 0
 	for {
-		line, err := c.reader.ReadString('\n')
+		line, err := c.readHeaderLine(min(maxHeaderLine, maxHeaderBytes-headerBytes))
+		headerBytes += len(line)
 		if err != nil {
 			if errors.Is(err, io.EOF) && (sawHeader || line != "") {
 				// EOF inside a header block is a truncated frame, not a
