@@ -43,22 +43,33 @@ func TestWriteCoverageReportDoesNotUsePredictableTmp(t *testing.T) {
 	}
 }
 
-func TestWriteCoverageReportPreservesMode(t *testing.T) {
-	old := syscall.Umask(0o022)
+// With exact set the requested mode is applied as is: umask 077 must not
+// narrow a new 0644 file, and an existing 0600 file must be replaced by the
+// requested 0644 rather than keeping its own mode (the non-exact path does
+// both of those the other way round).
+func TestWriteCoverageReportExactMode(t *testing.T) {
+	old := syscall.Umask(0o077)
 	defer syscall.Umask(old)
-	out := filepath.Join(t.TempDir(), "coverage.json")
-	if err := os.WriteFile(out, []byte("old"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := writeCoverageReport(covRunner(t), out, 0o600, true, &bytes.Buffer{}); err != nil {
-		t.Fatal(err)
-	}
-	fi, _ := os.Stat(out)
-	if fi.Mode().Perm() != 0o600 {
-		t.Errorf("mode = %v, want 0600", fi.Mode().Perm())
-	}
-	if b, _ := os.ReadFile(out); !strings.Contains(string(b), "total_lines") {
-		t.Errorf("content not replaced: %q", b)
+	for _, existing := range []os.FileMode{0, 0o600} {
+		out := filepath.Join(t.TempDir(), "coverage.json")
+		if existing != 0 {
+			if err := os.WriteFile(out, []byte("old"), existing); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := writeCoverageReport(covRunner(t), out, 0o644, true, &bytes.Buffer{}); err != nil {
+			t.Fatal(err)
+		}
+		fi, err := os.Stat(out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fi.Mode().Perm() != 0o644 {
+			t.Errorf("existing %v: mode = %v, want 0644", existing, fi.Mode().Perm())
+		}
+		if b, _ := os.ReadFile(out); !strings.Contains(string(b), "total_lines") {
+			t.Errorf("content not replaced: %q", b)
+		}
 	}
 }
 
