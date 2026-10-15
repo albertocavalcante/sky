@@ -2,14 +2,50 @@ package lsp
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/syntax"
 
 	"github.com/albertocavalcante/sky/internal/protocol"
+	"github.com/albertocavalcante/sky/internal/starlark/filekind"
 )
+
+// TestRenameCapture_ManyParametersIsLinear guards against a quadratic scan of
+// the parameter list for every identifier in a function with many parameters.
+func TestRenameCapture_ManyParametersIsLinear(t *testing.T) {
+	const n = 100000
+	var b strings.Builder
+	b.WriteString("x = 1\ndef f(")
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString("p" + strconv.Itoa(i))
+	}
+	b.WriteString("):\n    return [")
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString("x")
+	}
+	b.WriteString("]\n")
+	file, err := parseStarlarkFile([]byte(b.String()), "p.star", filekind.KindStarlark)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if msg := renameCapture(file, "x", "y"); msg != "" {
+		t.Fatalf("unexpected refusal: %s", msg)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Errorf("renameCapture took %v for %d parameters, want linear time", d, n)
+	}
+}
 
 // runStar executes src and returns the printed value of the global r, or the
 // error text, so two programs can be compared for equal behavior.

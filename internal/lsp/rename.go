@@ -242,6 +242,24 @@ func isBuiltin(word string) bool {
 func renameCapture(file *build.File, oldName, newName string) string {
 	_, skip := classifyIdents(file)
 
+	// Parameters with a default, so evaluatedOutside is a map lookup rather
+	// than a scan of the parameter list for every identifier.
+	withDefault := map[build.Expr]bool{}
+	build.Walk(file, func(expr build.Expr, _ []build.Expr) {
+		var params []build.Expr
+		switch e := expr.(type) {
+		case *build.DefStmt:
+			params = e.Params
+		case *build.LambdaExpr:
+			params = e.Params
+		}
+		for _, p := range params {
+			if _, ok := p.(*build.AssignExpr); ok {
+				withDefault[p] = true
+			}
+		}
+	})
+
 	isScope := func(e build.Expr) bool {
 		switch e.(type) {
 		case *build.DefStmt, *build.LambdaExpr, *build.Comprehension:
@@ -267,7 +285,7 @@ func renameCapture(file *build.File, oldName, newName string) string {
 	useChain := func(path []build.Expr) []any {
 		out := []any{}
 		for i := len(path) - 2; i >= 0; i-- {
-			if !isScope(path[i]) || evaluatedOutside(path, i) {
+			if !isScope(path[i]) || evaluatedOutside(path, i, withDefault) {
 				continue
 			}
 			out = append(out, path[i])
@@ -399,16 +417,16 @@ func renameCapture(file *build.File, oldName, newName string) string {
 // below the scope node path[i], is evaluated in the scope enclosing path[i]
 // rather than inside it: a parameter default of a def or lambda, or the first
 // iterable of a comprehension.
-func evaluatedOutside(path []build.Expr, i int) bool {
+func evaluatedOutside(path []build.Expr, i int, withDefault map[build.Expr]bool) bool {
 	if i+2 >= len(path) {
 		return false
 	}
 	child, next := path[i+1], path[i+2]
 	switch scope := path[i].(type) {
 	case *build.DefStmt:
-		return isDefault(scope.Params, child, next)
+		return isDefault(withDefault, child, next)
 	case *build.LambdaExpr:
-		return isDefault(scope.Params, child, next)
+		return isDefault(withDefault, child, next)
 	case *build.Comprehension:
 		if len(scope.Clauses) == 0 || child != scope.Clauses[0] {
 			return false
@@ -419,15 +437,12 @@ func evaluatedOutside(path []build.Expr, i int) bool {
 	return false
 }
 
-// isDefault reports whether child is a parameter with a default and next is
-// that default expression (not the parameter name).
-func isDefault(params []build.Expr, child, next build.Expr) bool {
-	for _, p := range params {
-		if p != child {
-			continue
-		}
-		a, ok := p.(*build.AssignExpr)
-		return ok && next != a.LHS
+// isDefault reports whether child is a parameter with a default (a member of
+// withDefault) and next is that default expression (not the parameter name).
+func isDefault(withDefault map[build.Expr]bool, child, next build.Expr) bool {
+	if !withDefault[child] {
+		return false
 	}
-	return false
+	a, ok := child.(*build.AssignExpr)
+	return ok && next != a.LHS
 }
