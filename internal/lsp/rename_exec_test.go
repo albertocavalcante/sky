@@ -1,0 +1,186 @@
+package lsp
+
+import (
+	"sort"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"go.starlark.net/starlark"
+	"go.starlark.net/syntax"
+
+	"github.com/albertocavalcante/sky/internal/protocol"
+	"github.com/albertocavalcante/sky/internal/starlark/filekind"
+)
+
+// TestRenameCapture_ManyParametersIsLinear guards against a quadratic scan of
+// the parameter list for every identifier in a function with many parameters.
+func TestRenameCapture_ManyParametersIsLinear(t *testing.T) {
+	const n = 100000
+	var b strings.Builder
+	b.WriteString("x = 1\ndef f(")
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString("p" + strconv.Itoa(i))
+	}
+	b.WriteString("):\n    return [")
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString("x")
+	}
+	b.WriteString("]\n")
+	file, err := parseStarlarkFile([]byte(b.String()), "p.star", filekind.KindStarlark)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if msg := renameCapture(file, "x", "y"); msg != "" {
+		t.Fatalf("unexpected refusal: %s", msg)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Errorf("renameCapture took %v for %d parameters, want linear time", d, n)
+	}
+}
+
+// runStar executes src and returns the printed value of the global r, or the
+// error text, so two programs can be compared for equal behavior.
+func runStar(src string) string {
+	thread := &starlark.Thread{Name: "rename-exec"}
+	globals, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, "p.star", src, nil)
+	if err != nil {
+		return "error: " + err.Error()
+	}
+	r, ok := globals["r"]
+	if !ok {
+		return "no r"
+	}
+	return r.String()
+}
+
+// applyEdits applies single-line, ASCII-only edits to src.
+func applyEdits(t *testing.T, src string, edits []protocol.TextEdit) string {
+	t.Helper()
+	lines := strings.Split(src, "\n")
+	sorted := append([]protocol.TextEdit(nil), edits...)
+	sort.Slice(sorted, func(i, j int) bool {
+		a, b := sorted[i].Range.Start, sorted[j].Range.Start
+		if a.Line != b.Line {
+			return a.Line > b.Line
+		}
+		return a.Character > b.Character
+	})
+	for _, e := range sorted {
+		l := lines[e.Range.Start.Line]
+		lines[e.Range.Start.Line] = l[:e.Range.Start.Character] + e.NewText + l[e.Range.End.Character:]
+	}
+	return strings.Join(lines, "\n")
+}
+
+// checkRenameByExecution renames the first occurrence of oldName in code and
+// asserts the verdict (refused or accepted). An accepted rename must leave the
+// program's observable result (global r) unchanged.
+func checkRenameByExecution(t *testing.T, code, oldName, newName string, wantRefused bool) {
+	t.Helper()
+	idx := strings.Index(code, oldName)
+	if idx < 0 {
+		t.Fatalf("%q not in %q", oldName, code)
+	}
+	line := strings.Count(code[:idx], "\n")
+	char := idx - (strings.LastIndex(code[:idx], "\n") + 1)
+	edit, err := doRename(t, code, uint32(line), uint32(char), newName)
+	if wantRefused {
+		if err == nil {
+			after := applyEdits(t, code, edit.Changes["file:///rename.star"])
+			t.Fatalf("rename %s -> %s must be refused; it would turn\n%s\ninto\n%s\nbefore: %s\nafter:  %s",
+				oldName, newName, code, after, runStar(code), runStar(after))
+		}
+		if re, ok := err.(*ResponseError); !ok || re.Code != CodeRequestFailed {
+			t.Errorf("err = %v, want RequestFailed", err)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("rename %s -> %s is safe and must be accepted: %v", oldName, newName, err)
+	}
+	if edit == nil {
+		t.Fatal("no edits")
+	}
+	after := applyEdits(t, code, edit.Changes["file:///rename.star"])
+	if before, got := runStar(code), runStar(after); before != got {
+		t.Errorf("accepted rename changed behavior\n%s\n->\n%s\nbefore: %s\nafter:  %s", code, after, before, got)
+	}
+}
+
+func TestRename_DefaultsResolveInEnclosingScope(t *testing.T) {
+	tests := []struct {
+		name    string
+		code    string
+		old     string
+		newName string
+		refused bool
+	}{
+		{"global renamed onto builtin used as default", "x = 1\ndef f(len=len):\n    return len([])\nr = f()\n", "x", "len", true},
+		{"default expression sees the global being renamed", "x = 1\ndef f(y=x):\n    return y\nr = f()\n", "x", "y", false},
+		{"lambda default sees the global being renamed", "x = 1\nf = lambda y=x: y\nr = f()\n", "x", "y", false},
+		{"lambda default capture", "x = 1\nf = lambda len=len: len([])\nr = f()\n", "x", "len", true},
+		{"body use of param still captured", "x = 1\ndef f(y=2):\n    return x + y\nr = f()\n", "x", "y", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			checkRenameByExecution(t, tt.code, tt.old, tt.newName, tt.refused)
+		})
+	}
+}
+
+func TestRename_FirstComprehensionIterableResolvesOutside(t *testing.T) {
+	tests := []struct {
+		name    string
+		code    string
+		old     string
+		newName string
+		refused bool
+	}{
+		{"first iterable captured by loop var", "x = 1\nr = [len([]) for len in [len]]\n", "x", "len", true},
+		{"first iterable sees renamed global", "x = [1, 2]\nr = [y for y in x]\n", "x", "y", false},
+		{"dict comprehension first iterable", "x = [1, 2]\nr = {y: 1 for y in x}\n", "x", "y", false},
+		{"nested comprehension in first iterable", "x = [1, 2]\nr = [z for z in [y for y in x]]\n", "x", "y", false},
+		{"later iterable is inside", "x = [1, 2]\nr = [y for w in [[1]] for y in x]\n", "x", "y", true},
+		{"condition is inside", "x = 1\nr = [y for y in [1, 2] if y != x]\n", "x", "y", true},
+		{"body is inside", "x = 1\nr = [y + x for y in [1, 2]]\n", "x", "y", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			checkRenameByExecution(t, tt.code, tt.old, tt.newName, tt.refused)
+		})
+	}
+}
+
+func TestRename_KeywordLabelCollisions(t *testing.T) {
+	const def = "def f(name, **kwargs):\n    return (name, kwargs)\n"
+	tests := []struct {
+		name    string
+		code    string
+		refused bool
+	}{
+		{"extra label equals the new name", def + "r = f(1, label=2)\n", true},
+		{"call passes both old and new label", def + "r = f(name=1, label=2)\n", true},
+		{"unrelated extra label is fine", def + "r = f(name=1, other=2)\n", false},
+		{"plain call without kwargs conflict", def + "r = f(1, other=2)\n", false},
+		{"same label on a foreign callee is fine", def + "d = {}\nd.update(label=2)\nr = (f(name=1), d)\n", false},
+		{"lambda with **kwargs receives the new label", "f = lambda name=1, **kwargs: (name, kwargs)\nr = f(label=2)\n", true},
+		{"alias of a def receives the new label", def + "g = f\nr = g(label=2)\n", true},
+		{"reassigned callee receives the new label", def + "f = lambda name=1, **kw: (name, kw)\nr = f(label=2)\n", true},
+		{"computed callee receives the new label", def + "r = (lambda **kw: kw)(label=2)\n", true},
+		{"def without **kwargs", "def f(name, other=0):\n    return (name, other)\nr = f(name=1, other=2)\n", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			checkRenameByExecution(t, tt.code, "name", "label", tt.refused)
+		})
+	}
+}
