@@ -75,19 +75,42 @@ var snapshotNameReplacer = strings.NewReplacer(
 
 // snapshotPath returns the full path for a named snapshot.
 //
-// New baselines use an encoded, length-bounded name. A baseline written before
-// that scheme (the raw test name, unbounded) is still found and used: ignoring
-// it would make Compare create a fresh baseline and pass a changed value without
-// update mode.
+// New baselines encode both the test name and the snapshot name so that
+// distinct names get distinct files: "a/b" becomes "a%2Fb" and "a_b" becomes
+// "a%5Fb". (The legacy scheme mapped every unsafe character to "_", so those
+// two names shared one file.) The name is also length-bounded.
+//
+// A baseline written by an earlier scheme is still found and used, and wins
+// over the new path: ignoring it would make Compare create a fresh baseline and
+// pass a changed value without update mode. Limit: a legacy file shared by two
+// colliding names keeps being shared until it is deleted.
 func (sm *SnapshotManager) snapshotPath(name string) string {
 	safeName := snapshotNameReplacer.Replace(name)
-	current := filepath.Join(sm.snapshotDir(), boundSnapshotFileName(encodeFileComponent(sm.testName)+"__"+safeName+".snap"))
-	if legacy := sm.legacySnapshotPath(safeName); legacy != "" && legacy != current {
-		if info, err := os.Stat(legacy); err == nil && info.Mode().IsRegular() {
-			return legacy
+	current := filepath.Join(sm.snapshotDir(), boundSnapshotFileName(encodeFileComponent(sm.testName)+"__"+encodeSnapshotName(name)+".snap"))
+	earlier := []string{
+		// Raw test name, lossy snapshot name, unbounded.
+		sm.legacySnapshotPath(safeName),
+		// Encoded test name, lossy snapshot name, bounded.
+		filepath.Join(sm.snapshotDir(), boundSnapshotFileName(encodeFileComponent(sm.testName)+"__"+safeName+".snap")),
+	}
+	for _, p := range earlier {
+		if p == "" || p == current {
+			continue
+		}
+		if info, err := os.Stat(p); err == nil && info.Mode().IsRegular() {
+			return p
 		}
 	}
 	return current
+}
+
+// encodeSnapshotName encodes a snapshot name for a new baseline file. On top of
+// encodeFileComponent it encodes "_": a legacy file name is built by replacing
+// unsafe characters with "_", so a new file named "a_b" would be mistaken for
+// the legacy baseline of "a/b" (which must win) and the two names would share a
+// file again. Never emitting "_" keeps new files off every legacy path.
+func encodeSnapshotName(name string) string {
+	return strings.ReplaceAll(encodeFileComponent(name), "_", "%5F")
 }
 
 // legacySnapshotPath is where a baseline lived before names were encoded. It
@@ -106,7 +129,10 @@ func (sm *SnapshotManager) legacySnapshotPath(safeName string) string {
 // Returns nil if they match, or an error describing the mismatch.
 // If UpdateMode is true, updates the snapshot instead of comparing.
 func (sm *SnapshotManager) Compare(value starlark.Value, name string) error {
-	serialized := SerializeStarlarkValue(value)
+	serialized, err := serializeChecked(value)
+	if err != nil {
+		return fmt.Errorf("cannot snapshot %q: %w", name, err)
+	}
 	snapPath := sm.snapshotPath(name)
 
 	// Check if snapshot exists
@@ -169,11 +195,64 @@ func (sm *SnapshotManager) Mismatches() []SnapshotMismatch {
 
 // SerializeStarlarkValue converts a Starlark value to a deterministic string representation.
 // This is used for snapshot comparison.
+//
+// A value that cannot be serialized (a reference cycle, or nesting deeper than
+// maxSnapshotDepth) yields a placeholder describing the problem; Compare reports
+// it as an error instead.
 func SerializeStarlarkValue(v starlark.Value) string {
-	return serializeValue(v, 0)
+	out, err := serializeChecked(v)
+	if err != nil {
+		return "<unserializable: " + err.Error() + ">"
+	}
+	return out
 }
 
-func serializeValue(v starlark.Value, indent int) string {
+// maxSnapshotDepth bounds container nesting so that a pathologically deep (not
+// cyclic) value cannot exhaust the Go stack, which no Starlark timeout can
+// interrupt.
+const maxSnapshotDepth = 1000
+
+// serializeChecked serializes v, failing on reference cycles and excessive depth.
+func serializeChecked(v starlark.Value) (string, error) {
+	s := &serializer{active: make(map[starlark.Value]struct{})}
+	out := s.serialize(v, 0)
+	if s.err != nil {
+		return "", s.err
+	}
+	return out, nil
+}
+
+// serializer tracks the containers on the current path to detect cycles.
+type serializer struct {
+	active map[starlark.Value]struct{}
+	depth  int
+	err    error
+}
+
+func (s *serializer) serialize(v starlark.Value, indent int) string {
+	if s.err != nil {
+		return ""
+	}
+	// depth, not indent: a one-element tuple nests without indenting.
+	if s.depth >= maxSnapshotDepth {
+		s.err = fmt.Errorf("value is nested deeper than %d levels", maxSnapshotDepth)
+		return ""
+	}
+	s.depth++
+	defer func() { s.depth-- }()
+	switch v.(type) {
+	case *starlark.List, *starlark.Dict, *starlark.Set, *starlarkstruct.Struct:
+		if _, ok := s.active[v]; ok {
+			s.err = fmt.Errorf("value contains a reference cycle (%s)", v.Type())
+			return ""
+		}
+		s.active[v] = struct{}{}
+		defer delete(s.active, v)
+	}
+	return s.serializeValue(v, indent)
+}
+
+func (s *serializer) serializeValue(v starlark.Value, indent int) string {
 	ind := strings.Repeat("  ", indent)
 
 	switch val := v.(type) {
@@ -208,7 +287,7 @@ func serializeValue(v starlark.Value, indent int) string {
 		for i := 0; i < val.Len(); i++ {
 			sb.WriteString(ind)
 			sb.WriteString("  ")
-			sb.WriteString(serializeValue(val.Index(i), indent+1))
+			sb.WriteString(s.serialize(val.Index(i), indent+1))
 			sb.WriteString(",\n")
 		}
 		sb.WriteString(ind)
@@ -220,14 +299,14 @@ func serializeValue(v starlark.Value, indent int) string {
 			return "()"
 		}
 		if val.Len() == 1 {
-			return "(" + serializeValue(val.Index(0), indent) + ",)"
+			return "(" + s.serialize(val.Index(0), indent) + ",)"
 		}
 		var sb strings.Builder
 		sb.WriteString("(\n")
 		for i := 0; i < val.Len(); i++ {
 			sb.WriteString(ind)
 			sb.WriteString("  ")
-			sb.WriteString(serializeValue(val.Index(i), indent+1))
+			sb.WriteString(s.serialize(val.Index(i), indent+1))
 			sb.WriteString(",\n")
 		}
 		sb.WriteString(ind)
@@ -248,9 +327,9 @@ func serializeValue(v starlark.Value, indent int) string {
 			v, _, _ := val.Get(k)
 			sb.WriteString(ind)
 			sb.WriteString("  ")
-			sb.WriteString(serializeValue(k, indent+1))
+			sb.WriteString(s.serialize(k, indent+1))
 			sb.WriteString(": ")
-			sb.WriteString(serializeValue(v, indent+1))
+			sb.WriteString(s.serialize(v, indent+1))
 			sb.WriteString(",\n")
 		}
 		sb.WriteString(ind)
@@ -276,7 +355,7 @@ func serializeValue(v starlark.Value, indent int) string {
 		for _, item := range items {
 			sb.WriteString(ind)
 			sb.WriteString("  ")
-			sb.WriteString(serializeValue(item, indent+1))
+			sb.WriteString(s.serialize(item, indent+1))
 			sb.WriteString(",\n")
 		}
 		sb.WriteString(ind)
@@ -300,7 +379,7 @@ func serializeValue(v starlark.Value, indent int) string {
 				sb.WriteString("  ")
 				sb.WriteString(name)
 				sb.WriteString(" = ")
-				sb.WriteString(serializeValue(attrVal, indent+1))
+				sb.WriteString(s.serialize(attrVal, indent+1))
 				sb.WriteString(",\n")
 			}
 		}
