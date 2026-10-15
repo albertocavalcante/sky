@@ -49,6 +49,10 @@ type SuppressionParser struct {
 
 	// suppressions maps line numbers to their suppressions
 	suppressions map[int][]Suppression
+
+	// commentStarts holds, per line index, the offset of the comment-starting
+	// "#" outside any string literal, or -1.
+	commentStarts []int
 }
 
 // NewSuppressionParser creates a new parser for the given source content.
@@ -61,8 +65,63 @@ func NewSuppressionParser(content []byte) *SuppressionParser {
 		suppressions: make(map[int][]Suppression),
 	}
 
+	parser.commentStarts = findCommentStarts(lines)
 	parser.parse()
 	return parser
+}
+
+// findCommentStarts returns, per line index, the byte offset of the "#" that
+// starts a comment, or -1 when the line has none. A "#" inside a single-,
+// double- or triple-quoted string literal (including one continued from an
+// earlier line) is not a comment.
+func findCommentStarts(lines []string) []int {
+	starts := make([]int, len(lines))
+	var quote byte // active quote character, 0 when outside a string
+	triple := false
+	for n, line := range lines {
+		starts[n] = -1
+		continued := false // line ends in a backslash that escapes the newline
+		for i := 0; i < len(line); i++ {
+			c := line[i]
+			if quote == 0 {
+				switch c {
+				case '#':
+					starts[n] = i
+					i = len(line)
+				case '"', '\'':
+					quote = c
+					triple = strings.HasPrefix(line[i:], strings.Repeat(string(c), 3))
+					if triple {
+						i += 2
+					}
+				}
+				continue
+			}
+			if c == '\\' {
+				if i == len(line)-1 {
+					continued = true
+				}
+				i++ // skip the escaped character
+				continue
+			}
+			if c != quote {
+				continue
+			}
+			if !triple {
+				quote = 0
+			} else if strings.HasPrefix(line[i:], strings.Repeat(string(c), 3)) {
+				quote = 0
+				triple = false
+				i += 2
+			}
+		}
+		if quote != 0 && !triple && !continued {
+			// An unterminated single-line string ends at the newline, unless
+			// a trailing backslash escapes it (the string continues).
+			quote = 0
+		}
+	}
+	return starts
 }
 
 // parse scans all lines for suppression comments.
@@ -72,7 +131,7 @@ func (p *SuppressionParser) parse() {
 		currentLine := lineNum + 1
 
 		// Look for skylint comments
-		suppressions := p.parseLineForSuppressions(line, currentLine)
+		suppressions := p.parseLineForSuppressions(line, p.commentStarts[lineNum], currentLine)
 		if len(suppressions) > 0 {
 			p.suppressions[currentLine] = suppressions
 		}
@@ -80,11 +139,9 @@ func (p *SuppressionParser) parse() {
 }
 
 // parseLineForSuppressions extracts all suppression directives from a line.
-func (p *SuppressionParser) parseLineForSuppressions(line string, lineNum int) []Suppression {
+func (p *SuppressionParser) parseLineForSuppressions(line string, commentIdx, lineNum int) []Suppression {
 	var suppressions []Suppression
 
-	// Find all comment positions
-	commentIdx := strings.Index(line, "#")
 	if commentIdx == -1 {
 		return nil
 	}
