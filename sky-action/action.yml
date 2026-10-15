@@ -54,23 +54,22 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    # Bootstrap toolchain: the action checkout's go.mod. When `version` selects
+    # a ref whose go.mod needs a newer Go, install.sh builds with
+    # GOTOOLCHAIN=auto, which downloads the toolchain that ref requires.
     - name: Set up Go
       uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
       with:
-        go-version: '1.25'
-        cache: true
+        go-version-file: ${{ github.action_path }}/../go.mod
+        cache: false
 
+    # go install pkg@version is unusable here (go.mod has replace directives),
+    # so install.sh builds from a checkout of the requested ref.
     - name: Install sky tools
       shell: bash
       env:
         INPUT_VERSION: ${{ inputs.version }}
-      run: |
-        version="$INPUT_VERSION"
-        if [ -z "$version" ]; then
-          version="${GITHUB_ACTION_REF:-main}"
-        fi
-        go install "github.com/albertocavalcante/sky/cmd/skytest@${version}"
-        go install "github.com/albertocavalcante/sky/cmd/sky-ci@${version}"
+      run: bash "$GITHUB_ACTION_PATH/install.sh"
 
     # Pipeline pattern: skytest outputs JSON, sky-ci transforms to GitHub format
     # This is cross-platform - bash is available on all GitHub runners
