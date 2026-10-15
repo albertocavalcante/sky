@@ -3,6 +3,7 @@ package skycov
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -286,5 +287,31 @@ func TestRun_MinWithNoMeasuredLinesIsError(t *testing.T) {
 	stderr.Reset()
 	if code := RunWithIO(context.Background(), []string{covFile}, nil, &stdout, &stderr); code != 0 {
 		t.Errorf("empty report without -min: code = %d, want 0\nstderr: %s", code, stderr.String())
+	}
+}
+
+func TestRun_MinEqualToCoveragePasses(t *testing.T) {
+	// 57 of 100 lines: float math gives 56.99999999999999, which must not
+	// fail -min=57.
+	var b strings.Builder
+	b.WriteString(`{"files":{"lib.star":{"lines":{`)
+	for i := 1; i <= 100; i++ {
+		if i > 1 {
+			b.WriteString(",")
+		}
+		hits := 0
+		if i <= 57 {
+			hits = 1
+		}
+		fmt.Fprintf(&b, `"%d":%d`, i, hits)
+	}
+	b.WriteString(`}}}}`)
+	covFile := filepath.Join(t.TempDir(), "coverage.json")
+	if err := os.WriteFile(covFile, []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if code := RunWithIO(context.Background(), []string{"-min=57", covFile}, nil, &stdout, &stderr); code != 0 {
+		t.Errorf("code = %d, want 0\nstderr: %s", code, stderr.String())
 	}
 }

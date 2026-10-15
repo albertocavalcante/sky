@@ -173,7 +173,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writef(stderr, "skycov: -min=%.1f set but coverage unavailable: no lines were measured in %s\n", minFlag, inputFiles[0])
 		return exitError
 	}
-	if minFlag > 0 && report.Percentage() < minFlag {
+	if !skyconfig.CoverageMeets(report.CoveredLines, report.TotalLines, minFlag) {
 		writef(stderr, "skycov: coverage %.1f%% is below minimum %.1f%%\n",
 			report.Percentage(), minFlag)
 		return exitBelowMin
