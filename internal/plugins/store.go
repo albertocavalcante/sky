@@ -461,22 +461,28 @@ func writeJSON(path string, value any) error {
 func (s *Store) UpdatePluginMetadata(name string, installedAt time.Time, version, description string) (bool, error) {
 	updated := false
 	err := s.withWriteLock(func() error {
-		plugins, err := s.loadPluginsNL()
+		cached, err := s.loadPluginsNL()
 		if err != nil {
 			return err
 		}
-		for i := range plugins {
-			if plugins[i].Name != name || !plugins[i].InstalledAt.Equal(installedAt) {
+		for i := range cached {
+			if cached[i].Name != name || !cached[i].InstalledAt.Equal(installedAt) {
 				continue
 			}
+			// Copy on write: readers may hold the cached slice, and a failed
+			// save must not leave the edit behind in it.
+			plugins := append([]Plugin(nil), cached...)
 			if version != "" {
 				plugins[i].Version = version
 			}
 			if description != "" {
 				plugins[i].Description = description
 			}
+			if err := s.savePlugins(plugins); err != nil {
+				return err
+			}
 			updated = true
-			return s.savePlugins(plugins)
+			return nil
 		}
 		return nil
 	})

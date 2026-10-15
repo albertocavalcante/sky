@@ -369,6 +369,52 @@ func TestInstall_CleanupDoesNotDeleteSymlinkOutsideStore(t *testing.T) {
 	}
 }
 
+func TestUpdatePluginMetadata_DoesNotMutateEarlierResult(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "bin")
+	writeTestFile(t, bin, "x")
+	root := filepath.Join(dir, "root")
+	s := NewStore(root)
+	p, err := s.InstallFromPath("foo", bin, "1", TypeExecutable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := s.LoadPlugins()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := s.UpdatePluginMetadata("foo", p.InstalledAt, "2", "new"); err != nil || !ok {
+		t.Fatalf("update: %v, %v", ok, err)
+	}
+	if before[0].Version != "1" || before[0].Description != "" {
+		t.Fatalf("earlier LoadPlugins result was mutated: %+v", before[0])
+	}
+	after, _ := s.LoadPlugins()
+	if after[0].Version != "2" {
+		t.Fatalf("update not visible: %+v", after[0])
+	}
+
+	if runtime.GOOS == "windows" {
+		return
+	}
+	// A failed save must not leave the change in the cache.
+	if err := os.Chmod(root, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(root, 0o755) })
+	if f, err := os.CreateTemp(root, "probe-"); err == nil {
+		_ = f.Close()
+		return // writable despite 0555 (running as root)
+	}
+	if _, err := s.UpdatePluginMetadata("foo", p.InstalledAt, "3", "lost"); err == nil {
+		t.Fatal("update should fail when the catalog cannot be written")
+	}
+	got, _ := s.FindPlugin("foo")
+	if got == nil || got.Version != "2" || got.Description != "new" {
+		t.Fatalf("failed update leaked into cache: %+v", got)
+	}
+}
+
 func TestOwnsBinary_CaseInsensitiveFilesystem(t *testing.T) {
 	dir := t.TempDir()
 	s := NewStore(filepath.Join(dir, "root"))
