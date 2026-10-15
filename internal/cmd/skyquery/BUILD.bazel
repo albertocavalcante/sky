@@ -15,6 +15,9 @@ go_library(
 
 go_test(
     name = "skyquery_test",
-    srcs = ["run_test.go"],
+    srcs = [
+        "run_test.go",
+        "workspace_test.go",
+    ],
     embed = [":skyquery"],
 )

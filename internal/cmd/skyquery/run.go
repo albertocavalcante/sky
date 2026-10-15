@@ -97,6 +97,16 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 
 	queryStr := queryArgs[0]
 
+	// An invalid workspace is a usage error, not a parse error: fail before
+	// indexing so --keep_going cannot hide it.
+	if info, err := os.Stat(workspace); err != nil {
+		writef(stderr, "skyquery: invalid workspace %q: %v\n", workspace, err)
+		return exitError
+	} else if !info.IsDir() {
+		writef(stderr, "skyquery: invalid workspace %q: not a directory\n", workspace)
+		return exitError
+	}
+
 	// Create index
 	idx := index.New(workspace)
 
