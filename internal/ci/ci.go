@@ -195,9 +195,25 @@ func detectSystem() System {
 
 // readResults reads and parses JSON test results from stdin.
 func readResults(r io.Reader) (*TestResults, error) {
-	var results TestResults
 	decoder := json.NewDecoder(r)
-	if err := decoder.Decode(&results); err != nil {
+	var raw json.RawMessage
+	if err := decoder.Decode(&raw); err != nil {
+		return nil, fmt.Errorf("parsing JSON: %w", err)
+	}
+	// Exactly one report: anything after it (a second report, garbage) could
+	// hide failures, so reject it rather than ignore it.
+	if _, err := decoder.Token(); err != io.EOF {
+		return nil, fmt.Errorf("unexpected data after the JSON report; expected exactly one skytest -json report")
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &keys); err != nil {
+		return nil, fmt.Errorf("parsing JSON: report must be an object: %w", err)
+	}
+	if v, ok := keys["results"]; !ok || string(v) == "null" {
+		return nil, fmt.Errorf("invalid report: missing \"results\" array (not skytest -json output?)")
+	}
+	var results TestResults
+	if err := json.Unmarshal(raw, &results); err != nil {
 		return nil, fmt.Errorf("parsing JSON: %w", err)
 	}
 	return &results, nil
