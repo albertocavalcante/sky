@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -644,12 +645,164 @@ func checkReplacedSymlink(t *testing.T, s *Store, dest string, err error) {
 }
 
 func TestInstall_ReinstallOverSymlinkToFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("mode bits and symlinks are not reliable on Windows")
+	}
 	target := filepath.Join(t.TempDir(), "real")
 	writeTestFile(t, target, "old")
+	// An unreadable target makes any implementation that opens, reads or
+	// copies through the symlink fail; only replacing the link itself works.
+	if err := os.Chmod(target, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(target, 0o644) })
+	if f, err := os.Open(target); err == nil {
+		_ = f.Close()
+		t.Skip("mode 000 file is still readable (running as root?)")
+	}
 	s, dest, err := reinstallOverSymlink(t, target)
 	checkReplacedSymlink(t, s, dest, err)
+	if err := os.Chmod(target, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if got, _ := os.ReadFile(target); string(got) != "old" {
 		t.Fatalf("symlink target was modified: %q", got)
+	}
+}
+
+// Replacing an executable symlink must be a single atomic rename: the path
+// may never be absent, or a concurrent launch fails with ENOENT.
+func TestInstall_ReinstallOverSymlinkNeverLeavesDestMissing(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need privileges on Windows")
+	}
+	dir := t.TempDir()
+	v1 := filepath.Join(dir, "v1")
+	real := filepath.Join(dir, "real")
+	writeTestFile(t, v1, "new")
+	writeTestFile(t, real, "old")
+	s := NewStore(filepath.Join(dir, "root"))
+	if err := s.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	dest := s.PluginPath("foo", TypeExecutable)
+	plantLink := func() error {
+		tmpLink := filepath.Join(s.PluginsDir(), ".planted")
+		_ = os.Remove(tmpLink)
+		if err := os.Symlink(real, tmpLink); err != nil {
+			return err
+		}
+		return os.Rename(tmpLink, dest) // atomic: dest never absent
+	}
+	if err := plantLink(); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	var missing atomic.Int64
+	stop := make(chan struct{})
+	started := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		close(started)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			if _, err := os.Stat(dest); errors.Is(err, os.ErrNotExist) {
+				missing.Add(1)
+			}
+		}
+	}()
+	<-started
+	done := make(chan error, 1)
+	go func() {
+		for i := 0; i < 300; i++ {
+			if _, err := s.InstallFromPath("foo", v1, "x", TypeExecutable); err != nil {
+				done <- err
+				return
+			}
+			if err := plantLink(); err != nil {
+				done <- err
+				return
+			}
+		}
+		done <- nil
+	}()
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(60 * time.Second):
+		close(stop)
+		t.Fatal("reinstall loop did not finish")
+	}
+	close(stop)
+	wg.Wait()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := missing.Load(); n != 0 {
+		t.Fatalf("plugin path was missing %d times while replacing a symlink", n)
+	}
+}
+
+// A directory at the plugin path cannot be replaced by a file. The install
+// must fail cleanly: directory untouched, nothing left behind (rollback of
+// non-regular entries is intentionally not attempted).
+func TestInstall_DirectoryAtPluginPath(t *testing.T) {
+	for _, tc := range []string{"catalog-ok", "catalog-unwritable"} {
+		t.Run(tc, func(t *testing.T) {
+			dir := t.TempDir()
+			v1 := filepath.Join(dir, "v1")
+			writeTestFile(t, v1, "new")
+			root := filepath.Join(dir, "root")
+			s := NewStore(root)
+			if err := s.Ensure(); err != nil {
+				t.Fatal(err)
+			}
+			dest := s.PluginPath("foo", TypeExecutable)
+			if err := os.MkdirAll(filepath.Join(dest, "sub"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			writeTestFile(t, filepath.Join(dest, "sub", "keep"), "keep")
+			if tc == "catalog-unwritable" {
+				if runtime.GOOS == "windows" {
+					t.Skip("directory permission bits do not restrict writes on Windows")
+				}
+				if err := os.Chmod(root, 0o555); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(root, 0o755) })
+			}
+
+			done := make(chan error, 1)
+			go func() {
+				_, err := s.InstallFromPath("foo", v1, "1", TypeExecutable)
+				done <- err
+			}()
+			select {
+			case err := <-done:
+				if err == nil {
+					t.Fatal("install over a directory should fail")
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatal("install over a directory did not finish")
+			}
+			info, err := os.Lstat(dest)
+			if err != nil || !info.IsDir() {
+				t.Fatalf("directory at plugin path was replaced: %v, %v", info, err)
+			}
+			if got, _ := os.ReadFile(filepath.Join(dest, "sub", "keep")); string(got) != "keep" {
+				t.Fatalf("directory contents changed: %q", got)
+			}
+			entries, _ := os.ReadDir(s.PluginsDir())
+			if len(entries) != 1 {
+				t.Fatalf("leftover files in plugins dir: %v", entries)
+			}
+		})
 	}
 }
 

@@ -90,14 +90,12 @@ func (s *Store) commitInstall(tmpName string, plugin Plugin) error {
 		}
 		// Park the live binary under a backup name so a failed catalog write
 		// can put it back; the catalog and the binary must never disagree.
-		backup, moved, err := s.parkBinary(dest, plugin.Name)
+		backup, err := s.parkBinary(dest, plugin.Name)
 		if err != nil {
 			return err
 		}
 		if err := os.Rename(tmpName, dest); err != nil {
-			if moved {
-				restoreBinary(backup, dest)
-			} else if backup != "" {
+			if backup != "" {
 				// dest was never touched; just drop the backup.
 				_ = os.Remove(backup)
 			}
@@ -119,44 +117,45 @@ func (s *Store) commitInstall(tmpName string, plugin Plugin) error {
 	})
 }
 
-// parkBinary backs up an existing entry at dest under a unique name in the
-// plugins directory and returns that name, or "" when dest does not exist.
-// For a regular file the live binary stays at dest the whole time (the backup
-// is a hard link, or a copy where links are unsupported) so a concurrent
-// launch never sees the path missing. Anything else (a symlink, device, ...)
-// is never followed or read: the entry itself is renamed aside (moved=true)
-// and restoreBinary puts it back on failure.
-func (s *Store) parkBinary(dest, name string) (backup string, moved bool, err error) {
+// parkBinary backs up an existing regular file at dest under a unique name in
+// the plugins directory and returns that name. The live binary stays at dest
+// the whole time (the backup is a hard link, or a copy where links are
+// unsupported) so a concurrent launch never sees the path missing.
+//
+// Anything that is not a regular file (symlink, device, directory, ...) gets
+// no backup: it is never followed or read, and the later os.Rename of the
+// staged file replaces it atomically (a symlink is swapped in one step; a
+// directory makes the rename fail before anything changes). Rollback of a
+// failed catalog write is therefore only provided for regular-file plugins.
+// An empty backup is returned when dest is absent or not a regular file.
+func (s *Store) parkBinary(dest, name string) (backup string, err error) {
 	info, err := os.Lstat(dest)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return "", false, nil
+			return "", nil
 		}
-		return "", false, fmt.Errorf("stat plugin: %w", err)
+		return "", fmt.Errorf("stat plugin: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", nil
 	}
 	f, err := os.CreateTemp(s.PluginsDir(), name+"-bak-")
 	if err != nil {
-		return "", false, fmt.Errorf("create backup: %w", err)
+		return "", fmt.Errorf("create backup: %w", err)
 	}
 	backup = f.Name()
 	_ = f.Close()
 	// Free the reserved name; the write lock serialises installs.
 	if err := os.Remove(backup); err != nil {
-		return "", false, fmt.Errorf("create backup: %w", err)
-	}
-	if !info.Mode().IsRegular() {
-		if err := os.Rename(dest, backup); err != nil {
-			return "", false, fmt.Errorf("back up previous plugin entry: %w", err)
-		}
-		return backup, true, nil
+		return "", fmt.Errorf("create backup: %w", err)
 	}
 	if err := os.Link(dest, backup); err != nil {
 		if err := copyFile(dest, backup, 0o755); err != nil {
 			_ = os.Remove(backup)
-			return "", false, fmt.Errorf("back up previous plugin binary: %w", err)
+			return "", fmt.Errorf("back up previous plugin binary: %w", err)
 		}
 	}
-	return backup, false, nil
+	return backup, nil
 }
 
 // restoreBinary undoes a committed rename by atomically moving the backup
