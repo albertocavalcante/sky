@@ -32,6 +32,10 @@ type Server struct {
 	documents   map[string]*Document
 	rootURI     string
 
+	// overlappingTokens is true when the client advertised
+	// textDocument.semanticTokens.overlappingTokenSupport.
+	overlappingTokens bool
+
 	// Diagnostics
 	lintDriver *linter.Driver
 	checker    *checker.Checker
@@ -98,8 +102,48 @@ func (s *Server) ExitStatus() (code int, exited bool) {
 	return s.exitCode, s.exited
 }
 
-// Handle implements Handler interface - routes requests to methods.
+// PrepareRequest implements requestPreparer. Requests are dispatched to
+// goroutines, so a didChange that follows a request on the wire can replace
+// the document before the handler reads it. Capturing the document here, on
+// the read loop, pins the version the client was looking at when it asked.
+func (s *Server) PrepareRequest(req *Request) {
+	var p struct {
+		TextDocument struct {
+			URI string `json:"uri"`
+		} `json:"textDocument"`
+	}
+	if len(req.Params) == 0 || json.Unmarshal(req.Params, &p) != nil || p.TextDocument.URI == "" {
+		return
+	}
+	s.mu.RLock()
+	doc := s.documents[p.TextDocument.URI]
+	s.mu.RUnlock()
+	if doc != nil {
+		req.snapshot = doc
+	}
+}
+
+// Handle implements Handler interface - routes requests to methods. When the
+// request carries a document snapshot (see PrepareRequest) and the document
+// was changed or closed before the handler finished, the answer would
+// describe a stale or mixed state, so ContentModified is returned instead.
 func (s *Server) Handle(ctx context.Context, req *Request) (any, error) {
+	res, err := s.route(ctx, req)
+	if snap, ok := req.snapshot.(*Document); ok {
+		s.mu.RLock()
+		cur := s.documents[snap.URI]
+		s.mu.RUnlock()
+		if cur != snap {
+			return nil, &ResponseError{
+				Code:    CodeContentModified,
+				Message: "document changed while the request was pending",
+			}
+		}
+	}
+	return res, err
+}
+
+func (s *Server) route(ctx context.Context, req *Request) (any, error) {
 	s.mu.RLock()
 	shutdown := s.shutdown
 	initialized := s.initialized
@@ -203,6 +247,7 @@ func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (
 	}
 
 	s.mu.Lock()
+	s.overlappingTokens = p.Capabilities.TextDocument.SemanticTokens.OverlappingTokenSupport
 	if p.WorkspaceFolders != nil && len(*p.WorkspaceFolders) > 0 {
 		s.rootURI = string((*p.WorkspaceFolders)[0].Uri)
 	} else if p.RootUri != nil && *p.RootUri != "" {
