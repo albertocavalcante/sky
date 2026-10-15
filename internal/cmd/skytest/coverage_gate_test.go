@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -58,14 +59,54 @@ func TestRun_FailUnderBelowThresholdExits1(t *testing.T) {
 	}
 }
 
+// sizedGateFixture is like gateFixture but measures exactly total lines of
+// which covered are hit: unused() holds the uncovered call lines, test_a the
+// covered ones (plus the two def lines and one assert).
+func sizedGateFixture(t *testing.T, failUnder string, covered, total int) []string {
+	t.Helper()
+	var src strings.Builder
+	src.WriteString("def unused():\n")
+	for i := 0; i < total-covered; i++ {
+		src.WriteString("    a" + strconv.Itoa(i) + " = len(\"a\")\n")
+	}
+	src.WriteString("    return 1\n\ndef test_a():\n")
+	for i := 0; i < covered-3; i++ {
+		src.WriteString("    b" + strconv.Itoa(i) + " = len(\"b\")\n")
+	}
+	src.WriteString("    assert.eq(len(\"a\"), 1)\n")
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test_a.star")
+	if err := os.WriteFile(file, []byte(src.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := filepath.Join(dir, "sky.toml")
+	if err := os.WriteFile(cfg, []byte("[test.coverage]\nfail_under = "+failUnder+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return []string{"--config", cfg, "--coverage", "--coverprofile=" + filepath.Join(dir, "cov.json"), file}
+}
+
+// 64.4*250 is 16100.000000000002 in float64, so a float product comparison
+// fails 161 of 250 lines (exactly 64.4%) at fail_under = 64.4.
 func TestRun_FailUnderEqualToCoveragePasses(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	code := RunWithIO(context.Background(), gateFixture(t, "50"), nil, &stdout, &stderr)
+	code := RunWithIO(context.Background(), sizedGateFixture(t, "64.4", 161, 250), nil, &stdout, &stderr)
 	if strings.Contains(stderr.String(), "coverage unavailable") {
 		t.Skip("coverage hook not enabled in this build")
 	}
 	if code != exitOK {
-		t.Fatalf("exit = %d, want 0 (50%% measured, threshold 50)\nstderr: %s", code, stderr.String())
+		t.Fatalf("exit = %d, want 0 (161 of 250 lines = 64.4%%, threshold 64.4)\nstderr: %s", code, stderr.String())
+	}
+}
+
+func TestRun_FailUnderOneLineShortFails(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), sizedGateFixture(t, "64.4", 160, 250), nil, &stdout, &stderr)
+	if strings.Contains(stderr.String(), "coverage unavailable") {
+		t.Skip("coverage hook not enabled in this build")
+	}
+	if code != exitFailed {
+		t.Fatalf("exit = %d, want %d (160 of 250 lines = 64%%, threshold 64.4)\nstderr: %s", code, exitFailed, stderr.String())
 	}
 }
 
@@ -124,6 +165,8 @@ func TestCheckCoverageThreshold(t *testing.T) {
 		{"equal passes", &coverage.Report{TotalLines: 10, CoveredLines: 8}, 80, exitOK, ""},
 		// 57/100*100 is 56.99999999999999 in float64; exact equality passes.
 		{"exact equality 57 of 100", &coverage.Report{TotalLines: 100, CoveredLines: 57}, 57, exitOK, ""},
+		{"exact equality 161 of 250 at 64.4", &coverage.Report{TotalLines: 250, CoveredLines: 161}, 64.4, exitOK, ""},
+		{"one line short 160 of 250 at 64.4", &coverage.Report{TotalLines: 250, CoveredLines: 160}, 64.4, exitFailed, "below threshold"},
 		{"one line short", &coverage.Report{TotalLines: 100, CoveredLines: 56}, 57, exitFailed, "below threshold"},
 		{"above passes", &coverage.Report{TotalLines: 10, CoveredLines: 10}, 80, exitOK, ""},
 		// Like sky-ci, zero measured lines is "unavailable", never 100%.
