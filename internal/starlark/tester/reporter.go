@@ -1,6 +1,7 @@
 package tester
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -369,8 +370,8 @@ func (r *JSONReporter) ReportSummary(w io.Writer, result *RunResult) {
 
 	type jsonFile struct {
 		File     string     `json:"file"`
-		Tests    []jsonTest `json:"tests"`
 		Duration float64    `json:"duration_ms"`
+		Tests    []jsonTest `json:"tests"`
 	}
 
 	type jsonOutput struct {
@@ -388,12 +389,14 @@ func (r *JSONReporter) ReportSummary(w io.Writer, result *RunResult) {
 		Total:    passed + failed,
 		Files:    files,
 		Duration: float64(result.Duration.Milliseconds()),
+		Results:  []jsonFile{},
 	}
 
 	for _, fr := range result.Files {
 		jf := jsonFile{
 			File:     fr.File,
 			Duration: float64(fr.Duration.Milliseconds()),
+			Tests:    []jsonTest{},
 		}
 		for _, t := range fr.Tests {
 			jt := jsonTest{
@@ -409,48 +412,12 @@ func (r *JSONReporter) ReportSummary(w io.Writer, result *RunResult) {
 		out.Results = append(out.Results, jf)
 	}
 
-	// Manual JSON encoding to avoid importing encoding/json for simple output
-	_, _ = fmt.Fprintf(w, "{\n")
-	_, _ = fmt.Fprintf(w, "  \"passed\": %d,\n", out.Passed)
-	_, _ = fmt.Fprintf(w, "  \"failed\": %d,\n", out.Failed)
-	_, _ = fmt.Fprintf(w, "  \"total\": %d,\n", out.Total)
-	_, _ = fmt.Fprintf(w, "  \"files\": %d,\n", out.Files)
-	_, _ = fmt.Fprintf(w, "  \"duration_ms\": %.0f,\n", out.Duration)
-	_, _ = fmt.Fprintf(w, "  \"results\": [\n")
-
-	for i, jf := range out.Results {
-		_, _ = fmt.Fprintf(w, "    {\n")
-		_, _ = fmt.Fprintf(w, "      \"file\": %q,\n", jf.File)
-		_, _ = fmt.Fprintf(w, "      \"duration_ms\": %.0f,\n", jf.Duration)
-		_, _ = fmt.Fprintf(w, "      \"tests\": [\n")
-
-		for j, jt := range jf.Tests {
-			_, _ = fmt.Fprintf(w, "        {\n")
-			_, _ = fmt.Fprintf(w, "          \"name\": %q,\n", jt.Name)
-			_, _ = fmt.Fprintf(w, "          \"passed\": %t,\n", jt.Passed)
-			_, _ = fmt.Fprintf(w, "          \"duration_ms\": %.0f", jt.Duration)
-			if jt.Error != "" {
-				_, _ = fmt.Fprintf(w, ",\n          \"error\": %q\n", jt.Error)
-			} else {
-				_, _ = fmt.Fprintf(w, "\n")
-			}
-			if j < len(jf.Tests)-1 {
-				_, _ = fmt.Fprintf(w, "        },\n")
-			} else {
-				_, _ = fmt.Fprintf(w, "        }\n")
-			}
-		}
-
-		_, _ = fmt.Fprintf(w, "      ]\n")
-		if i < len(out.Results)-1 {
-			_, _ = fmt.Fprintf(w, "    },\n")
-		} else {
-			_, _ = fmt.Fprintf(w, "    }\n")
-		}
-	}
-
-	_, _ = fmt.Fprintf(w, "  ]\n")
-	_, _ = fmt.Fprintf(w, "}\n")
+	// encoding/json escapes control characters as valid JSON (\u0007);
+	// %q would emit Go-only escapes such as \a and \x00.
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(out)
 }
 
 // GitHubReporter outputs results as GitHub workflow commands.
@@ -461,7 +428,7 @@ type GitHubReporter struct{}
 // Report implements Reporter.
 func (r *GitHubReporter) Report(w io.Writer, result *FileResult) error {
 	// Start a collapsible group for this file
-	if _, err := fmt.Fprintf(w, "::group::\U0001F4C1 %s\n", result.File); err != nil {
+	if _, err := fmt.Fprintf(w, "::group::\U0001F4C1 %s\n", escapeGitHubMessage(result.File)); err != nil {
 		return err
 	}
 
@@ -492,7 +459,7 @@ func (r *GitHubReporter) Report(w io.Writer, result *FileResult) error {
 					return err
 				}
 			}
-			if _, err := fmt.Fprintf(w, "SKIP  %s\n", t.Name); err != nil {
+			if _, err := fmt.Fprintf(w, "SKIP  %s\n", escapeGitHubMessage(t.Name)); err != nil {
 				return err
 			}
 
@@ -503,18 +470,18 @@ func (r *GitHubReporter) Report(w io.Writer, result *FileResult) error {
 				escapeGitHubMessage(t.Name)); err != nil {
 				return err
 			}
-			if _, err := fmt.Fprintf(w, "XPASS %s\n", t.Name); err != nil {
+			if _, err := fmt.Fprintf(w, "XPASS %s\n", escapeGitHubMessage(t.Name)); err != nil {
 				return err
 			}
 
 		case t.XFail && t.Passed:
 			// Expected failure that failed (success)
-			if _, err := fmt.Fprintf(w, "XFAIL %s\n", t.Name); err != nil {
+			if _, err := fmt.Fprintf(w, "XFAIL %s\n", escapeGitHubMessage(t.Name)); err != nil {
 				return err
 			}
 
 		case t.Passed:
-			if _, err := fmt.Fprintf(w, "PASS  %s\n", t.Name); err != nil {
+			if _, err := fmt.Fprintf(w, "PASS  %s\n", escapeGitHubMessage(t.Name)); err != nil {
 				return err
 			}
 
@@ -539,7 +506,7 @@ func (r *GitHubReporter) Report(w io.Writer, result *FileResult) error {
 					return err
 				}
 			}
-			if _, err := fmt.Fprintf(w, "FAIL  %s\n", t.Name); err != nil {
+			if _, err := fmt.Fprintf(w, "FAIL  %s\n", escapeGitHubMessage(t.Name)); err != nil {
 				return err
 			}
 		}
