@@ -87,6 +87,49 @@ func TestLoadGraph_EnclosingPackageReverseLookup(t *testing.T) {
 	}
 }
 
+func TestLoadGraph_LoadedByMergesSpellings(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, "pkg/BUILD", "pkg/sub/base.bzl")
+	if err := writeContent(root, "pkg/a.bzl", `load("//pkg:sub/base.bzl", "x")`+"\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeContent(root, "pkg/b.bzl", `load("//pkg/sub:base.bzl", "x")`+"\n"); err != nil {
+		t.Fatal(err)
+	}
+	idx := New(root)
+	if _, errs := idx.AddPattern("//..."); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	g := idx.BuildLoadGraph()
+	for _, q := range []string{"//pkg:sub/base.bzl", "//pkg/sub:base.bzl", "//pkg/sub/base.bzl", "pkg/sub/base.bzl"} {
+		got := append([]string(nil), g.LoadedBy(q)...)
+		sort.Strings(got)
+		if len(got) != 2 || got[0] != "pkg/a.bzl" || got[1] != "pkg/b.bzl" {
+			t.Errorf("LoadedBy(%q) = %v, want [pkg/a.bzl pkg/b.bzl]", q, got)
+		}
+	}
+}
+
+func TestLoadGraph_LoadLine(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, "pkg/BUILD", "pkg/base.bzl")
+	src := "# c\n\n\nload(\":base.bzl\", \"x\")\n"
+	if err := writeContent(root, "pkg/a.bzl", src); err != nil {
+		t.Fatal(err)
+	}
+	idx := New(root)
+	if _, errs := idx.AddPattern("//..."); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	g := idx.BuildLoadGraph()
+	if got := g.LoadLine("pkg/a.bzl", "//pkg:base.bzl"); got != 4 {
+		t.Errorf("LoadLine = %d, want 4", got)
+	}
+	if got := g.LoadLine("pkg/a.bzl", "//pkg:other.bzl"); got != 0 {
+		t.Errorf("LoadLine for unknown module = %d, want 0", got)
+	}
+}
+
 func TestLookupNormalizesBackslashes(t *testing.T) {
 	// Real Windows separators cannot occur on this OS; exercise the helper
 	// with an explicit separator.

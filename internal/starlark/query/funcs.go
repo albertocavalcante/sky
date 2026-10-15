@@ -266,12 +266,9 @@ func (e *Engine) evalAllLoads(args []Expr) (*Result, error) {
 			seen[module] = true
 
 			// Find the line number of the load statement if it's a direct load
-			line := 1
-			for _, load := range f.Loads {
-				if load.Module == module {
-					line = load.Line
-					break
-				}
+			line := graph.LoadLine(f.Path, module)
+			if line == 0 {
+				line = 1
 			}
 
 			items = append(items, Item{
