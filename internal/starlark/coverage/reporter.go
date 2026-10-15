@@ -32,8 +32,9 @@ type TextReporter struct {
 }
 
 // Report implements Reporter.
-func (r *TextReporter) Report(w io.Writer, report *Report) error {
+func (r *TextReporter) Report(out io.Writer, report *Report) error {
 	report.Compute()
+	w := &errWriter{w: out}
 
 	// Header
 	writef(w, "Coverage Report\n")
@@ -68,7 +69,7 @@ func (r *TextReporter) Report(w io.Writer, report *Report) error {
 		report.TotalLines,
 	)
 
-	return nil
+	return w.err
 }
 
 func (r *TextReporter) getMissingLines(fc *FileCoverage) []int {
@@ -188,9 +189,10 @@ func (r *JSONReporter) Report(w io.Writer, report *Report) error {
 		return fmt.Errorf("encoding JSON: %w", err)
 	}
 
-	_, _ = w.Write(data)
-	_, _ = w.Write([]byte("\n"))
-	return nil
+	ew := &errWriter{w: w}
+	_, _ = ew.Write(data)
+	_, _ = ew.Write([]byte("\n"))
+	return ew.err
 }
 
 // -----------------------------------------------------------------------------
@@ -332,14 +334,15 @@ func (r *CoberturaReporter) Report(w io.Writer, report *Report) error {
 		cov.Packages.Package = append(cov.Packages.Package, pkg)
 	}
 
-	_, _ = w.Write([]byte(xml.Header))
-	enc := xml.NewEncoder(w)
+	ew := &errWriter{w: w}
+	_, _ = ew.Write([]byte(xml.Header))
+	enc := xml.NewEncoder(ew)
 	enc.Indent("", "  ")
 	if err := enc.Encode(cov); err != nil {
 		return fmt.Errorf("encoding Cobertura XML: %w", err)
 	}
-	_, _ = w.Write([]byte("\n"))
-	return nil
+	_, _ = ew.Write([]byte("\n"))
+	return ew.err
 }
 
 // -----------------------------------------------------------------------------
@@ -435,7 +438,11 @@ func (r *HTMLReporter) Report(w io.Writer, report *Report) error {
 		data.Files = append(data.Files, fileData)
 	}
 
-	return htmlTemplate.Execute(w, data)
+	ew := &errWriter{w: w}
+	if err := htmlTemplate.Execute(ew, data); err != nil {
+		return err
+	}
+	return ew.err
 }
 
 var htmlTemplate = template.Must(template.New("coverage").Parse(`<!DOCTYPE html>
@@ -603,8 +610,9 @@ h1 { margin-bottom: 0.5rem; }
 type LCOVReporter struct{}
 
 // Report implements Reporter.
-func (r *LCOVReporter) Report(w io.Writer, report *Report) error {
+func (r *LCOVReporter) Report(out io.Writer, report *Report) error {
 	report.Compute()
+	w := &errWriter{w: out}
 
 	for _, path := range report.FilePaths() {
 		fc := report.Files[path]
@@ -645,10 +653,29 @@ func (r *LCOVReporter) Report(w io.Writer, report *Report) error {
 		writef(w, "end_of_record\n")
 	}
 
-	return nil
+	return w.err
 }
 
-// Helper for writing to io.Writer
-func writef(w io.Writer, format string, args ...any) {
+// errWriter remembers the first write error and turns short writes into
+// io.ErrShortWrite, so reporters can write freely and return the error once.
+type errWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (e *errWriter) Write(p []byte) (int, error) {
+	if e.err != nil {
+		return 0, e.err
+	}
+	n, err := e.w.Write(p)
+	if err == nil && n < len(p) {
+		err = io.ErrShortWrite
+	}
+	e.err = err
+	return n, err
+}
+
+// writef formats to w; the error is kept in w and reported by the caller.
+func writef(w *errWriter, format string, args ...any) {
 	_, _ = fmt.Fprintf(w, format, args...)
 }

@@ -15,6 +15,7 @@ go_test(
     srcs = [
         "coverage_test.go",
         "regress_test.go",
+        "reporter_write_test.go",
     ],
     embed = [":coverage"],
 )
