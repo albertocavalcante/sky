@@ -9,9 +9,10 @@ import (
 )
 
 // Write atomically replaces path with data. The temporary file is created
-// exclusively with a unique name (mode 0600) next to path, restricted/chmodded
-// to its final mode before any content is written, then renamed into place.
-// An existing destination keeps its permission bits; a new one gets
+// exclusively (mode 0600) next to path with a short fixed-prefix unique name,
+// so a destination basename at the filesystem limit still works. It is
+// chmodded to its final mode before any content is written, then renamed into
+// place. An existing destination keeps its permission bits; a new one gets
 // perm subject to the process umask.
 func Write(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
@@ -19,7 +20,7 @@ func Write(path string, data []byte, perm os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
+	tmp, err := os.CreateTemp(dir, ".sky-tmp-*")
 	if err != nil {
 		return err
 	}
