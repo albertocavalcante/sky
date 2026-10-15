@@ -342,6 +342,12 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	// front so a failed or empty collection can never be mistaken for fresh
 	// data by a consumer such as sky-ci.
 	var coverageRunner *tester.Runner
+	// Watch mode never finishes a run, so it cannot enforce a threshold:
+	// refuse the combination rather than exit 0 with the gate skipped.
+	if watchFlag && effectiveCoverage && failUnder > 0 {
+		writef(stderr, "skytest: coverage.fail_under=%.1f cannot be enforced with --watch; drop --watch or the threshold\n", failUnder)
+		return exitError
+	}
 	coverageMode := os.FileMode(0o666) // umask applies to a new report
 	hadStaleReport := false
 	if effectiveCoverage {

@@ -69,6 +69,20 @@ func TestRun_FailUnderEqualToCoveragePasses(t *testing.T) {
 	}
 }
 
+// --watch never reaches the gate, so combining it with an enforced threshold
+// must be refused instead of silently exiting 0.
+func TestRun_FailUnderWithWatchIsRejected(t *testing.T) {
+	args := append([]string{"--watch"}, gateFixture(t, "80")...)
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), args, nil, &stdout, &stderr)
+	if code != exitError {
+		t.Fatalf("exit = %d, want %d\nstderr: %s", code, exitError, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "--watch") || !strings.Contains(stderr.String(), "fail_under") {
+		t.Errorf("stderr = %q, want a message naming --watch and fail_under", stderr.String())
+	}
+}
+
 func TestRun_FailUnderWithoutCoverageWarns(t *testing.T) {
 	args := gateFixture(t, "80")
 	// Drop "--coverage" and "--coverprofile=..." (indexes 2 and 3).
