@@ -25,21 +25,30 @@ type Store struct {
 }
 
 // NewStore creates a store rooted at the provided path.
+// A relative root is anchored to the current directory once, here, so the
+// paths persisted in the catalog never depend on the working directory later.
 func NewStore(root string) *Store {
-	return &Store{Root: root}
+	return &Store{Root: absRoot(root)}
+}
+
+func absRoot(root string) string {
+	if abs, err := filepath.Abs(root); err == nil {
+		return abs
+	}
+	return root
 }
 
 // DefaultStore creates a store in the user config directory.
 func DefaultStore() (*Store, error) {
 	if override := os.Getenv("SKY_CONFIG_DIR"); override != "" {
-		return &Store{Root: override}, nil
+		return NewStore(override), nil
 	}
 
 	base, err := os.UserConfigDir()
 	if err != nil {
 		return nil, fmt.Errorf("config dir: %w", err)
 	}
-	return &Store{Root: filepath.Join(base, "sky")}, nil
+	return NewStore(filepath.Join(base, "sky")), nil
 }
 
 // Ensure creates the config directories if needed.
@@ -157,6 +166,12 @@ func (s *Store) loadPluginsNL() ([]Plugin, error) {
 	for i := range plugins {
 		if plugins[i].Type == "" {
 			plugins[i].Type = TypeExecutable
+		}
+		// A relative path written by an older version would resolve against
+		// the working directory (and could run a lookalike binary); keep only
+		// its file name and anchor it in this store's plugins directory.
+		if p := plugins[i].Path; p != "" && !filepath.IsAbs(p) {
+			plugins[i].Path = filepath.Join(s.PluginsDir(), filepath.Base(p))
 		}
 	}
 	sort.Slice(plugins, func(i, j int) bool {

@@ -415,6 +415,67 @@ func TestUpdatePluginMetadata_DoesNotMutateEarlierResult(t *testing.T) {
 	}
 }
 
+func TestStore_RelativeRootPersistsAbsolutePath(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	bin := filepath.Join(dir, "bin")
+	writeTestFile(t, bin, "x")
+	t.Setenv("SKY_CONFIG_DIR", "rel-root")
+	s, err := DefaultStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !filepath.IsAbs(s.Root) {
+		t.Fatalf("store root not absolute: %q", s.Root)
+	}
+	p, err := s.InstallFromPath("foo", bin, "1", TypeExecutable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !filepath.IsAbs(p.Path) {
+		t.Fatalf("persisted path not absolute: %q", p.Path)
+	}
+	data, err := os.ReadFile(s.PluginsFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), `"path": "rel-root`) {
+		t.Fatalf("catalog holds a relative path: %s", data)
+	}
+}
+
+func TestStore_StaleRelativePathResolvesInStore(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "root")
+	s := NewStore(root)
+	if err := s.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	// An older version persisted a path relative to the working directory.
+	rel := filepath.Join("root", "plugins", "foo")
+	data, err := json.Marshal([]Plugin{{Name: "foo", Path: rel, Type: TypeExecutable}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(s.PluginsFile(), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A lookalike in the working directory must not be picked.
+	other := filepath.Join(dir, "cwd")
+	if err := os.MkdirAll(filepath.Join(other, "root", "plugins"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(other)
+
+	p, err := s.FindPlugin("foo")
+	if err != nil || p == nil {
+		t.Fatalf("find: %v, %v", p, err)
+	}
+	if want := s.PluginPath("foo", TypeExecutable); p.Path != want {
+		t.Fatalf("path = %q, want %q", p.Path, want)
+	}
+}
+
 func TestOwnsBinary_CaseInsensitiveFilesystem(t *testing.T) {
 	dir := t.TempDir()
 	s := NewStore(filepath.Join(dir, "root"))
