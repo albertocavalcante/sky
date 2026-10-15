@@ -12,15 +12,6 @@ on:
 permissions:
   contents: read
 
-env:
-  # Tracks go.mod's `go` directive. Sky bumped to 1.26 alongside the
-  # bazel-cst-go / starlark-cst-go / starlark-format-go dep introduction
-  # (their go.mod declares 1.26). govulncheck refuses to load packages
-  # whose required Go version exceeds the toolchain's, so this must
-  # match the floor in go.mod or jobs that compile sky will fail with
-  # `go.mod requires go >= 1.26 (running go 1.X)`.
-  GO_VERSION: "1.26"
-
 jobs:
   # ===========================================================================
   # Job 1: Go Build & Test (module compatibility)
@@ -49,7 +40,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
 
@@ -136,7 +127,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
 
@@ -170,7 +161,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
           cache: false  # Don't need cache for format check
 
       - name: Check Go formatting
@@ -248,7 +239,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
 
