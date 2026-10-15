@@ -247,14 +247,21 @@ func expandPath(path string) ([]string, error) {
 		return []string{path}, nil
 	}
 
+	// WalkDir does not follow a symlink given as the root, so a symlink to a
+	// directory would yield nothing. A trailing separator makes it resolve.
+	root := path
+	if li, lerr := os.Lstat(path); lerr == nil && li.Mode()&os.ModeSymlink != 0 {
+		root = path + string(os.PathSeparator)
+	}
+
 	var files []string
-	err = filepath.WalkDir(path, func(p string, d os.DirEntry, err error) error {
+	err = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
 			// Skip hidden directories
-			if p != path && strings.HasPrefix(d.Name(), ".") {
+			if p != root && strings.HasPrefix(d.Name(), ".") {
 				return filepath.SkipDir
 			}
 			return nil

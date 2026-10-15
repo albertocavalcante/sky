@@ -14,6 +14,9 @@ go_library(
 
 go_test(
     name = "skycheck_test",
-    srcs = ["run_test.go"],
+    srcs = [
+        "run_test.go",
+        "symlink_test.go",
+    ],
     embed = [":skycheck"],
 )
