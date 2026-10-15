@@ -3,6 +3,9 @@ package lsp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/albertocavalcante/sky/internal/protocol"
@@ -39,6 +42,10 @@ func TestRename_ShadowedCalleeIsRefused(t *testing.T) {
 	code := "def f(name):\n    return name\n\ndef invoke(f):\n    return f(name = 1)\n"
 	lines, err := renameLines(t, code, 0, 7, "label")
 	requireRequestFailed(t, err, lines)
+	// The refusal must name the reason the call cannot be resolved.
+	if !strings.Contains(err.Error(), "the callee is shadowed") {
+		t.Errorf("refusal must explain that the callee is shadowed, got: %v", err)
+	}
 }
 
 func TestRename_ParenthesizedCalleeIsResolved(t *testing.T) {
@@ -81,8 +88,19 @@ func TestRename_KeywordUnpackingIsRefused(t *testing.T) {
 
 func TestRename_KeywordUnpackingToForeignCalleesDoesNotBlock(t *testing.T) {
 	code := "def macro(name, **kwargs):\n    native.cc_library(name = name, **kwargs)\n    dict(**kwargs)\n\ndef g(a):\n    return a\n\ng(**{\"a\": 1})\n"
-	if _, err := renameLines(t, code, 0, 11, "label"); err != nil {
+	// Guard against over-refusal: the rename is allowed, and it edits exactly
+	// the declaration and the value use, never the keyword label of the
+	// foreign call (line 1, column 22).
+	edit, err := doRename(t, code, 0, 11, "label")
+	if err != nil {
 		t.Fatalf("unpacking into foreign or unrelated callees must not block: %v", err)
+	}
+	var got []string
+	for _, e := range edit.Changes["file:///rename.star"] {
+		got = append(got, fmt.Sprintf("%d:%d-%d", e.Range.Start.Line, e.Range.Start.Character, e.Range.End.Character))
+	}
+	if want := []string{"0:10-14", "1:29-33"}; !slices.Equal(got, want) {
+		t.Errorf("edits = %v, want %v", got, want)
 	}
 }
 
