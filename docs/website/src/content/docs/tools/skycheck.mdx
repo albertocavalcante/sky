@@ -27,6 +27,9 @@ skycheck *.star
 # Check with JSON output
 skycheck --json file.star
 
+# SARIF 2.1.0 for code scanning
+skycheck --format=sarif --sarif-root=. file.star > findings.sarif
+
 # Quiet mode (errors only)
 skycheck --quiet file.star
 ```
@@ -36,8 +39,15 @@ skycheck --quiet file.star
 | Flag | Description |
 |------|-------------|
 | `--json` | Output diagnostics as JSON |
+| `--format` | Output format: `text`, `json`, or `sarif`; conflicts with `--json` unless set to `json` |
+| `--sarif-root` | Checkout root for SARIF source URIs; defaults to the current directory |
 | `--quiet` | Only output errors, suppress warnings |
 | `--version` | Print version and exit |
+
+SARIF retains the normal exit codes and any diagnostics collected before a
+processing failure. Processing failures produce unsuccessful invocations; an
+empty input directory fails the scan. Input paths are resolved from the working
+directory, then made relative to `--sarif-root` for the report.
 
 ## What skycheck Detects
 

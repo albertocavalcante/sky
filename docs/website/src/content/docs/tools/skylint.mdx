@@ -38,6 +38,9 @@ skylint --format=json .
 
 # GitHub Actions format
 skylint --format=github .
+
+# SARIF 2.1.0 for code scanning
+skylint --format=sarif --sarif-root=. src/ > findings.sarif
 ```
 
 ## Output Formats
@@ -46,8 +49,15 @@ skylint --format=github .
 |--------|-------------|
 | `text` | Human-readable output (default) |
 | `compact` | Single line per issue |
+| `sarif` | SARIF 2.1.0 with rule metadata, UTF-16 locations, and suggested fixes |
 | `json` | Machine-readable JSON |
 | `github` | GitHub Actions annotations |
+
+`--sarif-root` selects the checkout root for SARIF paths and defaults to the
+current directory. Input paths are resolved from the working directory. SARIF
+keeps the normal lint exit codes and records processing failures as unsuccessful
+invocations. An empty input directory fails the scan. `--format=sarif` cannot be
+combined with `--diff`; `--fix` reports the remaining findings after applying fixes.
 
 ## Rules
 

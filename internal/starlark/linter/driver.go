@@ -15,8 +15,10 @@ import (
 
 // Driver executes lint rules on files.
 type Driver struct {
-	registry   *Registry
-	classifier classifier.Classifier
+	// CaptureSources retains source snapshots for findings that need rich export.
+	CaptureSources bool
+	registry       *Registry
+	classifier     classifier.Classifier
 }
 
 // NewDriver creates a new driver with the given registry.
@@ -37,6 +39,7 @@ func (d *Driver) Run(ctx context.Context, paths []string) (*Result, error) {
 	}
 
 	result := &Result{
+		Sources:  make(map[string][]byte),
 		Files:    len(files),
 		Findings: []Finding{},
 		Errors:   []FileError{},
@@ -51,7 +54,14 @@ func (d *Driver) Run(ctx context.Context, paths []string) (*Result, error) {
 		default:
 		}
 
-		findings, err := d.RunFile(path)
+		content, err := os.ReadFile(path)
+		var findings []Finding
+		if err == nil {
+			findings, err = d.RunContent(path, content)
+			if d.CaptureSources && len(findings) > 0 {
+				result.Sources[path] = content
+			}
+		}
 		if err != nil {
 			result.Errors = append(result.Errors, FileError{
 				Path: path,

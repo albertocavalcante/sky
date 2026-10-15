@@ -19,6 +19,9 @@ go_library(
 
 go_test(
     name = "skylint_test",
-    srcs = ["run_test.go"],
+    srcs = [
+        "run_test.go",
+        "sarif_test.go",
+    ],
     embed = [":skylint"],
 )

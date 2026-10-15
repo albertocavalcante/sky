@@ -32,6 +32,7 @@ func RunWithIO(ctx context.Context, args []string, _ io.Reader, stdout, stderr i
 		enableFlag         string
 		disableFlag        string
 		formatFlag         string
+		sarifRoot          string
 		configFlag         string
 		warningsAsErrors   bool
 		listRulesFlag      bool
@@ -46,7 +47,8 @@ func RunWithIO(ctx context.Context, args []string, _ io.Reader, stdout, stderr i
 	fs.SetOutput(stderr)
 	fs.StringVar(&enableFlag, "enable", "", "enable rules (comma-separated, supports 'all' and categories)")
 	fs.StringVar(&disableFlag, "disable", "", "disable rules (comma-separated, supports patterns like 'native-*')")
-	fs.StringVar(&formatFlag, "format", "text", "output format: text, compact, json, github")
+	fs.StringVar(&formatFlag, "format", "text", "output format: text, compact, json, github, sarif")
+	fs.StringVar(&sarifRoot, "sarif-root", ".", "checkout root for SARIF source paths")
 	fs.StringVar(&configFlag, "config", "", "config file path (default: search for .skylint.json)")
 	fs.BoolVar(&warningsAsErrors, "warnings-as-errors", false, "treat warnings as errors")
 	fs.BoolVar(&listRulesFlag, "list-rules", false, "list all available rules")
@@ -73,6 +75,7 @@ func RunWithIO(ctx context.Context, args []string, _ io.Reader, stdout, stderr i
 		writeln(stderr, "  skylint --fix --diff .           # Preview fixes as diff")
 		writeln(stderr, "  skylint --list-rules             # List all available rules")
 		writeln(stderr, "  skylint --explain=load           # Explain the 'load' rule")
+		writeln(stderr, "  skylint --format=sarif src/       # Output as SARIF 2.1.0")
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -155,6 +158,8 @@ func RunWithIO(ctx context.Context, args []string, _ io.Reader, stdout, stderr i
 		reporter = linter.NewJSONReporter()
 	case "github":
 		reporter = githubReporter{}
+	case "sarif":
+		reporter = &linter.SARIFReporter{Root: sarifRoot, Version: version.String(), Rules: registry.AllRules()}
 	default:
 		writef(stderr, "skylint: unknown format: %s\n", formatFlag)
 		return exitError
@@ -162,6 +167,10 @@ func RunWithIO(ctx context.Context, args []string, _ io.Reader, stdout, stderr i
 
 	if diffFlag && !fixFlag {
 		writeln(stderr, "skylint: --diff requires --fix")
+		return exitError
+	}
+	if formatFlag == "sarif" && diffFlag {
+		writeln(stderr, "skylint: --format=sarif cannot be combined with --diff")
 		return exitError
 	}
 
@@ -175,10 +184,24 @@ func RunWithIO(ctx context.Context, args []string, _ io.Reader, stdout, stderr i
 
 	// Create driver and run linter
 	driver := linter.NewDriver(registry)
+	driver.CaptureSources = formatFlag == "sarif"
 	result, err := driver.Run(ctx, paths)
 	if err != nil {
+		if formatFlag == "sarif" {
+			if result == nil {
+				result = &linter.Result{}
+			}
+			result.Errors = append(result.Errors, linter.FileError{Err: err})
+			if reportErr := reporter.Report(stdout, result); reportErr != nil {
+				writef(stderr, "skylint: SARIF: %v\n", reportErr)
+			}
+			return exitError
+		}
 		writef(stderr, "skylint: %v\n", err)
 		return exitError
+	}
+	if formatFlag == "sarif" && result.Files == 0 {
+		result.Errors = append(result.Errors, linter.FileError{Err: fmt.Errorf("no files to lint")})
 	}
 
 	// Handle --fix mode
