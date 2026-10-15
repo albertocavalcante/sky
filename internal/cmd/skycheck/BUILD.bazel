@@ -15,6 +15,7 @@ go_library(
 go_test(
     name = "skycheck_test",
     srcs = [
+        "fifo_unix_test.go",
         "run_test.go",
         "symlink_test.go",
     ],

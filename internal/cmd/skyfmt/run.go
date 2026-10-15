@@ -308,12 +308,27 @@ func expandPath(path string) ([]string, error) {
 			}
 			return nil
 		}
-		if filekind.IsStarlarkFile(d.Name()) {
+		if filekind.IsStarlarkFile(d.Name()) && isRegularEntry(p, d) {
 			files = append(files, p)
 		}
 		return nil
 	})
 	return files, err
+}
+
+// isRegularEntry reports whether a walked entry is a regular file, following
+// symlinks. FIFOs, devices and sockets named like a source file are skipped
+// because reading them can block forever. A dangling link is skipped; other
+// stat errors keep the entry so reading it reports the error.
+func isRegularEntry(path string, d os.DirEntry) bool {
+	if d.Type()&os.ModeSymlink == 0 {
+		return d.Type().IsRegular()
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		return !os.IsNotExist(err)
+	}
+	return st.Mode().IsRegular()
 }
 
 // computeDiff returns a unified diff between original and formatted content.
