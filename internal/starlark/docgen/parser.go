@@ -60,8 +60,13 @@ func ParseDocstring(docstring string) *ParsedDocstring {
 	// Split into sections
 	sections := splitSections(docstring)
 
-	for header, content := range sections {
-		header = strings.ToLower(strings.TrimSuffix(header, ":"))
+	// Sections are applied in document order, so when a docstring has several
+	// headers that map to the same field (Note:/Notes:, Args:/Arguments:/
+	// Parameters:, ...) or repeats one, the last one wins. This must not depend
+	// on map iteration order.
+	for _, sec := range sections {
+		header := strings.ToLower(strings.TrimSuffix(sec.header, ":"))
+		content := sec.content
 
 		switch header {
 		case "":
@@ -109,22 +114,28 @@ func ParseDocstring(docstring string) *ParsedDocstring {
 	return parsed
 }
 
+// docSection is one header/content pair of a docstring.
+type docSection struct {
+	header  string
+	content string
+}
+
 // splitSections splits a docstring into sections based on headers.
-func splitSections(docstring string) map[string]string {
-	sections := make(map[string]string)
+// Sections are returned in document order; the description has header "".
+func splitSections(docstring string) []docSection {
+	var sections []docSection
 
 	// Find all section positions
 	matches := sectionRegex.FindAllStringIndex(docstring, -1)
 
 	if len(matches) == 0 {
 		// No sections, entire string is description
-		sections[""] = docstring
-		return sections
+		return append(sections, docSection{header: "", content: docstring})
 	}
 
 	// Extract content before first section
 	if matches[0][0] > 0 {
-		sections[""] = strings.TrimSpace(docstring[:matches[0][0]])
+		sections = append(sections, docSection{header: "", content: strings.TrimSpace(docstring[:matches[0][0]])})
 	}
 
 	// Extract each section
@@ -148,7 +159,7 @@ func splitSections(docstring string) map[string]string {
 		content := docstring[contentStart:contentEnd]
 		// Only trim trailing whitespace, preserve leading newlines and indentation
 		content = strings.TrimRight(content, " \t\n\r")
-		sections[header] = content
+		sections = append(sections, docSection{header: header, content: content})
 	}
 
 	return sections
