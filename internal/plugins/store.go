@@ -25,21 +25,30 @@ type Store struct {
 }
 
 // NewStore creates a store rooted at the provided path.
+// A relative root is anchored to the current directory once, here, so the
+// paths persisted in the catalog never depend on the working directory later.
 func NewStore(root string) *Store {
-	return &Store{Root: root}
+	return &Store{Root: absRoot(root)}
+}
+
+func absRoot(root string) string {
+	if abs, err := filepath.Abs(root); err == nil {
+		return abs
+	}
+	return root
 }
 
 // DefaultStore creates a store in the user config directory.
 func DefaultStore() (*Store, error) {
 	if override := os.Getenv("SKY_CONFIG_DIR"); override != "" {
-		return &Store{Root: override}, nil
+		return NewStore(override), nil
 	}
 
 	base, err := os.UserConfigDir()
 	if err != nil {
 		return nil, fmt.Errorf("config dir: %w", err)
 	}
-	return &Store{Root: filepath.Join(base, "sky")}, nil
+	return NewStore(filepath.Join(base, "sky")), nil
 }
 
 // Ensure creates the config directories if needed.
@@ -158,6 +167,12 @@ func (s *Store) loadPluginsNL() ([]Plugin, error) {
 		if plugins[i].Type == "" {
 			plugins[i].Type = TypeExecutable
 		}
+		// A relative path written by an older version would resolve against
+		// the working directory (and could run a lookalike binary); keep only
+		// its file name and anchor it in this store's plugins directory.
+		if p := plugins[i].Path; p != "" && !filepath.IsAbs(p) {
+			plugins[i].Path = filepath.Join(s.PluginsDir(), filepath.Base(p))
+		}
 	}
 	sort.Slice(plugins, func(i, j int) bool {
 		return plugins[i].Name < plugins[j].Name
@@ -201,6 +216,9 @@ func (s *Store) upsertPluginNL(plugin Plugin) error {
 		return err
 	}
 
+	// Work on a copy: plugins may be the cached slice, which must not change
+	// if the save below fails.
+	plugins = append([]Plugin(nil), plugins...)
 	replaced := false
 	for i := range plugins {
 		if plugins[i].Name == plugin.Name {
@@ -458,22 +476,28 @@ func writeJSON(path string, value any) error {
 func (s *Store) UpdatePluginMetadata(name string, installedAt time.Time, version, description string) (bool, error) {
 	updated := false
 	err := s.withWriteLock(func() error {
-		plugins, err := s.loadPluginsNL()
+		cached, err := s.loadPluginsNL()
 		if err != nil {
 			return err
 		}
-		for i := range plugins {
-			if plugins[i].Name != name || !plugins[i].InstalledAt.Equal(installedAt) {
+		for i := range cached {
+			if cached[i].Name != name || !cached[i].InstalledAt.Equal(installedAt) {
 				continue
 			}
+			// Copy on write: readers may hold the cached slice, and a failed
+			// save must not leave the edit behind in it.
+			plugins := append([]Plugin(nil), cached...)
 			if version != "" {
 				plugins[i].Version = version
 			}
 			if description != "" {
 				plugins[i].Description = description
 			}
+			if err := s.savePlugins(plugins); err != nil {
+				return err
+			}
 			updated = true
-			return s.savePlugins(plugins)
+			return nil
 		}
 		return nil
 	})
