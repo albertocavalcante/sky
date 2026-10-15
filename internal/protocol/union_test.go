@@ -214,3 +214,51 @@ func TestUnionContentChangeRejectsMalformed(t *testing.T) {
 		}
 	}
 }
+
+func TestUnionContentChangeRequiredNull(t *testing.T) {
+	type U = Or_TextDocumentContentChangePartial_TextDocumentContentChangeWholeDocument
+	for _, in := range []string{
+		`{"text":null}`,
+		`{"range":null,"text":"x"}`,
+		`{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},"text":null}`,
+	} {
+		var u U
+		if err := json.Unmarshal([]byte(in), &u); err == nil {
+			t.Errorf("%s: decoded as %#v, want error", in, u.Value)
+		}
+	}
+}
+
+func TestUnionContentChangeValidForms(t *testing.T) {
+	type U = Or_TextDocumentContentChangePartial_TextDocumentContentChangeWholeDocument
+	rng := `{"start":{"line":1,"character":2},"end":{"line":1,"character":3}}`
+	var u U
+	if err := json.Unmarshal([]byte(`{"text":"x"}`), &u); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := u.Value.(TextDocumentContentChangeWholeDocument); !ok || v.Text != "x" {
+		t.Errorf("whole: got %#v", u.Value)
+	}
+	u = U{}
+	if err := json.Unmarshal([]byte(`{"range":`+rng+`,"text":"y"}`), &u); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := u.Value.(TextDocumentContentChangePartial); !ok || v.Text != "y" || v.Range.End.Character != 3 {
+		t.Errorf("partial: got %#v", u.Value)
+	}
+	u = U{}
+	if err := json.Unmarshal([]byte(`{"range":`+rng+`,"rangeLength":4,"text":"z"}`), &u); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := u.Value.(TextDocumentContentChangePartial); !ok || v.RangeLength != 4 {
+		t.Errorf("rangeLength: got %#v", u.Value)
+	}
+}
+
+// A nullable required field (lspls spells it as a pointer) must still accept null.
+func TestUnionNullableRequiredFieldAccepted(t *testing.T) {
+	var v OptionalVersionedTextDocumentIdentifier
+	if err := json.Unmarshal([]byte(`{"uri":"file:///a","version":null}`), &v); err != nil {
+		t.Fatal(err)
+	}
+}

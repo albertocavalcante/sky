@@ -74,11 +74,11 @@ func main() {
 	}
 	// keys collects the required and optional JSON keys of a struct,
 	// following embedded structs.
-	var keys func(name string, seen map[string]bool) (req, opt []string)
-	keys = func(name string, seen map[string]bool) (req, opt []string) {
+	var keys func(name string, seen map[string]bool) (req, opt, nonNull []string)
+	keys = func(name string, seen map[string]bool) (req, opt, nonNull []string) {
 		st := structs[name]
 		if st == nil || seen[name] {
-			return nil, nil
+			return nil, nil, nil
 		}
 		seen[name] = true
 		for _, fld := range st.Fields.List {
@@ -88,8 +88,8 @@ func main() {
 			}
 			if len(fld.Names) == 0 {
 				if id, ok := fld.Type.(*ast.Ident); ok && tag == "" {
-					r, o := keys(id.Name, seen)
-					req, opt = append(req, r...), append(opt, o...)
+					r, o, n := keys(id.Name, seen)
+					req, opt, nonNull = append(req, r...), append(opt, o...), append(nonNull, n...)
 				}
 				continue
 			}
@@ -101,11 +101,20 @@ func main() {
 				opt = append(opt, parts[0])
 			} else {
 				req = append(req, parts[0])
+				// A required field of a plain scalar or struct type is not
+				// nullable: pointers, slices, maps, any and union types are
+				// how lspls spells "T | null", so only those may be null.
+				if id, ok := fld.Type.(*ast.Ident); ok && id.Name != "any" && !strings.HasPrefix(id.Name, "Or_") {
+					if _, isAlias := aliases[id.Name]; !isAlias {
+						nonNull = append(nonNull, parts[0])
+					}
+				}
 			}
 		}
 		sort.Strings(req)
 		sort.Strings(opt)
-		return req, opt
+		sort.Strings(nonNull)
+		return req, opt, nonNull
 	}
 
 	text := string(src)
@@ -142,8 +151,8 @@ func main() {
 			return nil, false
 		}
 		if structs[v] != nil {
-			req, opt := keys(v, map[string]bool{})
-			return []string{fmt.Sprintf("keySet{%s, %s}", strSlice(req), strSlice(opt))}, true
+			req, opt, nn := keys(v, map[string]bool{})
+			return []string{fmt.Sprintf("keySet{%s, %s, %s}", strSlice(req), strSlice(opt), strSlice(nn))}, true
 		}
 		target, isAlias := aliases[v]
 		if !isAlias {
@@ -188,6 +197,14 @@ func main() {
 		// strict: every variant is a struct, so no later fallback can accept
 		// input that the key discrimination rejected.
 		strict := len(cands) == len(variants[name])
+		// A variant whose required keys are all present but one of them is
+		// null is malformed input, not a cue to fall back to a less specific
+		// variant (which would silently drop the null field).
+		var all []string
+		for _, c := range cands {
+			all = append(all, c.sets...)
+		}
+		fmt.Fprintf(&b, "\tif unionNullRequired(x, %s) {\n\t\treturn fmt.Errorf(\"unmarshal failed: null for a required field of one of [%s]\")\n\t}\n", strings.Join(all, ", "), strings.Join(variants[name], " "))
 		b.WriteString("\t{\n\t\tbestScore := -1\n\t\tvar best any\n")
 		if strict {
 			b.WriteString("\t\tfailScore := -1\n\t\tvar failErr error\n")
