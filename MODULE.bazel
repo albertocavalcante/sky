@@ -30,11 +30,10 @@ git_override(
 
 go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
 
-# Tracks go.mod's `go` directive. Bumped to 1.26 alongside the
-# starlark-cst-go / bazel-cst-go / starlark-format-go deps whose go.mod
-# declares 1.26 — gazelle's go_repository fetch refuses to build
-# modules whose required Go exceeds the SDK ("requires go >= 1.26").
-go_sdk.download(version = "1.26.2")
+# The SDK version comes from go.mod (its `toolchain` directive, else `go`), the
+# same source the CI workflows use, so there is one place to bump. gazelle's
+# go_repository fetch refuses modules whose required Go exceeds the SDK.
+go_sdk.from_file(go_mod = "//:go.mod")
 go_sdk.nogo(nogo = "//tools/nogo:sky_nogo")
 
 go_deps = use_extension("@gazelle//:extensions.bzl", "go_deps")
