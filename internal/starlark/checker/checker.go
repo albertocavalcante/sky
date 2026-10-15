@@ -269,16 +269,43 @@ func (c *Checker) findUnusedBindings(f *syntax.File) []Diagnostic {
 			}
 		}
 	}
+	// Identifiers that only write a variable (plain "=" targets and loop
+	// variables). Rebinding is not a read of the earlier value.
+	stores := make(map[*syntax.Ident]bool)
+	var markStores func(e syntax.Expr)
+	markStores = func(e syntax.Expr) {
+		switch e := e.(type) {
+		case *syntax.Ident:
+			stores[e] = true
+		case *syntax.ParenExpr:
+			markStores(e.X)
+		case *syntax.TupleExpr:
+			for _, x := range e.List {
+				markStores(x)
+			}
+		case *syntax.ListExpr:
+			for _, x := range e.List {
+				markStores(x)
+			}
+		}
+	}
 	syntax.Walk(f, func(n syntax.Node) bool {
 		switch n := n.(type) {
+		case *syntax.AssignStmt:
+			// Augmented assignment ("x += 1") reads x first, so only "=".
+			if n.Op == syntax.EQ {
+				markStores(n.LHS)
+			}
 		case *syntax.DefStmt:
 			markParams(n.Params)
 		case *syntax.LambdaExpr:
 			markParams(n.Params)
 		case *syntax.ForStmt:
 			markIdents(n.Vars)
+			markStores(n.Vars)
 		case *syntax.ForClause:
 			markIdents(n.Vars)
+			markStores(n.Vars)
 		}
 		return true
 	})
@@ -303,8 +330,8 @@ func (c *Checker) findUnusedBindings(f *syntax.File) []Diagnostic {
 					if !skip[n] {
 						bindings[n] = false
 					}
-				} else {
-					// This is a use
+				} else if !stores[n] {
+					// This is a use (a plain store is not)
 					uses[n.Name] = append(uses[n.Name], n)
 				}
 			case resolve.Free:
