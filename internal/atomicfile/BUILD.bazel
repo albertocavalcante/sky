@@ -10,6 +10,7 @@ go_library(
 go_test(
     name = "atomicfile_test",
     srcs = [
+        "atomicfile_longpath_unix_test.go",
         "atomicfile_test.go",
         "atomicfile_unix_test.go",
     ],
