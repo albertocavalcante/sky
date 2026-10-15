@@ -2,6 +2,7 @@ package index
 
 import (
 	"path"
+	"path/filepath"
 	"strings"
 )
 
@@ -14,31 +15,56 @@ func matchGlob(pattern, name string) bool {
 	return matchSegments(strings.Split(pattern, "/"), strings.Split(name, "/"))
 }
 
-func matchSegments(pat, name []string) bool {
-	for len(pat) > 0 {
-		if pat[0] == "**" {
-			// Collapse consecutive "**".
-			for len(pat) > 1 && pat[1] == "**" {
-				pat = pat[1:]
-			}
-			if len(pat) == 1 {
-				return true
-			}
-			for i := 0; i <= len(name); i++ {
-				if matchSegments(pat[1:], name[i:]) {
-					return true
-				}
-			}
-			return false
+// hasRecursiveSegment reports whether pattern has a whole "**" path segment.
+// A "**" embedded in a larger segment (a**.bzl) is not recursive; it behaves
+// like "*" under path.Match.
+func hasRecursiveSegment(pattern string) bool {
+	for _, seg := range strings.Split(filepath.ToSlash(pattern), "/") {
+		if seg == "**" {
+			return true
 		}
-		if len(name) == 0 {
-			return false
-		}
-		ok, err := path.Match(pat[0], name[0])
-		if err != nil || !ok {
-			return false
-		}
-		pat, name = pat[1:], name[1:]
 	}
-	return len(name) == 0
+	return false
+}
+
+// hasGlobMeta reports whether s contains a path.Match metacharacter.
+func hasGlobMeta(s string) bool {
+	return strings.ContainsAny(s, "*?[")
+}
+
+// matchSegments matches pattern segments against name segments. It is a DP
+// over (pattern index, name index) so alternating "**" and literal segments
+// cost O(len(pat)*len(name)) segment matches rather than exponential time.
+func matchSegments(pat, name []string) bool {
+	// ok[i][j] caches whether pat[i:] matches name[j:]; 0 unknown, 1 yes, 2 no.
+	memo := make([][]uint8, len(pat)+1)
+	for i := range memo {
+		memo[i] = make([]uint8, len(name)+1)
+	}
+	var match func(i, j int) bool
+	match = func(i, j int) bool {
+		if m := memo[i][j]; m != 0 {
+			return m == 1
+		}
+		var res bool
+		switch {
+		case i == len(pat):
+			res = j == len(name)
+		case pat[i] == "**":
+			// Zero segments, or consume one name segment and stay on "**".
+			res = match(i+1, j) || (j < len(name) && match(i, j+1))
+		case j == len(name):
+			res = false
+		default:
+			ok, err := path.Match(pat[i], name[j])
+			res = err == nil && ok && match(i+1, j+1)
+		}
+		if res {
+			memo[i][j] = 1
+		} else {
+			memo[i][j] = 2
+		}
+		return res
+	}
+	return match(0, 0)
 }

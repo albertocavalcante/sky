@@ -21,6 +21,11 @@ type LoadGraph struct {
 	// reverseByPath indexes internal loads by normalized file path so any
 	// accepted spelling of a module finds them.
 	reverseByPath map[string][]string
+
+	// lines maps a loading file to the resolved module label and the line of
+	// the first direct load statement naming it. Forward only keeps resolved
+	// labels, so this preserves where each direct load was written.
+	lines map[string]map[string]int
 }
 
 // BuildLoadGraph builds the load graph from indexed files.
@@ -34,6 +39,7 @@ func (idx *Index) BuildLoadGraph() *LoadGraph {
 		Reverse: make(map[string][]string),
 
 		reverseByPath: make(map[string][]string),
+		lines:         make(map[string]map[string]int),
 	}
 
 	for _, f := range idx.files {
@@ -43,6 +49,12 @@ func (idx *Index) BuildLoadGraph() *LoadGraph {
 			// file's package so they are not confused with root-package files.
 			module := resolveRelativeLabel(idx.packageDir(f.Path), load.Module)
 			modules = append(modules, module)
+			if g.lines[f.Path] == nil {
+				g.lines[f.Path] = make(map[string]int)
+			}
+			if _, seen := g.lines[f.Path][module]; !seen {
+				g.lines[f.Path][module] = load.Line
+			}
 			key := canonicalLabel(module)
 			g.Reverse[key] = append(g.Reverse[key], f.Path)
 			if p := moduleToPath(key); p != "" {
@@ -64,18 +76,39 @@ func (g *LoadGraph) LoadedBy(module string) []string {
 		return nil
 	}
 	module = normalizeLookup(module)
-	if r, ok := g.Reverse[module]; ok {
-		return r
-	}
 	key := canonicalLabel(module)
-	if g.reverseByPath != nil {
-		if p := moduleToPath(key); p != "" {
-			if r, ok := g.reverseByPath[p]; ok {
-				return r
+
+	// A module can be spelled several ways ("//pkg:sub/base.bzl" and
+	// "//pkg/sub:base.bzl" name the same file), and loaders may have used any
+	// of them, so merge the exact-label and normalized-path indexes.
+	var result []string
+	seen := make(map[string]bool)
+	add := func(files []string) {
+		for _, f := range files {
+			if !seen[f] {
+				seen[f] = true
+				result = append(result, f)
 			}
 		}
 	}
-	return g.Reverse[key]
+	add(g.Reverse[module])
+	add(g.Reverse[key])
+	if g.reverseByPath != nil {
+		if p := moduleToPath(key); p != "" {
+			add(g.reverseByPath[p])
+		}
+	}
+	return result
+}
+
+// LoadLine returns the 1-based line of the direct load statement in file that
+// loads the resolved module label (as listed in Forward), or 0 if file has no
+// such direct load.
+func (g *LoadGraph) LoadLine(file, module string) int {
+	if g == nil {
+		return 0
+	}
+	return g.lines[normalizeLookup(file)][module]
 }
 
 // packageDir returns the slash-separated directory of the Bazel package that

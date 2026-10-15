@@ -96,7 +96,7 @@ func discoverBazelPattern(pattern string, root string) ([]string, error) {
 // Patterns are matched against root-relative, slash-separated paths; "**"
 // matches zero or more directories.
 func discoverGlobPattern(pattern string, root string) ([]string, error) {
-	if !strings.Contains(pattern, "**") {
+	if !hasRecursiveSegment(pattern) {
 		// Plain glob (*.bzl, lib/*.bzl): keep filepath.Glob semantics, which
 		// follow symlinks and allow explicitly named hidden directories.
 		matches, err := filepath.Glob(filepath.Join(root, pattern))
@@ -112,9 +112,7 @@ func discoverGlobPattern(pattern string, root string) ([]string, error) {
 			if st, err := os.Stat(match); err != nil || st.IsDir() {
 				continue
 			}
-			{
-				result = append(result, match)
-			}
+			result = append(result, match)
 		}
 		return result, nil
 	}
@@ -141,7 +139,7 @@ func discoverRecursive(dir string) ([]string, error) {
 		}
 
 		// Check if it's a Starlark file
-		if IsStarlarkFile(entry.Name()) {
+		if IsStarlarkFile(entry.Name()) && isFileEntry(path, entry) {
 			files = append(files, path)
 		}
 
@@ -163,8 +161,9 @@ func discoverInDirectory(dir string) ([]string, error) {
 		if entry.IsDir() {
 			continue
 		}
-		if IsStarlarkFile(entry.Name()) {
-			files = append(files, filepath.Join(dir, entry.Name()))
+		full := filepath.Join(dir, entry.Name())
+		if IsStarlarkFile(entry.Name()) && isFileEntry(full, entry) {
+			files = append(files, full)
 		}
 	}
 
@@ -193,7 +192,7 @@ func discoverRecursiveGlob(root string, pattern string) ([]string, error) {
 		if err != nil {
 			return nil
 		}
-		if IsStarlarkFile(entry.Name()) && matchGlob(pattern, filepath.ToSlash(rel)) {
+		if IsStarlarkFile(entry.Name()) && matchGlob(pattern, filepath.ToSlash(rel)) && isFileEntry(path, entry) {
 			files = append(files, path)
 		}
 
@@ -201,6 +200,18 @@ func discoverRecursiveGlob(root string, pattern string) ([]string, error) {
 	})
 
 	return files, err
+}
+
+// isFileEntry reports whether a directory entry that is not itself a directory
+// is a usable file. Symlinks are followed: a link to a file is a file (it is
+// read through the link, like filepath.Glob matches), while a link to a
+// directory or a dangling link is skipped so it is never opened as a file.
+func isFileEntry(path string, entry os.DirEntry) bool {
+	if entry.Type()&os.ModeSymlink == 0 {
+		return true
+	}
+	st, err := os.Stat(path)
+	return err == nil && !st.IsDir()
 }
 
 // IsStarlarkFile checks if a filename is a Starlark file.

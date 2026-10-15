@@ -204,7 +204,7 @@ func (idx *Index) MatchFiles(pattern string) []*File {
 	}
 
 	// Handle glob patterns
-	if strings.Contains(pattern, "*") {
+	if hasGlobMeta(pattern) {
 		for _, f := range idx.files {
 			if matchGlob(pattern, f.Path) {
 				result = append(result, f)
