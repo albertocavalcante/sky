@@ -20,7 +20,9 @@ go_test(
     name = "skyfmt_test",
     srcs = [
         "compare_test.go",
+        "fifo_unix_test.go",
         "run_test.go",
+        "symlink_test.go",
     ],
     embed = [":skyfmt"],
 )

@@ -244,27 +244,54 @@ func expandPath(path string) ([]string, error) {
 	}
 
 	if !info.IsDir() {
+		// An explicit non-regular file (FIFO, device, socket) could block
+		// forever when read.
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("%s: not a regular file", path)
+		}
 		return []string{path}, nil
 	}
 
+	// WalkDir does not follow a symlink given as the root, so a symlink to a
+	// directory would yield nothing. A trailing separator makes it resolve.
+	root := path
+	if li, lerr := os.Lstat(path); lerr == nil && li.Mode()&os.ModeSymlink != 0 {
+		root = path + string(os.PathSeparator)
+	}
+
 	var files []string
-	err = filepath.WalkDir(path, func(p string, d os.DirEntry, err error) error {
+	err = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
 			// Skip hidden directories
-			if p != path && strings.HasPrefix(d.Name(), ".") {
+			if p != root && strings.HasPrefix(d.Name(), ".") {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if filekind.IsStarlarkFile(d.Name()) {
+		if filekind.IsStarlarkFile(d.Name()) && isRegularEntry(p, d) {
 			files = append(files, p)
 		}
 		return nil
 	})
 	return files, err
+}
+
+// isRegularEntry reports whether a walked entry is a regular file, following
+// symlinks. FIFOs, devices and sockets named like a source file are skipped
+// because reading them can block forever. A dangling link is skipped; other
+// stat errors keep the entry so reading it reports the error.
+func isRegularEntry(path string, d os.DirEntry) bool {
+	if d.Type()&os.ModeSymlink == 0 {
+		return d.Type().IsRegular()
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		return !os.IsNotExist(err)
+	}
+	return st.Mode().IsRegular()
 }
 
 // Helper functions for writing output.
