@@ -16,7 +16,10 @@ import (
 func gateFixture(t *testing.T, failUnder string) []string {
 	t.Helper()
 	dir := t.TempDir()
-	src := "def helper(x):\n    if x:\n        return 1\n    return 2\n\ndef test_a():\n    assert.eq(helper(True), 1)\n"
+	// The compiler only attributes lines to calls, and a function that is
+	// never called registers its lines with zero hits, so unused() leaves
+	// missing lines.
+	src := "def unused():\n    a = len(\"a\")\n    b = len(\"b\")\n    return a + b\n\ndef test_a():\n    assert.eq(len(\"a\"), 1)\n"
 	file := filepath.Join(dir, "test_a.star")
 	if err := os.WriteFile(file, []byte(src), 0o644); err != nil {
 		t.Fatal(err)
@@ -36,6 +39,33 @@ func TestRun_FailUnderMetPasses(t *testing.T) {
 	}
 	if code != exitOK {
 		t.Fatalf("exit = %d, want 0\nstderr: %s", code, stderr.String())
+	}
+}
+
+// The fixture measures 3 of 6 lines (50%): the gate must decide the exit code
+// of a real coverage run, not just of checkCoverageThreshold.
+func TestRun_FailUnderBelowThresholdExits1(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), gateFixture(t, "80"), nil, &stdout, &stderr)
+	if strings.Contains(stderr.String(), "coverage unavailable") {
+		t.Skip("coverage hook not enabled in this build")
+	}
+	if code != exitFailed {
+		t.Fatalf("exit = %d, want %d\nstderr: %s", code, exitFailed, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "below threshold") {
+		t.Errorf("stderr = %q, want a below-threshold diagnostic", stderr.String())
+	}
+}
+
+func TestRun_FailUnderEqualToCoveragePasses(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), gateFixture(t, "50"), nil, &stdout, &stderr)
+	if strings.Contains(stderr.String(), "coverage unavailable") {
+		t.Skip("coverage hook not enabled in this build")
+	}
+	if code != exitOK {
+		t.Fatalf("exit = %d, want 0 (50%% measured, threshold 50)\nstderr: %s", code, stderr.String())
 	}
 }
 
