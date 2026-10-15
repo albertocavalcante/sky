@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/albertocavalcante/sky/internal/atomicfile"
+	"github.com/albertocavalcante/sky/internal/skyconfig"
 	"github.com/albertocavalcante/sky/internal/starlark/coverage"
 	"github.com/albertocavalcante/sky/internal/version"
 )
@@ -98,6 +99,13 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		return exitOK
 	}
 
+	// A NaN, infinite or out-of-range minimum would make every comparison
+	// false and silently disable the gate.
+	if err := skyconfig.ValidateCoverageThreshold(minFlag); err != nil {
+		writef(stderr, "skycov: -min: %v\n", err)
+		return exitError
+	}
+
 	// Validate the format before touching any input or output.
 	var reporter coverage.Reporter
 	switch formatFlag {
@@ -160,7 +168,12 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 
 	// Check minimum coverage
 	report.Compute()
-	if minFlag > 0 && report.Percentage() < minFlag {
+	// Like sky-ci, a report with no measured lines is "unavailable", not 100%.
+	if minFlag > 0 && report.TotalLines == 0 {
+		writef(stderr, "skycov: -min=%.1f set but coverage unavailable: no lines were measured in %s\n", minFlag, inputFiles[0])
+		return exitError
+	}
+	if !skyconfig.CoverageMeets(report.CoveredLines, report.TotalLines, minFlag) {
 		writef(stderr, "skycov: coverage %.1f%% is below minimum %.1f%%\n",
 			report.Percentage(), minFlag)
 		return exitBelowMin
@@ -228,8 +241,11 @@ func loadCoverageData(path string) (*coverage.Report, error) {
 		fc := report.AddFile(filePath)
 		for lineStr, hits := range fileData.Lines {
 			line, err := strconv.Atoi(lineStr)
-			if err != nil {
-				continue
+			if err != nil || line < 1 {
+				return nil, fmt.Errorf("%s: %s: invalid line key %q (must be a positive integer)", path, filePath, lineStr)
+			}
+			if hits < 0 {
+				return nil, fmt.Errorf("%s: %s: line %q has negative hit count %d", path, filePath, lineStr, hits)
 			}
 			fc.Lines.Hits[line] = hits
 		}

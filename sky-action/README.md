@@ -21,9 +21,13 @@ GitHub Action for running Starlark tests with [skytest](https://github.com/alber
   uses: albertocavalcante/sky/sky-action@<commit-sha>
   with:
     path: .
+    coverage: true
     coverage-threshold: 80
     version: <commit-sha>
 ```
+
+`coverage-threshold` needs coverage collection, so set `coverage: true` too;
+without it the step fails with `coverage unavailable`.
 
 ### Full Example
 
