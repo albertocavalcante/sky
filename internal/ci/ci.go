@@ -167,7 +167,7 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return exitFailed
 	}
 
-	if cfg.CoverageThreshold > 0 && coverageKnown && belowThreshold(cfg.coveredLines, cfg.totalLines, cfg.CoverageThreshold) {
+	if cfg.CoverageThreshold > 0 && coverageKnown && !skyconfig.CoverageMeets(cfg.coveredLines, cfg.totalLines, cfg.CoverageThreshold) {
 		printf(stderr, "sky-ci: coverage %.1f%% is below threshold %.1f%%\n", cfg.Coverage, cfg.CoverageThreshold)
 		return exitFailed
 	}
@@ -255,11 +255,4 @@ func readCoverage(path string) (pct float64, covered, total int, err error) {
 		return 0, 0, 0, fmt.Errorf("inconsistent coverage data in %s: percentage %v does not match %d/%d lines", path, *c.Percentage, c.CoveredLines, c.TotalLines)
 	}
 	return pct, c.CoveredLines, c.TotalLines, nil
-}
-
-// belowThreshold reports whether covered/total is under threshold percent.
-// It compares covered*100 with threshold*total because dividing first rounds
-// 57/100 to 56.99999999999999 and would fail an exact match.
-func belowThreshold(covered, total int, threshold float64) bool {
-	return float64(covered)*100 < threshold*float64(total)
 }
