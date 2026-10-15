@@ -69,6 +69,20 @@ func TestAnnotationEscaping(t *testing.T) {
 	}
 }
 
+// 57 of 100 lines is exactly 57%; 57/100*100 is 56.99999999999999 in float64.
+func TestCoverageThresholdExactEqualityPasses(t *testing.T) {
+	cov := filepath.Join(t.TempDir(), "cov.json")
+	if err := os.WriteFile(cov, []byte(`{"files":{},"total_lines":100,"covered_lines":57,"percentage": 57}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	const pass = `{"passed":1,"failed":0,"total":1,"files":1,"duration_ms":1,"results":[{"file":"a","duration_ms":1,"tests":[{"name":"t","passed":true,"duration_ms":1}]}]}`
+	var o, e bytes.Buffer
+	args := []string{"--system=generic", "--coverage-file=" + cov, "--coverage-threshold=57"}
+	if c := Run(args, strings.NewReader(pass), &o, &e); c != exitOK {
+		t.Errorf("57/100 at threshold 57: code=%d, stderr=%s", c, e.String())
+	}
+}
+
 func TestCoverageThreshold(t *testing.T) {
 	dir := t.TempDir()
 	cov := filepath.Join(dir, "cov.json")
