@@ -241,8 +241,11 @@ func loadCoverageData(path string) (*coverage.Report, error) {
 		fc := report.AddFile(filePath)
 		for lineStr, hits := range fileData.Lines {
 			line, err := strconv.Atoi(lineStr)
-			if err != nil {
-				continue
+			if err != nil || line < 1 {
+				return nil, fmt.Errorf("%s: %s: invalid line key %q (must be a positive integer)", path, filePath, lineStr)
+			}
+			if hits < 0 {
+				return nil, fmt.Errorf("%s: %s: line %q has negative hit count %d", path, filePath, lineStr, hits)
 			}
 			fc.Lines.Hits[line] = hits
 		}

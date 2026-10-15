@@ -290,6 +290,43 @@ func TestRun_MinWithNoMeasuredLinesIsError(t *testing.T) {
 	}
 }
 
+func TestRun_MalformedLineEntriesAreDataErrors(t *testing.T) {
+	tests := []struct {
+		name, data, want string
+	}{
+		{"non-integer key", `{"files":{"lib.star":{"lines":{"1":1,"oops":0}}}}`, `"oops"`},
+		{"zero key", `{"files":{"lib.star":{"lines":{"1":1,"0":0}}}}`, `"0"`},
+		{"negative key", `{"files":{"lib.star":{"lines":{"1":1,"-2":0}}}}`, `"-2"`},
+		{"negative hits", `{"files":{"lib.star":{"lines":{"1":1,"2":-1}}}}`, "negative hit count"},
+		{"float hits", `{"files":{"lib.star":{"lines":{"1":1,"2":1.5}}}}`, "lines"},
+	}
+	for _, tt := range tests {
+		for _, m := range []string{"", "-min=100"} {
+			t.Run(tt.name+m, func(t *testing.T) {
+				covFile := filepath.Join(t.TempDir(), "coverage.json")
+				if err := os.WriteFile(covFile, []byte(tt.data), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				args := []string{covFile}
+				if m != "" {
+					args = []string{m, covFile}
+				}
+				var stdout, stderr bytes.Buffer
+				code := RunWithIO(context.Background(), args, nil, &stdout, &stderr)
+				if code != 2 {
+					t.Fatalf("code = %d, want 2\nstderr: %s", code, stderr.String())
+				}
+				if !strings.Contains(stderr.String(), "coverage.json") || !strings.Contains(stderr.String(), tt.want) {
+					t.Errorf("stderr = %q, want file name and %q", stderr.String(), tt.want)
+				}
+				if stdout.Len() > 0 {
+					t.Errorf("no report expected, got %q", stdout.String())
+				}
+			})
+		}
+	}
+}
+
 func TestRun_MinEqualToCoveragePasses(t *testing.T) {
 	// 57 of 100 lines: float math gives 56.99999999999999, which must not
 	// fail -min=57.
