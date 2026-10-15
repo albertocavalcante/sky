@@ -100,3 +100,17 @@ threads. Leave rejected threads unresolved so the reviewer can respond.
 ## After merge
 
 Delete the branch and any worktrees you made (see `git-workflow.md`, Branch Hygiene). Do not leave them for later.
+
+## Review tiers
+
+Every change is reviewed. The tier decides when.
+
+| Tier | What | Rule |
+|---|---|---|
+| A: review first | Paths listed in `.agent/review-tiers.json` (transport, install and store code, protocol, CLI `run.go`, CI, snapshots, the action, workflows, manifests, lockfiles), diffs over 400 lines, or the `review:first` label | An independent review is read, and the owner approves, before merge |
+| B: merge, then review | Small and isolated, new tests fail without the fix | Merge when CI is green; review the merged commit right after |
+| C: docs or tests only | Nothing runs differently | Merge when CI is green |
+
+- If unsure, treat it as A. The labels `review:first` and `review:after` override the computed tier for one PR.
+- Anything found after a merge becomes a tracked follow-up issue (a checklist item with a link to the comment), never a lost comment.
+- A green CI run is evidence, not review. Tests must be shown to fail without the fix (run them against the base) before a PR is tier B.

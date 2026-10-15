@@ -17,10 +17,14 @@ go_library(
 go_test(
     name = "skytest_test",
     srcs = [
+        "coverage_gate_test.go",
         "coverage_write_test.go",
         "parallel_test.go",
         "run_test.go",
     ],
     embed = [":skytest"],
-    deps = ["//internal/starlark/tester"],
+    deps = [
+        "//internal/starlark/coverage",
+        "//internal/starlark/tester",
+    ],
 )

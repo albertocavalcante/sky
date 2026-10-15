@@ -4,6 +4,7 @@ go_library(
     name = "skyconfig",
     srcs = [
         "config.go",
+        "coverage.go",
         "starlark.go",
         "toml.go",
     ],
@@ -17,6 +18,9 @@ go_library(
 
 go_test(
     name = "skyconfig_test",
-    srcs = ["config_test.go"],
+    srcs = [
+        "config_test.go",
+        "coverage_test.go",
+    ],
     embed = [":skyconfig"],
 )

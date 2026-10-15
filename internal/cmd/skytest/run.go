@@ -273,6 +273,13 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	// Coverage: CLI > config
 	effectiveCoverage := cfg.Test.Coverage.Enabled || coverageFlag
 
+	// Coverage threshold: only from config (there is no flag).
+	failUnder := cfg.Test.Coverage.FailUnder
+	if err := skyconfig.ValidateCoverageThreshold(failUnder); err != nil {
+		writef(stderr, "skytest: coverage.fail_under: %v\n", err)
+		return exitError
+	}
+
 	// Coverage output: CLI > config > default
 	effectiveCoverageOut := cfg.Test.Coverage.Output
 	if effectiveCoverageOut == "" {
@@ -335,13 +342,27 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	// front so a failed or empty collection can never be mistaken for fresh
 	// data by a consumer such as sky-ci.
 	var coverageRunner *tester.Runner
+	// Watch mode never finishes a run, so it cannot enforce a threshold:
+	// refuse the combination rather than exit 0 with the gate skipped.
+	if watchFlag && effectiveCoverage && failUnder > 0 {
+		writef(stderr, "skytest: coverage.fail_under=%.1f cannot be enforced with --watch; drop --watch or the threshold\n", failUnder)
+		return exitError
+	}
 	coverageMode := os.FileMode(0o666) // umask applies to a new report
+	hadStaleReport := false
 	if effectiveCoverage {
 		opts.CoverageCollector = coverage.NewCollector()
 		coverageRunner = tester.New(opts)
 		// Remember the stale report's permissions so the fresh one keeps them.
+		// A directory is never a stale report: os.Remove would delete an empty
+		// one and the write would then replace it with a file.
 		if fi, err := os.Stat(effectiveCoverageOut); err == nil {
+			if fi.IsDir() {
+				writef(stderr, "skytest: coverage file %s is a directory\n", effectiveCoverageOut)
+				return exitError
+			}
 			coverageMode = fi.Mode().Perm()
+			hadStaleReport = true
 		}
 		if err := os.Remove(effectiveCoverageOut); err != nil && !os.IsNotExist(err) {
 			writef(stderr, "skytest: removing stale coverage file %s: %v\n", effectiveCoverageOut, err)
@@ -395,7 +416,9 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	// EXPERIMENTAL: Coverage collection requires starlark-go-x with OnExec hook.
 	// TODO(upstream): Remove experimental note once OnExec is merged.
 	if effectiveCoverage && coverageRunner != nil {
-		if err := writeCoverageReport(coverageRunner, effectiveCoverageOut, coverageMode, stderr); err != nil {
+		// A stale report's exact mode is applied to the temp file before the
+		// rename (no umask, no path-based chmod that could follow a symlink).
+		if err := writeCoverageReport(coverageRunner, effectiveCoverageOut, coverageMode, hadStaleReport, stderr); err != nil {
 			writef(stderr, "skytest: coverage: %v\n", err)
 			// Don't fail the run for coverage errors, just warn
 		}
@@ -404,7 +427,39 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	// Report summary
 	reporter.ReportSummary(stdout, result)
 
+	// Enforce coverage.fail_under after the report is on disk, with the same
+	// contract as sky-ci --coverage-threshold: exit 2 when the threshold
+	// cannot be evaluated, exit 1 when coverage is below it.
+	gateCode := exitOK
+	if failUnder > 0 {
+		var measured *coverage.Report
+		if coverageRunner != nil {
+			measured = coverageRunner.CoverageReport()
+		}
+		gateCode = checkCoverageThreshold(measured, failUnder, effectiveCoverage, stderr)
+	}
+
 	if result.HasFailures() {
+		return exitFailed
+	}
+	return gateCode
+}
+
+// checkCoverageThreshold compares measured coverage with coverage.fail_under.
+// Like sky-ci, a report with no measured lines is "unavailable", not 100%.
+func checkCoverageThreshold(report *coverage.Report, threshold float64, enabled bool, stderr io.Writer) int {
+	if !enabled {
+		writef(stderr, "skytest: warning: coverage.fail_under=%.1f is set but coverage is not enabled (use -coverage); threshold not enforced\n", threshold)
+		return exitOK
+	}
+	if report == nil || report.TotalLines <= 0 {
+		writef(stderr, "skytest: coverage.fail_under=%.1f set but coverage unavailable: no lines were measured (starlark-go-x OnExec hook not enabled)\n", threshold)
+		return exitError
+	}
+	// Exact comparison: float arithmetic rounds 57/100 and 161/250 at 64.4.
+	if !skyconfig.CoverageMeets(report.CoveredLines, report.TotalLines, threshold) {
+		pct := float64(report.CoveredLines) / float64(report.TotalLines) * 100
+		writef(stderr, "skytest: coverage %.1f%% is below threshold %.1f%%\n", pct, threshold)
 		return exitFailed
 	}
 	return exitOK
@@ -412,7 +467,9 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 
 // writeCoverageReport writes the coverage data to a JSON file.
 // EXPERIMENTAL: Coverage data is only collected when starlark-go-x OnExec hook is enabled.
-func writeCoverageReport(runner *tester.Runner, outPath string, perm os.FileMode, stderr io.Writer) error {
+//
+// With exact set, perm is applied as is; otherwise it is subject to the umask.
+func writeCoverageReport(runner *tester.Runner, outPath string, perm os.FileMode, exact bool, stderr io.Writer) error {
 	report := runner.CoverageReport()
 	if report != nil && report.TotalLines == 0 {
 		// Written for tooling that inspects it, but total_lines is 0: consumers
@@ -433,7 +490,11 @@ func writeCoverageReport(runner *tester.Runner, outPath string, perm os.FileMode
 	}
 
 	// Write to a unique temp file and rename so readers never see a partial report.
-	if err := atomicfile.Write(outPath, data, perm); err != nil {
+	write := atomicfile.Write
+	if exact {
+		write = atomicfile.WriteExact
+	}
+	if err := write(outPath, data, perm); err != nil {
 		return fmt.Errorf("writing %s: %w", outPath, err)
 	}
 

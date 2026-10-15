@@ -166,6 +166,38 @@ func TestLoadedBy(t *testing.T) {
 	}
 }
 
+func TestAllLoadsReportsDirectLoadLine(t *testing.T) {
+	tmpDir := t.TempDir()
+	files := map[string]string{
+		"pkg/BUILD.bazel": "",
+		"pkg/base.bzl":    "x = 1\n",
+		"pkg/a.bzl":       "# header\n\n\nload(\":base.bzl\", \"x\")\n",
+	}
+	for path, content := range files {
+		full := filepath.Join(tmpDir, path)
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	idx := index.New(tmpDir)
+	if _, errs := idx.AddPattern("//..."); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	result, err := NewEngine(idx).EvalString(`allloads(//pkg:a.bzl)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Items) != 1 {
+		t.Fatalf("got %d items, want 1", len(result.Items))
+	}
+	if got := result.Items[0]; got.Name != "//pkg:base.bzl" || got.Line != 4 {
+		t.Errorf("item = %s line %d, want //pkg:base.bzl line 4", got.Name, got.Line)
+	}
+}
+
 func TestAllLoads(t *testing.T) {
 	idx, _ := setupLoadGraphTestIndex(t)
 	engine := NewEngine(idx)

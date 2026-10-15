@@ -84,8 +84,8 @@ func discoverBazelPattern(pattern string, root string) ([]string, error) {
 		return discoverInDirectory(filePath)
 	}
 
-	// Single file
-	if IsStarlarkFile(filepath.Base(filePath)) {
+	// Single file (regular files only: never open a FIFO, device or socket)
+	if info.Mode().IsRegular() && IsStarlarkFile(filepath.Base(filePath)) {
 		return []string{filePath}, nil
 	}
 
@@ -96,7 +96,7 @@ func discoverBazelPattern(pattern string, root string) ([]string, error) {
 // Patterns are matched against root-relative, slash-separated paths; "**"
 // matches zero or more directories.
 func discoverGlobPattern(pattern string, root string) ([]string, error) {
-	if !strings.Contains(pattern, "**") {
+	if !hasRecursiveSegment(pattern) {
 		// Plain glob (*.bzl, lib/*.bzl): keep filepath.Glob semantics, which
 		// follow symlinks and allow explicitly named hidden directories.
 		matches, err := filepath.Glob(filepath.Join(root, pattern))
@@ -108,13 +108,11 @@ func discoverGlobPattern(pattern string, root string) ([]string, error) {
 			if !IsStarlarkFile(filepath.Base(match)) {
 				continue
 			}
-			// Follow symlinks but skip directories.
-			if st, err := os.Stat(match); err != nil || st.IsDir() {
+			// Follow symlinks; keep only regular files.
+			if !isFileCandidate(match) {
 				continue
 			}
-			{
-				result = append(result, match)
-			}
+			result = append(result, match)
 		}
 		return result, nil
 	}
@@ -141,7 +139,7 @@ func discoverRecursive(dir string) ([]string, error) {
 		}
 
 		// Check if it's a Starlark file
-		if IsStarlarkFile(entry.Name()) {
+		if IsStarlarkFile(entry.Name()) && isFileEntry(path, entry) {
 			files = append(files, path)
 		}
 
@@ -163,8 +161,9 @@ func discoverInDirectory(dir string) ([]string, error) {
 		if entry.IsDir() {
 			continue
 		}
-		if IsStarlarkFile(entry.Name()) {
-			files = append(files, filepath.Join(dir, entry.Name()))
+		full := filepath.Join(dir, entry.Name())
+		if IsStarlarkFile(entry.Name()) && isFileEntry(full, entry) {
+			files = append(files, full)
 		}
 	}
 
@@ -193,7 +192,7 @@ func discoverRecursiveGlob(root string, pattern string) ([]string, error) {
 		if err != nil {
 			return nil
 		}
-		if IsStarlarkFile(entry.Name()) && matchGlob(pattern, filepath.ToSlash(rel)) {
+		if IsStarlarkFile(entry.Name()) && matchGlob(pattern, filepath.ToSlash(rel)) && isFileEntry(path, entry) {
 			files = append(files, path)
 		}
 
@@ -201,6 +200,31 @@ func discoverRecursiveGlob(root string, pattern string) ([]string, error) {
 	})
 
 	return files, err
+}
+
+// isFileEntry reports whether a directory entry that is not itself a directory
+// is a candidate file. Only regular files qualify: FIFOs, devices and sockets
+// are skipped because reading them can block forever. Symlinks are followed
+// (a link to a file is read through the link, like filepath.Glob matches); a
+// link to a directory, to a non-regular file, or a dangling link is skipped.
+func isFileEntry(path string, entry os.DirEntry) bool {
+	if entry.Type()&os.ModeSymlink == 0 {
+		return entry.Type().IsRegular()
+	}
+	return isFileCandidate(path)
+}
+
+// isFileCandidate stats path (following symlinks) and reports whether it
+// should be indexed. A target that does not exist is skipped silently. Any
+// other stat error (for example EACCES behind an unreadable directory) keeps
+// the path as a candidate, so indexing it reports the error to the user
+// instead of dropping the file without a trace.
+func isFileCandidate(path string) bool {
+	st, err := os.Stat(path)
+	if err != nil {
+		return !os.IsNotExist(err)
+	}
+	return st.Mode().IsRegular()
 }
 
 // IsStarlarkFile checks if a filename is a Starlark file.
