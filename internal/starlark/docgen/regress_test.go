@@ -6,6 +6,19 @@ import (
 	"testing"
 )
 
+func TestParseDocstring_AliasedSectionsDeterministic(t *testing.T) {
+	doc := "Summary.\n\nNote:\n    first\n\nNotes:\n    second\n\nArgs:\n    a: one\n\nArguments:\n    b: two\n"
+	for i := 0; i < 50; i++ {
+		p := ParseDocstring(doc)
+		if p.Note != "second" {
+			t.Fatalf("run %d: Note = %q, want %q (last alias wins)", i, p.Note, "second")
+		}
+		if _, ok := p.Args["b"]; !ok || len(p.Args) != 1 {
+			t.Fatalf("run %d: Args = %v, want only b", i, p.Args)
+		}
+	}
+}
+
 func TestToAnchorKeepsUnderscores(t *testing.T) {
 	if got := toAnchor("My_Func"); got != "my_func" {
 		t.Errorf("toAnchor = %q, want my_func", got)
