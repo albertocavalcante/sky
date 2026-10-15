@@ -32,6 +32,29 @@ print("hello")
 	}
 }
 
+// TestSuppressionParser_HashInString verifies that a "#" inside a string
+// literal is not treated as the start of a suppression comment.
+func TestSuppressionParser_HashInString(t *testing.T) {
+	source := "x = \"# skylint: disable=r x\"\n" + // 1: double-quoted
+		"y = '# skylint: disable=r y'\n" + // 2: single-quoted
+		"z = \"a \\\" # skylint: disable=r z\"\n" + // 3: escaped quote
+		"w = \"\"\"\n" + // 4: triple-quoted, multi-line
+		"# skylint: disable=r\n" + // 5: still inside the string
+		"\"\"\"\n" + // 6
+		"v = \"# not a comment\"  # skylint: disable=r\n" + // 7: real comment after string
+		"u = 1  # skylint: disable=r\n" // 8: ordinary inline comment
+	parser := NewSuppressionParser([]byte(source))
+
+	want := map[int]bool{1: false, 2: false, 3: false, 5: false, 7: true, 8: true}
+	for line, suppressed := range want {
+		got := parser.IsSuppressed(Finding{Line: line, Rule: "r"})
+		if got != suppressed {
+			t.Errorf("line %d: suppressed = %v, want %v", line, got, suppressed)
+		}
+	}
+}
+
+// TestSuppressionParser_NextLine verifies "skylint: disable-next-line=rule".
 // TestSuppressionParser_NextLine verifies "skylint: disable-next-line=rule".
 func TestSuppressionParser_NextLine(t *testing.T) {
 	source := `# skylint: disable-next-line=rule-name
