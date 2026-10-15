@@ -154,6 +154,8 @@ func (f Finding) ToDiagnostic(filePath string) validator.Diagnostic {
 
 // Result represents the outcome of linting one or more files.
 type Result struct {
+	// Sources retains the exact source snapshots that produced Findings.
+	Sources map[string][]byte
 	// Files is the number of files that were linted.
 	Files int
 

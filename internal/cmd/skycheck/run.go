@@ -33,14 +33,17 @@ func Run(args []string) int {
 // RunWithIO allows custom IO for embedding/testing.
 func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.Writer) int {
 	var (
-		jsonFlag    bool
-		versionFlag bool
-		quietFlag   bool
+		jsonFlag              bool
+		versionFlag           bool
+		quietFlag             bool
+		formatFlag, sarifRoot string
 	)
 
 	fs := flag.NewFlagSet("skycheck", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.BoolVar(&jsonFlag, "json", false, "output diagnostics as JSON")
+	fs.StringVar(&formatFlag, "format", "", "output format: text, json, sarif")
+	fs.StringVar(&sarifRoot, "sarif-root", ".", "checkout root for SARIF source paths")
 	fs.BoolVar(&versionFlag, "version", false, "print version and exit")
 	fs.BoolVar(&quietFlag, "quiet", false, "only output errors, suppress warnings")
 
@@ -61,6 +64,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		writeln(stderr, "  skycheck file.star              # Check a single file")
 		writeln(stderr, "  skycheck *.star                 # Check multiple files")
 		writeln(stderr, "  skycheck --json file.star       # Output as JSON")
+		writeln(stderr, "  skycheck --format=sarif src/    # Output as SARIF 2.1.0")
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -73,6 +77,27 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	if versionFlag {
 		writef(stdout, "skycheck %s\n", version.String())
 		return exitOK
+	}
+	if formatFlag != "" && formatFlag != "text" && formatFlag != "json" && formatFlag != "sarif" {
+		writef(stderr, "skycheck: unknown format: %s\n", formatFlag)
+		return exitError
+	}
+	if jsonFlag && formatFlag != "" && formatFlag != "json" {
+		writeln(stderr, "skycheck: --json conflicts with --format")
+		return exitError
+	}
+	if formatFlag == "json" {
+		jsonFlag = true
+	}
+	sources := map[string][]byte{}
+	result := checker.Result{}
+	var failures []string
+	failed := func(err error) int {
+		if formatFlag == "sarif" {
+			return outputSARIF(stdout, stderr, sarifRoot, result, sources, append(failures, err.Error()))
+		}
+		writef(stderr, "skycheck: %v\n", err)
+		return exitError
 	}
 
 	paths := fs.Args()
@@ -87,8 +112,7 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	for _, pattern := range paths {
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
-			writef(stderr, "skycheck: invalid pattern %q: %v\n", pattern, err)
-			return exitError
+			return failed(fmt.Errorf("invalid pattern %q: %w", pattern, err))
 		}
 		if len(matches) == 0 {
 			// No glob match, treat as literal path
@@ -98,14 +122,20 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 		for _, match := range matches {
 			expanded, err := expandPath(match)
 			if err != nil {
-				writef(stderr, "skycheck: %v\n", err)
-				return exitError
+				if formatFlag == "sarif" {
+					failures = append(failures, err.Error())
+					continue
+				}
+				return failed(err)
 			}
 			files = append(files, expanded...)
 		}
 	}
 
 	if len(files) == 0 {
+		if formatFlag == "sarif" {
+			return failed(fmt.Errorf("no files to check"))
+		}
 		writeln(stderr, "skycheck: no files to check")
 		return exitOK
 	}
@@ -115,18 +145,27 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	c := checker.New(opts)
 
 	// Check all files
-	result := checker.Result{FileCount: len(files)}
+	result.FileCount = len(files)
 	for _, path := range files {
 		src, err := os.ReadFile(path)
 		if err != nil {
-			writef(stderr, "skycheck: %v\n", err)
-			return exitError
+			if formatFlag == "sarif" {
+				failures = append(failures, err.Error())
+				continue
+			}
+			return failed(err)
+		}
+		if formatFlag == "sarif" {
+			sources[path] = src
 		}
 
 		diags, err := c.CheckFile(path, src)
 		if err != nil {
-			writef(stderr, "skycheck: %v\n", err)
-			return exitError
+			if formatFlag == "sarif" {
+				failures = append(failures, err.Error())
+				continue
+			}
+			return failed(err)
 		}
 
 		result.Diagnostics = append(result.Diagnostics, diags...)
@@ -140,6 +179,9 @@ func RunWithIO(_ context.Context, args []string, _ io.Reader, stdout, stderr io.
 	}
 
 	// Output results
+	if formatFlag == "sarif" {
+		return outputSARIF(stdout, stderr, sarifRoot, result, sources, failures)
+	}
 	if jsonFlag {
 		return outputJSON(stdout, result)
 	}

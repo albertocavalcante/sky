@@ -2,18 +2,25 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "skycheck",
-    srcs = ["run.go"],
+    srcs = [
+        "run.go",
+        "sarif.go",
+    ],
     importpath = "github.com/albertocavalcante/sky/internal/cmd/skycheck",
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/starlark/checker",
         "//internal/starlark/filekind",
         "//internal/version",
+        "@com_github_albertocavalcante_sarif_go//:sarif-go",
     ],
 )
 
 go_test(
     name = "skycheck_test",
-    srcs = ["run_test.go"],
+    srcs = [
+        "run_test.go",
+        "sarif_test.go",
+    ],
     embed = [":skycheck"],
 )

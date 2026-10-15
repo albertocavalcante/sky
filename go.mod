@@ -8,6 +8,7 @@ require (
 	github.com/BurntSushi/toml v1.3.2
 	github.com/albertocavalcante/bazel-cst-go v0.0.0-20260520180544-300e5d85397a
 	github.com/albertocavalcante/buck2-cst-go v0.0.0-20260520174222-f14050af237d
+	github.com/albertocavalcante/sarif-go v0.1.0
 	github.com/albertocavalcante/starlark-cst-go v0.0.0-20260520165855-a1752e1c3209
 	github.com/albertocavalcante/starlark-format-go v0.0.0-20260518174104-d77df1101dbe
 	github.com/bazelbuild/buildtools v0.0.0-20251231073631-eb7356da6895
@@ -31,6 +32,10 @@ require (
 	github.com/golang/protobuf v1.5.0 // indirect
 	github.com/gostaticanalysis/analysisutil v0.7.1 // indirect
 	github.com/gostaticanalysis/comment v1.4.2 // indirect
+	github.com/owenrumney/go-sarif/v3 v3.3.1 // indirect
+	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
+	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
+	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
 	golang.org/x/mod v0.32.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
