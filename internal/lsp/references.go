@@ -387,7 +387,8 @@ func hasNamedParam(def *build.DefStmt, name string) bool {
 // attributes, loaded names and undefined globals are assumed to be foreign.
 // A rename is also refused when a resolved call already passes newName= as a
 // keyword next to targetName=, or when the callee takes **kwargs and a call
-// passes newName=, since the renamed parameter would then be bound twice.
+// passes newName=, since the renamed parameter would then be bound twice. An
+// unresolved callee receiving a newName= label is treated the same way.
 // Calls in other files cannot be seen and are not renamed.
 func collectRenameRefs(content string, file *build.File, targetName, newName string) ([]identRef, error) {
 	refs := collectIdentRefs(content, file, targetName)
@@ -476,8 +477,13 @@ func collectRenameRefs(content string, file *build.File, targetName, newName str
 					conflict = fmt.Sprintf("%s(%s=...) passes %q, which would collide with the renamed parameter", fn.Name, newName, newName)
 				}
 			default:
+				// An unresolved callee may be the renamed function
+				// (alias, lambda, shadowing), so a newName= label may
+				// collide with the renamed parameter or its **kwargs.
 				if rewrites {
 					refuse(fn.Name + "(" + targetName + "=...)")
+				} else if passesNew {
+					refuse(fn.Name + "(" + newName + "=...)")
 				}
 				return
 			}
@@ -486,6 +492,8 @@ func collectRenameRefs(content string, file *build.File, targetName, newName str
 			// cannot be resolved statically.
 			if rewrites {
 				refuse("(...)(" + targetName + "=...)")
+			} else if passesNew {
+				refuse("(...)(" + newName + "=...)")
 			}
 			return
 		}

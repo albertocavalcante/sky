@@ -136,6 +136,10 @@ func TestRename_KeywordLabelCollisions(t *testing.T) {
 		{"unrelated extra label is fine", def + "r = f(name=1, other=2)\n", false},
 		{"plain call without kwargs conflict", def + "r = f(1, other=2)\n", false},
 		{"same label on a foreign callee is fine", def + "r = f(name=1)\nnative.cc_library(label=2)\n", false},
+		{"lambda with **kwargs receives the new label", "f = lambda name=1, **kwargs: (name, kwargs)\nr = f(label=2)\n", true},
+		{"alias of a def receives the new label", def + "g = f\nr = g(label=2)\n", true},
+		{"reassigned callee receives the new label", def + "f = lambda name=1, **kw: (name, kw)\nr = f(label=2)\n", true},
+		{"computed callee receives the new label", def + "r = (lambda **kw: kw)(label=2)\n", true},
 		{"def without **kwargs", "def f(name, other=0):\n    return (name, other)\nr = f(name=1, other=2)\n", false},
 	}
 	for _, tt := range tests {
