@@ -9,11 +9,11 @@ import (
 )
 
 // Write atomically replaces path with data. The temporary file is created
-// exclusively (mode 0600) next to path with a short fixed-prefix unique name,
-// so a destination basename at the filesystem limit still works. It is
-// chmodded to its final mode before any content is written, then renamed into
-// place. An existing destination keeps its permission bits; a new one gets
-// perm subject to the process umask.
+// exclusively (mode 0600) next to path with the shortest practical name (".t"
+// plus the unique suffix), so any destination that fits the path limit also
+// fits its temporary file. It is chmodded to its final mode before any content
+// is written, then renamed into place. An existing destination keeps its
+// permission bits; a new one gets perm subject to the process umask.
 func Write(path string, data []byte, perm os.FileMode) error {
 	mode, err := finalMode(filepath.Dir(path), path, perm)
 	if err != nil {
@@ -28,7 +28,7 @@ func Write(path string, data []byte, perm os.FileMode) error {
 // before the rename, so no path-based chmod is needed afterwards.
 func WriteExact(path string, data []byte, mode os.FileMode) error {
 	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".sky-tmp-*")
+	tmp, err := os.CreateTemp(dir, ".t*")
 	if err != nil {
 		return err
 	}
@@ -63,7 +63,7 @@ func finalMode(dir, path string, perm os.FileMode) (os.FileMode, error) {
 		return fi.Mode().Perm(), nil
 	}
 	// New file: learn the umask-applied mode by creating a probe file.
-	probe, err := os.CreateTemp(dir, ".umask-probe-*")
+	probe, err := os.CreateTemp(dir, ".u*")
 	if err != nil {
 		return 0, err
 	}
