@@ -203,14 +203,10 @@ func readResults(r io.Reader) (*TestResults, error) {
 	}
 	// Exactly one report: anything after it (a second report, garbage) could
 	// hide failures, so reject it rather than ignore it.
-	// Read the remainder once (O(n)); Decoder.Token rescans buffered
-	// whitespace after every short read.
-	rest, err := io.ReadAll(io.MultiReader(decoder.Buffered(), r))
-	if err != nil {
-		return nil, fmt.Errorf("reading input: %w", err)
-	}
-	if len(bytes.Trim(rest, " \t\r\n")) != 0 {
-		return nil, fmt.Errorf("unexpected data after the JSON report; expected exactly one skytest -json report")
+	// Scan the remainder in fixed-size chunks: stop at the first
+	// non-whitespace byte and never buffer the stream (it may be endless).
+	if err := rejectTrailingData(io.MultiReader(decoder.Buffered(), r)); err != nil {
+		return nil, err
 	}
 	var keys map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &keys); err != nil {
@@ -224,6 +220,24 @@ func readResults(r io.Reader) (*TestResults, error) {
 		return nil, fmt.Errorf("parsing JSON: %w", err)
 	}
 	return &results, nil
+}
+
+// rejectTrailingData returns an error at the first byte of r that is not JSON
+// whitespace, reading at most one chunk beyond it. Linear in the whitespace.
+func rejectTrailingData(r io.Reader) error {
+	var buf [4096]byte
+	for {
+		n, err := r.Read(buf[:])
+		if len(bytes.Trim(buf[:n], " \t\r\n")) != 0 {
+			return fmt.Errorf("unexpected data after the JSON report; expected exactly one skytest -json report")
+		}
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("reading input: %w", err)
+		}
+	}
 }
 
 // getHandler returns the appropriate handler for the CI system.

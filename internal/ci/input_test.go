@@ -2,6 +2,7 @@ package ci
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -71,7 +72,10 @@ func TestTrailingWhitespaceIsLinear(t *testing.T) {
 	}
 }
 
-func TestStrayByteAfterReportRejected(t *testing.T) {
+// Guard (passes on the previous implementation too): finite tails with a
+// non-whitespace byte stay rejected. The fail-first test is
+// TestStrayByteDoesNotDrainStream.
+func TestGuardStrayByteAfterReportRejected(t *testing.T) {
 	const report = `{"passed":0,"failed":0,"total":0,"results":[]}`
 	for _, tail := range []string{"x", "   \n\tx", " {}"} {
 		in := io.MultiReader(strings.NewReader(report), strings.NewReader(tail))
@@ -89,5 +93,47 @@ func TestCompatGuardEmptyResultsArrayStaysValid(t *testing.T) {
 	in := `{"passed":0,"failed":0,"total":0,"files":0,"duration_ms":0,"results":[]}` + "\n\n"
 	if code := Run([]string{"--system=generic"}, strings.NewReader(in), &o, &e); code != exitOK {
 		t.Fatalf("code=%d stderr=%s", code, e.String())
+	}
+}
+
+// endlessAfter yields head in its first Read, then an endless stream of 'y'
+// bytes, failing with errOverread once more than limit bytes were served past
+// head.
+type endlessAfter struct {
+	head  []byte
+	limit int
+	past  int
+}
+
+var errOverread = errors.New("test: reader consumed past the stray byte")
+
+func (e *endlessAfter) Read(p []byte) (int, error) {
+	if len(e.head) > 0 {
+		n := copy(p, e.head)
+		e.head = e.head[n:]
+		return n, nil
+	}
+	if e.past >= e.limit {
+		return 0, errOverread
+	}
+	n := min(len(p), e.limit-e.past)
+	for i := range p[:n] {
+		p[i] = 'y'
+	}
+	e.past += n
+	return n, nil
+}
+
+// Fail-first: the previous code drained the stream with io.ReadAll, so an
+// open-ended stream after a stray byte was consumed (and would block forever).
+func TestStrayByteDoesNotDrainStream(t *testing.T) {
+	const report = `{"passed":0,"failed":0,"total":0,"results":[]}`
+	src := &endlessAfter{head: []byte(report + "x"), limit: 1 << 20}
+	_, err := readResults(src)
+	if err == nil || !strings.Contains(err.Error(), "unexpected data") {
+		t.Fatalf("err = %v, want unexpected data error", err)
+	}
+	if src.past > 4096 {
+		t.Fatalf("consumed %d bytes past the stray byte, want <= 4096", src.past)
 	}
 }
