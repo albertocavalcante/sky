@@ -260,6 +260,19 @@ func renameCapture(file *build.File, oldName, newName string) string {
 		}
 		return append(out, file)
 	}
+	// useChain is chain for a use: path is the ancestors of the node followed
+	// by the node itself. A parameter default is evaluated in the scope
+	// enclosing the def or lambda, so that scope is left out of its chain.
+	useChain := func(path []build.Expr) []any {
+		out := []any{}
+		for i := len(path) - 2; i >= 0; i-- {
+			if !isScope(path[i]) || evaluatedOutside(path, i) {
+				continue
+			}
+			out = append(out, path[i])
+		}
+		return append(out, file)
+	}
 
 	binds := map[any]map[string]bool{}
 	bind := func(scope any, name string) {
@@ -295,9 +308,9 @@ func renameCapture(file *build.File, oldName, newName string) string {
 		scope []any
 	}
 	var occs []occurrence
-	note := func(name string, stack []build.Expr) {
+	note := func(name string, stack []build.Expr, node build.Expr) {
 		if name == oldName || name == newName {
-			occs = append(occs, occurrence{name, chain(stack)})
+			occs = append(occs, occurrence{name, useChain(append(stack[:len(stack):len(stack)], node))})
 		}
 	}
 
@@ -310,11 +323,11 @@ func renameCapture(file *build.File, oldName, newName string) string {
 		switch e := expr.(type) {
 		case *build.Ident:
 			if !skip[e] {
-				note(e.Name, stack)
+				note(e.Name, stack, e)
 			}
 		case *build.DefStmt:
 			bind(outer, e.Name)
-			note(e.Name, stack)
+			note(e.Name, stack, e)
 			for _, p := range e.Params {
 				bindPattern(e, p)
 			}
@@ -379,4 +392,34 @@ func renameCapture(file *build.File, oldName, newName string) string {
 		}
 	}
 	return ""
+}
+
+// evaluatedOutside reports whether the node at the end of path, which lies
+// below the scope node path[i], is evaluated in the scope enclosing path[i]
+// rather than inside it: a parameter default of a def or lambda.
+func evaluatedOutside(path []build.Expr, i int) bool {
+	if i+2 >= len(path) {
+		return false
+	}
+	child, next := path[i+1], path[i+2]
+	switch scope := path[i].(type) {
+	case *build.DefStmt:
+		return isDefault(scope.Params, child, next)
+	case *build.LambdaExpr:
+		return isDefault(scope.Params, child, next)
+	}
+	return false
+}
+
+// isDefault reports whether child is a parameter with a default and next is
+// that default expression (not the parameter name).
+func isDefault(params []build.Expr, child, next build.Expr) bool {
+	for _, p := range params {
+		if p != child {
+			continue
+		}
+		a, ok := p.(*build.AssignExpr)
+		return ok && next != a.LHS
+	}
+	return false
 }

@@ -60,6 +60,7 @@ go_test(
         "position_test.go",
         "provider_test.go",
         "references_test.go",
+        "rename_exec_test.go",
         "rename_refs_regression_test.go",
         "rename_safety_test.go",
         "rename_test.go",
@@ -79,6 +80,7 @@ go_test(
         "//internal/starlark/filekind",
         "//internal/starlark/linter",
         "@com_github_bazelbuild_buildtools//build",
+        "@net_starlark_go//starlark",
         "@net_starlark_go//syntax",
     ],
 )
