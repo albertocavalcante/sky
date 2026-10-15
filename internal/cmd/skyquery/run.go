@@ -2,9 +2,11 @@ package skyquery
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -44,7 +46,9 @@ func validateWorkspace(workspace *string) error {
 	// A directory that is listable but not searchable (mode r--) lets the
 	// listing succeed while every entry fails to stat or open.
 	if len(names) > 0 {
-		if _, err := os.Stat(filepath.Join(*workspace, names[0])); err != nil {
+		// Lstat: a dangling symlink is fine, and an entry removed
+		// concurrently (ErrNotExist) is not a workspace problem.
+		if _, err := os.Lstat(filepath.Join(*workspace, names[0])); errors.Is(err, fs.ErrPermission) {
 			return err
 		}
 	}

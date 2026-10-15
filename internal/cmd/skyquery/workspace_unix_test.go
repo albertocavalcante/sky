@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -70,6 +71,29 @@ func TestRun_UntraversableWorkspaceFailsRegardlessOfKeepGoing(t *testing.T) {
 		if !strings.Contains(stderr.String(), "invalid workspace") {
 			t.Errorf("RunWithIO(%v): stderr lacks the invalid-workspace message: %q", args, stderr.String())
 		}
+	}
+}
+
+func TestRun_WorkspaceWithDanglingSymlinks(t *testing.T) {
+	ws := t.TempDir()
+	if err := os.WriteFile(filepath.Join(ws, "z.star"), []byte("x = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Several dangling links so that one is almost certainly the first
+	// directory entry; a dangling link must not make the workspace invalid.
+	for i := 0; i < 20; i++ {
+		link := filepath.Join(ws, "dangling"+strconv.Itoa(i))
+		if err := os.Symlink(filepath.Join(ws, "missing"), link); err != nil {
+			t.Skipf("cannot create symlink: %v", err)
+		}
+	}
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"--workspace", ws, "files(//...)"}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "z.star") {
+		t.Errorf("z.star missing: stdout=%q", stdout.String())
 	}
 }
 
