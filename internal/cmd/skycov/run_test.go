@@ -247,3 +247,44 @@ func TestRun_BadFormatDoesNotCreateOutput(t *testing.T) {
 		t.Error("output file created despite invalid format")
 	}
 }
+
+func TestRun_InvalidMinIsError(t *testing.T) {
+	covFile := filepath.Join(t.TempDir(), "coverage.json")
+	if err := os.WriteFile(covFile, []byte(`{"files":{"lib.star":{"lines":{"1":0}}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range []string{"NaN", "Inf", "-1", "101"} {
+		t.Run(v, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := RunWithIO(context.Background(), []string{"-min=" + v, covFile}, nil, &stdout, &stderr)
+			if code != 2 {
+				t.Errorf("-min=%s: code = %d, want 2\nstderr: %s", v, code, stderr.String())
+			}
+			if stdout.Len() > 0 {
+				t.Errorf("-min=%s: no report should be printed, got %q", v, stdout.String())
+			}
+		})
+	}
+}
+
+func TestRun_MinWithNoMeasuredLinesIsError(t *testing.T) {
+	covFile := filepath.Join(t.TempDir(), "coverage.json")
+	if err := os.WriteFile(covFile, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := RunWithIO(context.Background(), []string{"-min=80", covFile}, nil, &stdout, &stderr)
+	if code != 2 {
+		t.Errorf("empty report with -min: code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "coverage unavailable") {
+		t.Errorf("stderr = %q, want a coverage unavailable message", stderr.String())
+	}
+
+	// Without a requested minimum an empty report is still just reported.
+	stdout.Reset()
+	stderr.Reset()
+	if code := RunWithIO(context.Background(), []string{covFile}, nil, &stdout, &stderr); code != 0 {
+		t.Errorf("empty report without -min: code = %d, want 0\nstderr: %s", code, stderr.String())
+	}
+}
