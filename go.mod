@@ -2,6 +2,8 @@ module github.com/albertocavalcante/sky
 
 go 1.26.2
 
+toolchain go1.26.9
+
 require (
 	github.com/BurntSushi/toml v1.3.2
 	github.com/albertocavalcante/bazel-cst-go v0.0.0-20260520180544-300e5d85397a
