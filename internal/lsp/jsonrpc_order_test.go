@@ -89,14 +89,29 @@ func TestHeaderLimits(t *testing.T) {
 		t.Fatalf("test body length = %d", len(body))
 	}
 
-	t.Run("oversized line", func(t *testing.T) {
+	t.Run("huge line", func(t *testing.T) {
 		in := "X-Fill: " + strings.Repeat("a", 1<<20) + "\r\n" + cl + "\r\n" + body
 		if err := run(in); !errors.Is(err, errHeaderTooLarge) {
 			t.Fatalf("err = %v, want errHeaderTooLarge", err)
 		}
 	})
+	// The next two cases stay far below the block cap, so only the per-line
+	// cap can tell them apart.
+	t.Run("line just over the cap", func(t *testing.T) {
+		in := "X-Fill: " + strings.Repeat("a", maxHeaderLine-len("X-Fill: \r\n")+1) + "\r\n" + cl + "\r\n" + body
+		if err := run(in); !errors.Is(err, errHeaderTooLarge) {
+			t.Fatalf("err = %v, want errHeaderTooLarge", err)
+		}
+	})
+	t.Run("line just under the cap", func(t *testing.T) {
+		in := "X-Fill: " + strings.Repeat("a", maxHeaderLine-len("X-Fill: \r\n")-1) + "\r\n" + cl + "\r\n" + body
+		if err := run(in); err != nil {
+			t.Fatalf("err = %v", err)
+		}
+	})
 	t.Run("oversized header block", func(t *testing.T) {
-		line := "X-Fill: " + strings.Repeat("a", 1000) + "\r\n"
+		// Every line is under the per-line cap; only the total is too big.
+		line := "X-Fill: " + strings.Repeat("a", maxHeaderLine-len("X-Fill: \r\n")-1) + "\r\n"
 		in := strings.Repeat(line, maxHeaderBytes/len(line)+2) + cl + "\r\n" + body
 		if err := run(in); !errors.Is(err, errHeaderTooLarge) {
 			t.Fatalf("err = %v, want errHeaderTooLarge", err)
