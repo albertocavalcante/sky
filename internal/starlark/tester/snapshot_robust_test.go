@@ -55,7 +55,8 @@ func TestSnapshotRejectsExcessiveDepth(t *testing.T) {
 	}
 }
 
-// Shared (non-cyclic) substructure and ordinary nesting serialize exactly as before.
+// Compatibility guard (passes on main too): shared, non-cyclic substructure and
+// ordinary nesting must serialize exactly as before the cycle check.
 func TestSerializationOfAcyclicValuesIsUnchanged(t *testing.T) {
 	shared := starlark.NewList([]starlark.Value{starlark.MakeInt(1)})
 	d := starlark.NewDict(2)
@@ -70,94 +71,70 @@ func TestSerializationOfAcyclicValuesIsUnchanged(t *testing.T) {
 	}
 }
 
-func TestCollidingSnapshotNamesGetDifferentFiles(t *testing.T) {
-	dir := t.TempDir()
-	newSM := func(update bool) *SnapshotManager {
+func TestCollidingSnapshotNamesAreRejected(t *testing.T) {
+	for _, update := range []bool{true, false} {
+		dir := t.TempDir()
 		sm := NewSnapshotManager(update)
 		sm.SetContext(filepath.Join(dir, "t.star"), "test_p")
-		return sm
+		if err := sm.Compare(starlark.String("slash"), "a/b"); err != nil {
+			t.Fatalf("update=%v first name: %v", update, err)
+		}
+		path := sm.snapshotPath("a_b")
+		before, _ := os.ReadFile(path)
+		err := sm.Compare(starlark.String("underscore"), "a_b")
+		if err == nil {
+			t.Fatalf("update=%v: colliding name accepted", update)
+		}
+		for _, want := range []string{`"a/b"`, `"a_b"`, filepath.Base(path)} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("update=%v: error %q does not mention %s", update, err, want)
+			}
+		}
+		if after, _ := os.ReadFile(path); string(after) != string(before) {
+			t.Errorf("update=%v: file changed by the rejected name: %q -> %q", update, before, after)
+		}
 	}
-	sm := newSM(true)
-	if sm.snapshotPath("a/b") == sm.snapshotPath("a_b") {
-		t.Fatal("a/b and a_b map to the same snapshot file")
+}
+
+func TestSameSnapshotNameTwiceIsFine(t *testing.T) {
+	sm := NewSnapshotManager(true)
+	sm.SetContext(filepath.Join(t.TempDir(), "t.star"), "test_p")
+	for i := 0; i < 2; i++ {
+		if err := sm.Compare(starlark.String("v"), "a/b"); err != nil {
+			t.Fatalf("call %d: %v", i, err)
+		}
 	}
-	if err := sm.Compare(starlark.String("slash"), "a/b"); err != nil {
+	// Re-running the same test in the same run is fine too.
+	sm.SetContext(sm.testFile, "test_p")
+	if err := sm.Compare(starlark.String("w"), "a/b"); err != nil {
 		t.Fatal(err)
 	}
-	if err := sm.Compare(starlark.String("underscore"), "a_b"); err != nil {
-		t.Fatal(err)
+}
+
+func TestNonCollidingNamesAreFine(t *testing.T) {
+	sm := NewSnapshotManager(true)
+	sm.SetContext(filepath.Join(t.TempDir(), "t.star"), "test_p")
+	for _, name := range []string{"a/b", "a/c", "x"} {
+		if err := sm.Compare(starlark.String(name), name); err != nil {
+			t.Fatalf("%q: %v", name, err)
+		}
+	}
+	if n := countFiles(t, sm.snapshotDir()); n != 3 {
+		t.Errorf("found %d files, want 3", n)
+	}
+}
+
+// The same snapshot name in different tests uses different files and is fine.
+func TestSameNameInDifferentTestsIsFine(t *testing.T) {
+	sm := NewSnapshotManager(true)
+	file := filepath.Join(t.TempDir(), "t.star")
+	for _, test := range []string{"test_one", "test_two"} {
+		sm.SetContext(file, test)
+		if err := sm.Compare(starlark.String(test), "a/b"); err != nil {
+			t.Fatalf("%s: %v", test, err)
+		}
 	}
 	if n := countFiles(t, sm.snapshotDir()); n != 2 {
-		t.Fatalf("found %d snapshot files, want 2", n)
-	}
-	// A plain run after -u must pass for both.
-	plain := newSM(false)
-	if err := plain.Compare(starlark.String("slash"), "a/b"); err != nil {
-		t.Errorf("a/b: %v", err)
-	}
-	if err := plain.Compare(starlark.String("underscore"), "a_b"); err != nil {
-		t.Errorf("a_b: %v", err)
-	}
-}
-
-// Baselines written by the previous scheme (lossy snapshot name) keep winning.
-func TestLegacyBaselineForNameWithSeparatorIsStillUsed(t *testing.T) {
-	dir := t.TempDir()
-	sm := NewSnapshotManager(false)
-	sm.SetContext(filepath.Join(dir, "t.star"), "test_p")
-	legacy := legacySnapshotFile(sm, "a/b")
-	writeBaseline(t, legacy, `"OLD"`)
-
-	if err := sm.Compare(starlark.String("OLD"), "a/b"); err != nil {
-		t.Fatalf("legacy baseline not used: %v", err)
-	}
-	if err := sm.Compare(starlark.String("CHANGED"), "a/b"); err == nil {
-		t.Fatal("changed value passed against a legacy baseline")
-	}
-	if n := countFiles(t, sm.snapshotDir()); n != 1 {
-		t.Errorf("found %d snapshot files, want only the legacy baseline", n)
-	}
-
-	up := NewSnapshotManager(true)
-	up.SetContext(filepath.Join(dir, "t.star"), "test_p")
-	if err := up.Compare(starlark.String("NEW"), "a/b"); err != nil {
-		t.Fatal(err)
-	}
-	if got, _ := os.ReadFile(legacy); !strings.Contains(string(got), "NEW") {
-		t.Errorf("legacy baseline not rewritten in place: %q", got)
-	}
-	if n := countFiles(t, sm.snapshotDir()); n != 1 {
-		t.Errorf("found %d snapshot files, want 1", n)
-	}
-}
-
-// Existing baselines of ordinary snake_case names keep their file name.
-func TestExistingUnderscoreNameBaselineIsStillUsed(t *testing.T) {
-	sm := NewSnapshotManager(false)
-	sm.SetContext(filepath.Join(t.TempDir(), "t.star"), "test_p")
-	writeBaseline(t, filepath.Join(sm.snapshotDir(), "test_p__my_snap.snap"), `"OLD"`)
-	if err := sm.Compare(starlark.String("OLD"), "my_snap"); err != nil {
-		t.Fatal(err)
-	}
-	if err := sm.Compare(starlark.String("CHANGED"), "my_snap"); err == nil {
-		t.Fatal("changed value passed against an existing baseline")
-	}
-	if n := countFiles(t, sm.snapshotDir()); n != 1 {
-		t.Errorf("found %d snapshot files, want 1", n)
-	}
-}
-
-// The intermediate scheme (encoded test name, lossy snapshot name) is honored too.
-func TestIntermediateSchemeBaselineIsStillUsed(t *testing.T) {
-	dir := t.TempDir()
-	sm := NewSnapshotManager(false)
-	sm.SetContext(filepath.Join(dir, "t.star"), "test_p[x/y]")
-	old := filepath.Join(sm.snapshotDir(), "test_p[x%2Fy]__a_b.snap")
-	writeBaseline(t, old, `"OLD"`+"\n")
-	if err := sm.Compare(starlark.String("CHANGED"), "a/b"); err == nil {
-		t.Fatal("changed value passed; intermediate-scheme baseline was ignored")
-	}
-	if n := countFiles(t, sm.snapshotDir()); n != 1 {
-		t.Errorf("found %d snapshot files, want 1", n)
+		t.Errorf("found %d files, want 2", n)
 	}
 }

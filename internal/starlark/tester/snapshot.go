@@ -33,6 +33,15 @@ type SnapshotManager struct {
 
 	// mismatches tracks snapshots that didn't match.
 	mismatches []SnapshotMismatch
+
+	// owners remembers which test and snapshot name first resolved to each
+	// snapshot file in this run, to detect names that share a file.
+	owners map[string]snapshotOwner
+}
+
+// snapshotOwner identifies who used a snapshot file first.
+type snapshotOwner struct {
+	testFile, testName, name string
 }
 
 // SnapshotMismatch records a snapshot comparison failure.
@@ -75,42 +84,19 @@ var snapshotNameReplacer = strings.NewReplacer(
 
 // snapshotPath returns the full path for a named snapshot.
 //
-// New baselines encode both the test name and the snapshot name so that
-// distinct names get distinct files: "a/b" becomes "a%2Fb" and "a_b" becomes
-// "a%5Fb". (The legacy scheme mapped every unsafe character to "_", so those
-// two names shared one file.) The name is also length-bounded.
-//
-// A baseline written by an earlier scheme is still found and used, and wins
-// over the new path: ignoring it would make Compare create a fresh baseline and
-// pass a changed value without update mode. Limit: a legacy file shared by two
-// colliding names keeps being shared until it is deleted.
+// New baselines use an encoded, length-bounded name. A baseline written before
+// that scheme (the raw test name, unbounded) is still found and used: ignoring
+// it would make Compare create a fresh baseline and pass a changed value without
+// update mode.
 func (sm *SnapshotManager) snapshotPath(name string) string {
 	safeName := snapshotNameReplacer.Replace(name)
-	current := filepath.Join(sm.snapshotDir(), boundSnapshotFileName(encodeFileComponent(sm.testName)+"__"+encodeSnapshotName(name)+".snap"))
-	earlier := []string{
-		// Raw test name, lossy snapshot name, unbounded.
-		sm.legacySnapshotPath(safeName),
-		// Encoded test name, lossy snapshot name, bounded.
-		filepath.Join(sm.snapshotDir(), boundSnapshotFileName(encodeFileComponent(sm.testName)+"__"+safeName+".snap")),
-	}
-	for _, p := range earlier {
-		if p == "" || p == current {
-			continue
-		}
-		if info, err := os.Stat(p); err == nil && info.Mode().IsRegular() {
-			return p
+	current := filepath.Join(sm.snapshotDir(), boundSnapshotFileName(encodeFileComponent(sm.testName)+"__"+safeName+".snap"))
+	if legacy := sm.legacySnapshotPath(safeName); legacy != "" && legacy != current {
+		if info, err := os.Stat(legacy); err == nil && info.Mode().IsRegular() {
+			return legacy
 		}
 	}
 	return current
-}
-
-// encodeSnapshotName encodes a snapshot name for a new baseline file. On top of
-// encodeFileComponent it encodes "_": a legacy file name is built by replacing
-// unsafe characters with "_", so a new file named "a_b" would be mistaken for
-// the legacy baseline of "a/b" (which must win) and the two names would share a
-// file again. Never emitting "_" keeps new files off every legacy path.
-func encodeSnapshotName(name string) string {
-	return strings.ReplaceAll(encodeFileComponent(name), "_", "%5F")
 }
 
 // legacySnapshotPath is where a baseline lived before names were encoded. It
@@ -134,6 +120,9 @@ func (sm *SnapshotManager) Compare(value starlark.Value, name string) error {
 		return fmt.Errorf("cannot snapshot %q: %w", name, err)
 	}
 	snapPath := sm.snapshotPath(name)
+	if err := sm.claimPath(snapPath, name); err != nil {
+		return err
+	}
 
 	// Check if snapshot exists
 	existing, err := os.ReadFile(snapPath)
@@ -172,6 +161,33 @@ func (sm *SnapshotManager) Compare(value starlark.Value, name string) error {
 	})
 
 	return fmt.Errorf("snapshot %q does not match:\n%s", name, formatDiff(existingStr, serialized))
+}
+
+// claimPath records that name resolves to path and fails if a different
+// snapshot name (or test) already used the same file in this run. Distinct
+// names such as "a/b" and "a_b" map to one file; without this check they
+// overwrite each other and the next plain run fails. The same name twice is
+// fine. Nothing is read or written for a rejected name.
+//
+// Detection only: a file already shared by two names is not repaired.
+func (sm *SnapshotManager) claimPath(path, name string) error {
+	me := snapshotOwner{sm.testFile, sm.testName, name}
+	prev, ok := sm.owners[path]
+	if !ok {
+		if sm.owners == nil {
+			sm.owners = make(map[string]snapshotOwner)
+		}
+		sm.owners[path] = me
+		return nil
+	}
+	if prev == me {
+		return nil
+	}
+	if prev.testFile == me.testFile && prev.testName == me.testName {
+		return fmt.Errorf("snapshot names %q and %q map to the same file %s; rename one", prev.name, name, path)
+	}
+	return fmt.Errorf("snapshot %q of test %q and snapshot %q of test %q map to the same file %s; rename one",
+		prev.name, prev.testName, name, me.testName, path)
 }
 
 // writeSnapshot writes a snapshot to disk, creating directories as needed.
