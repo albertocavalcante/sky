@@ -54,7 +54,30 @@ func TestSuppressionParser_HashInString(t *testing.T) {
 	}
 }
 
-// TestSuppressionParser_NextLine verifies "skylint: disable-next-line=rule".
+// TestSuppressionParser_BackslashNewlineInString verifies that a backslash
+// before a newline continues a single- or double-quoted string, so the closing
+// quote on the next line does not open a new string and a real trailing
+// comment is still found. An unterminated string with no backslash must not
+// leak into the following line.
+func TestSuppressionParser_BackslashNewlineInString(t *testing.T) {
+	for _, q := range []string{`"`, `'`} {
+		source := "x = " + q + "a\\\n" + "b" + q + `; print("warn") # skylint: disable=print` + "\n"
+		parser := NewSuppressionParser([]byte(source))
+		if !parser.IsSuppressed(Finding{Line: 2, Rule: "print"}) {
+			t.Errorf("quote %s: comment after continued string on line 2 not found", q)
+		}
+		if parser.IsSuppressed(Finding{Line: 1, Rule: "print"}) {
+			t.Errorf("quote %s: line 1 must not be suppressed", q)
+		}
+	}
+
+	// Unterminated string without a backslash ends at the newline.
+	parser := NewSuppressionParser([]byte("x = \"abc\ny = 1 # skylint: disable=r\n"))
+	if !parser.IsSuppressed(Finding{Line: 2, Rule: "r"}) {
+		t.Error("unterminated string leaked into the next line")
+	}
+}
+
 // TestSuppressionParser_NextLine verifies "skylint: disable-next-line=rule".
 func TestSuppressionParser_NextLine(t *testing.T) {
 	source := `# skylint: disable-next-line=rule-name

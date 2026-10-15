@@ -80,6 +80,7 @@ func findCommentStarts(lines []string) []int {
 	triple := false
 	for n, line := range lines {
 		starts[n] = -1
+		continued := false // line ends in a backslash that escapes the newline
 		for i := 0; i < len(line); i++ {
 			c := line[i]
 			if quote == 0 {
@@ -97,6 +98,9 @@ func findCommentStarts(lines []string) []int {
 				continue
 			}
 			if c == '\\' {
+				if i == len(line)-1 {
+					continued = true
+				}
 				i++ // skip the escaped character
 				continue
 			}
@@ -111,8 +115,10 @@ func findCommentStarts(lines []string) []int {
 				i += 2
 			}
 		}
-		if quote != 0 && !triple {
-			quote = 0 // unterminated single-line string ends at the newline
+		if quote != 0 && !triple && !continued {
+			// An unterminated single-line string ends at the newline, unless
+			// a trailing backslash escapes it (the string continues).
+			quote = 0
 		}
 	}
 	return starts
