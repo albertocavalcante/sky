@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/pmezard/go-difflib/difflib"
@@ -35,8 +36,24 @@ type SnapshotManager struct {
 	mismatches []SnapshotMismatch
 
 	// owners remembers which test and snapshot name first resolved to each
-	// snapshot file in this run, to detect names that share a file.
-	owners map[string]snapshotOwner
+	// snapshot file in this run, to detect names that share a file. It is
+	// shared by every runner of one run (see Options.SnapshotOwners).
+	owners *SnapshotOwners
+}
+
+// SnapshotOwners records which snapshot name used each snapshot file during one
+// run. Runners are created per test file, but files such as test_pair.star and
+// test_pair.bzl share a snapshot directory, so the registry must outlive a
+// single runner. It is safe for concurrent use.
+type SnapshotOwners struct {
+	mu sync.Mutex
+	m  map[string]snapshotOwner
+}
+
+// NewSnapshotOwners returns an empty registry. Create one per run, not per
+// process: a watch-mode rerun after renaming a snapshot must start fresh.
+func NewSnapshotOwners() *SnapshotOwners {
+	return &SnapshotOwners{m: make(map[string]snapshotOwner)}
 }
 
 // snapshotOwner identifies who used a snapshot file first.
@@ -171,13 +188,15 @@ func (sm *SnapshotManager) Compare(value starlark.Value, name string) error {
 //
 // Detection only: a file already shared by two names is not repaired.
 func (sm *SnapshotManager) claimPath(path, name string) error {
+	if sm.owners == nil {
+		sm.owners = NewSnapshotOwners()
+	}
 	me := snapshotOwner{sm.testFile, sm.testName, name}
-	prev, ok := sm.owners[path]
+	sm.owners.mu.Lock()
+	defer sm.owners.mu.Unlock()
+	prev, ok := sm.owners.m[path]
 	if !ok {
-		if sm.owners == nil {
-			sm.owners = make(map[string]snapshotOwner)
-		}
-		sm.owners[path] = me
+		sm.owners.m[path] = me
 		return nil
 	}
 	if prev == me {
@@ -186,8 +205,8 @@ func (sm *SnapshotManager) claimPath(path, name string) error {
 	if prev.testFile == me.testFile && prev.testName == me.testName {
 		return fmt.Errorf("snapshot names %q and %q map to the same file %s; rename one", prev.name, name, path)
 	}
-	return fmt.Errorf("snapshot %q of test %q and snapshot %q of test %q map to the same file %s; rename one",
-		prev.name, prev.testName, name, me.testName, path)
+	return fmt.Errorf("snapshot %q of test %q in %s and snapshot %q of test %q in %s map to the same file %s; rename one",
+		prev.name, prev.testName, prev.testFile, name, me.testName, me.testFile, path)
 }
 
 // writeSnapshot writes a snapshot to disk, creating directories as needed.

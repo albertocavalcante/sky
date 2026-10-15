@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"go.starlark.net/starlark"
@@ -137,4 +138,57 @@ func TestSameNameInDifferentTestsIsFine(t *testing.T) {
 	if n := countFiles(t, sm.snapshotDir()); n != 2 {
 		t.Errorf("found %d files, want 2", n)
 	}
+}
+
+// Runners are created per test file, but test_pair.star and test_pair.bzl share
+// one snapshot directory: "a/b" in one and "a_b" in the other must be detected
+// when the runners share a registry.
+func TestCollisionAcrossRunnersSharingARegistry(t *testing.T) {
+	dir := t.TempDir()
+	run := func(owners *SnapshotOwners, file, snapName string) error {
+		sm := NewSnapshotManager(false)
+		sm.owners = owners
+		sm.SetContext(filepath.Join(dir, file), "test_value")
+		return sm.Compare(starlark.String("v"), snapName)
+	}
+
+	// Registries that are not shared cannot see each other: this is the
+	// per-runner behavior that let the second file reuse the first baseline.
+	if err := run(nil, "test_pair.star", "a/b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(nil, "test_pair.bzl", "a_b"); err != nil {
+		t.Fatalf("unshared registries should not see each other: %v", err)
+	}
+
+	dir = t.TempDir()
+	owners := NewSnapshotOwners()
+	if err := run(owners, "test_pair.star", "a/b"); err != nil {
+		t.Fatal(err)
+	}
+	err := run(owners, "test_pair.bzl", "a_b")
+	if err == nil {
+		t.Fatal("collision across files was not detected")
+	}
+	for _, want := range []string{"test_pair.star", "test_pair.bzl", `"a/b"`, `"a_b"`} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %s", err, want)
+		}
+	}
+}
+
+func TestSnapshotOwnersConcurrentUse(t *testing.T) {
+	owners := NewSnapshotOwners()
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sm := NewSnapshotManager(true)
+			sm.owners = owners
+			sm.SetContext("t.star", "test_p")
+			_ = sm.claimPath("shared", "n")
+		}()
+	}
+	wg.Wait()
 }

@@ -191,6 +191,11 @@ type Options struct {
 	// UpdateSnapshots when true, updates snapshots instead of comparing.
 	// Use with -u or --update-snapshots flag.
 	UpdateSnapshots bool
+
+	// SnapshotOwners is shared by all runners of one run so that snapshot name
+	// collisions are detected across test files. Optional: a runner without it
+	// detects collisions only among its own tests.
+	SnapshotOwners *SnapshotOwners
 }
 
 // DefaultOptions returns sensible defaults.
@@ -234,6 +239,7 @@ func New(opts Options) *Runner {
 
 	// Create snapshot manager (always available, but compare behavior depends on UpdateSnapshots)
 	r.snapshot = NewSnapshotManager(opts.UpdateSnapshots)
+	r.snapshot.owners = opts.SnapshotOwners
 
 	// Create mock manager (always available)
 	r.mock = NewMockManager()
