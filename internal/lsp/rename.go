@@ -9,6 +9,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/bazelbuild/buildtools/build"
+
 	"github.com/albertocavalcante/sky/internal/protocol"
 	"github.com/albertocavalcante/sky/internal/starlark/filekind"
 )
@@ -121,6 +123,11 @@ func (s *Server) handleRename(ctx context.Context, params json.RawMessage) (any,
 	if len(refs) == 0 {
 		return nil, nil
 	}
+	if p.NewName != word {
+		if msg := renameCapture(file, word, p.NewName); msg != "" {
+			return nil, &ResponseError{Code: CodeRequestFailed, Message: msg}
+		}
+	}
 
 	// Create text edits for each reference
 	edits := make([]protocol.TextEdit, 0, len(refs))
@@ -223,4 +230,153 @@ func isKeyword(word string) bool {
 // isBuiltin returns true if the word is a Starlark builtin function.
 func isBuiltin(word string) bool {
 	return starlarkBuiltinSet[word]
+}
+
+// renameCapture reports (as a non-empty message) when renaming oldName to
+// newName could change what a name refers to: newName is already bound in a
+// scope between a use of oldName and the scope that binds oldName (the
+// rename would merge two variables or make the inner binding shadow it), or
+// newName is used in the scope that binds oldName and would start resolving
+// to the renamed variable. The check is name-based and conservative: it never
+// resolves which of several same-named variables a use belongs to.
+func renameCapture(file *build.File, oldName, newName string) string {
+	_, skip := classifyIdents(file)
+
+	isScope := func(e build.Expr) bool {
+		switch e.(type) {
+		case *build.DefStmt, *build.LambdaExpr, *build.Comprehension:
+			return true
+		}
+		return false
+	}
+	// chain returns the scopes enclosing a node, innermost first, ending
+	// with the module (the file).
+	chain := func(stack []build.Expr) []any {
+		out := []any{}
+		for i := len(stack) - 1; i >= 0; i-- {
+			if isScope(stack[i]) {
+				out = append(out, stack[i])
+			}
+		}
+		return append(out, file)
+	}
+
+	binds := map[any]map[string]bool{}
+	bind := func(scope any, name string) {
+		if binds[scope] == nil {
+			binds[scope] = map[string]bool{}
+		}
+		binds[scope][name] = true
+	}
+	var bindPattern func(scope any, e build.Expr)
+	bindPattern = func(scope any, e build.Expr) {
+		switch v := e.(type) {
+		case *build.Ident:
+			bind(scope, v.Name)
+		case *build.ListExpr:
+			for _, x := range v.List {
+				bindPattern(scope, x)
+			}
+		case *build.TupleExpr:
+			for _, x := range v.List {
+				bindPattern(scope, x)
+			}
+		case *build.ParenExpr:
+			bindPattern(scope, v.X)
+		case *build.UnaryExpr:
+			bindPattern(scope, v.X)
+		case *build.AssignExpr:
+			bindPattern(scope, v.LHS)
+		}
+	}
+
+	type occurrence struct {
+		name  string
+		scope []any
+	}
+	var occs []occurrence
+	note := func(name string, stack []build.Expr) {
+		if name == oldName || name == newName {
+			occs = append(occs, occurrence{name, chain(stack)})
+		}
+	}
+
+	build.Walk(file, func(expr build.Expr, stack []build.Expr) {
+		outer := chain(stack)[0]
+		var parent build.Expr
+		if len(stack) > 0 {
+			parent = stack[len(stack)-1]
+		}
+		switch e := expr.(type) {
+		case *build.Ident:
+			if !skip[e] {
+				note(e.Name, stack)
+			}
+		case *build.DefStmt:
+			bind(outer, e.Name)
+			note(e.Name, stack)
+			for _, p := range e.Params {
+				bindPattern(e, p)
+			}
+		case *build.LambdaExpr:
+			for _, p := range e.Params {
+				bindPattern(e, p)
+			}
+		case *build.AssignExpr:
+			switch parent.(type) {
+			case *build.CallExpr, *build.DefStmt, *build.LambdaExpr:
+				return
+			}
+			if strings.HasSuffix(e.Op, "=") {
+				bindPattern(outer, e.LHS)
+			}
+		case *build.ForStmt:
+			bindPattern(outer, e.Vars)
+		case *build.ForClause:
+			bindPattern(outer, e.Vars)
+		case *build.LoadStmt:
+			for _, id := range e.To {
+				bind(outer, id.Name)
+			}
+		}
+	})
+
+	// Scopes whose binding of oldName the rename moves to newName: the
+	// innermost binder of each use, or the module for a free name.
+	owners := map[any]bool{}
+	for _, o := range occs {
+		if o.name != oldName {
+			continue
+		}
+		owner := any(file)
+		for _, sc := range o.scope {
+			if binds[sc][oldName] {
+				owner = sc
+				break
+			}
+		}
+		owners[owner] = true
+		for _, sc := range o.scope {
+			if binds[sc][newName] {
+				return fmt.Sprintf("cannot rename %q to %q: %q is already bound in a scope where %q is used, so the rename would change which variable a name refers to", oldName, newName, newName, oldName)
+			}
+			if sc == owner {
+				break
+			}
+		}
+	}
+	for _, o := range occs {
+		if o.name != newName {
+			continue
+		}
+		for _, sc := range o.scope {
+			if binds[sc][newName] {
+				break // resolves to its own binding, unaffected
+			}
+			if owners[sc] {
+				return fmt.Sprintf("cannot rename %q to %q: %q is already used where %q is bound, so the renamed variable would capture it", oldName, newName, newName, oldName)
+			}
+		}
+	}
+	return ""
 }
