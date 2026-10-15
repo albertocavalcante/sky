@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 )
 
 // ============================================================================
@@ -480,15 +479,13 @@ def test_other():
 	}
 }
 
-func TestRun_ParallelTimingReasonable(t *testing.T) {
-	// Test that parallel execution actually provides speedup
-	// by comparing parallel vs sequential on slow tests
+// Parallel execution must produce the same results as sequential execution.
+// This used to compare the wall-clock time of two runs of a few milliseconds,
+// which fails on a loaded CI runner (Bazel runs many test targets at once).
+func TestRun_ParallelMatchesSequential(t *testing.T) {
 	dir := t.TempDir()
-
-	// Create files with tests that take some time
 	for i := 1; i <= 4; i++ {
 		file := filepath.Join(dir, "test_timing"+string(rune('a'+i-1))+".star")
-		// Each test does some work
 		content := `def test_work():
     x = 0
     for i in range(10000):
@@ -500,26 +497,20 @@ func TestRun_ParallelTimingReasonable(t *testing.T) {
 		}
 	}
 
-	// Run sequentially
-	var stdout1, stderr1 bytes.Buffer
-	start1 := time.Now()
-	RunWithIO(context.Background(), []string{"-j", "1", dir}, nil, &stdout1, &stderr1)
-	seqDuration := time.Since(start1)
-
-	// Run in parallel with 4 workers
-	var stdout2, stderr2 bytes.Buffer
-	start2 := time.Now()
-	RunWithIO(context.Background(), []string{"-j", "4", dir}, nil, &stdout2, &stderr2)
-	parDuration := time.Since(start2)
-
-	// Parallel should be faster (with some tolerance for overhead)
-	// We don't require strict speedup, just that it's not significantly slower
-	t.Logf("Sequential: %v, Parallel: %v", seqDuration, parDuration)
-
-	// Allow parallel to be up to 2x slower due to test overhead on fast machines
-	// The key is that on slow tests, parallel will be faster
-	if parDuration > seqDuration*2 {
-		t.Errorf("Parallel (%v) significantly slower than sequential (%v)", parDuration, seqDuration)
+	run := func(jobs string) (int, string) {
+		var stdout, stderr bytes.Buffer
+		code := RunWithIO(context.Background(), []string{"-j", jobs, dir}, nil, &stdout, &stderr)
+		return code, stdout.String() + stderr.String()
+	}
+	const want = "Results: 4 passed, 0 failed, 4 total in 4 file(s)"
+	for _, jobs := range []string{"1", "4"} {
+		code, out := run(jobs)
+		if code != 0 {
+			t.Errorf("-j %s exited %d, want 0:\n%s", jobs, code, out)
+		}
+		if !strings.Contains(out, want) {
+			t.Errorf("-j %s output lacks %q:\n%s", jobs, want, out)
+		}
 	}
 }
 
