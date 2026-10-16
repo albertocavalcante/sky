@@ -1,6 +1,9 @@
 package protocol
 
-import "encoding/json"
+import (
+	"bytes"
+	"encoding/json"
+)
 
 //go:generate go run gen_unions.go
 
@@ -22,8 +25,36 @@ func unionScore(x []byte, required ...string) int {
 }
 
 // keySet describes the required and optional JSON keys of one struct variant.
+//
+// nonNull lists required keys whose type is not nullable: a JSON null there
+// (which encoding/json would silently decode to the zero value) means the
+// variant does not match.
 type keySet struct {
-	required, optional []string
+	required, optional, nonNull []string
+}
+
+// unionNullRequired reports whether x is an object that has every required
+// key of some set but carries JSON null for one of that set's non-nullable
+// keys.
+func unionNullRequired(x []byte, sets ...keySet) bool {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(x, &m); err != nil || m == nil {
+		return false
+	}
+sets:
+	for _, s := range sets {
+		for _, k := range s.required {
+			if _, ok := m[k]; !ok {
+				continue sets
+			}
+		}
+		for _, k := range s.nonNull {
+			if string(bytes.TrimSpace(m[k])) == "null" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // unionRank scores x against the best matching key set. It returns -1 if no
@@ -40,6 +71,11 @@ sets:
 	for _, s := range sets {
 		for _, k := range s.required {
 			if _, ok := m[k]; !ok {
+				continue sets
+			}
+		}
+		for _, k := range s.nonNull {
+			if string(bytes.TrimSpace(m[k])) == "null" {
 				continue sets
 			}
 		}
