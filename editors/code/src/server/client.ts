@@ -1,4 +1,3 @@
-import { execSync } from "node:child_process";
 import * as vscode from "vscode";
 import {
   LanguageClient,
@@ -8,6 +7,7 @@ import {
   TransportKind,
 } from "vscode-languageclient/node";
 import type { ExtensionContext } from "../context";
+import { findExecutableOnPath } from "./pathLookup";
 
 const SERVER_BINARY_NAME = "skyls";
 
@@ -77,7 +77,7 @@ function findServerBinary(ctx: ExtensionContext): string | undefined {
   }
 
   // 2. Check if server is in PATH
-  const which = findInPath(SERVER_BINARY_NAME);
+  const which = findExecutableOnPath(SERVER_BINARY_NAME);
   if (which !== undefined) {
     ctx.outputChannel.info(`Found ${SERVER_BINARY_NAME} in PATH: ${which}`);
     return which;
@@ -92,17 +92,4 @@ function findServerBinary(ctx: ExtensionContext): string | undefined {
       `Please install it or set 'sky-starlark.server.path' in settings.`
   );
   return undefined;
-}
-
-/**
- * Simple PATH lookup for the server binary.
- * Returns the full path if found, undefined otherwise.
- */
-function findInPath(name: string): string | undefined {
-  try {
-    const result = execSync(`which ${name}`, { encoding: "utf-8" }).trim();
-    return result !== "" ? result : undefined;
-  } catch {
-    return undefined;
-  }
 }
