@@ -1,12 +1,20 @@
+// Copyright 2026 Alberto Cavalcante. All rights reserved.
+// Use of this source code is governed by the license in this repository.
+
 package lsp
 
 import (
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/bazelbuild/buildtools/build"
 	"go.starlark.net/starlark"
 	"go.starlark.net/syntax"
 
@@ -14,10 +22,8 @@ import (
 	"github.com/albertocavalcante/sky/internal/starlark/filekind"
 )
 
-// TestRenameCapture_ManyParametersIsLinear guards against a quadratic scan of
-// the parameter list for every identifier in a function with many parameters.
-func TestRenameCapture_ManyParametersIsLinear(t *testing.T) {
-	const n = 100000
+func renameCaptureFixture(t testing.TB, n int) *build.File {
+	t.Helper()
 	var b strings.Builder
 	b.WriteString("x = 1\ndef f(")
 	for i := 0; i < n; i++ {
@@ -38,12 +44,104 @@ func TestRenameCapture_ManyParametersIsLinear(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	start := time.Now()
+	return file
+}
+
+func TestRenameCaptureManyParameters(t *testing.T) {
+	file := renameCaptureFixture(t, 100000)
 	if msg := renameCapture(file, "x", "y"); msg != "" {
 		t.Fatalf("unexpected refusal: %s", msg)
 	}
-	if d := time.Since(start); d > 2*time.Second {
-		t.Errorf("renameCapture took %v for %d parameters, want linear time", d, n)
+}
+
+// This empirical guard targets the repeated parameter scan fixed in #87.
+// It measures child-process CPU rather than wall time, so host descheduling and
+// the race detector's exit delay do not count. It does not bound all rename work.
+func TestRenameCaptureParameterScanCost(t *testing.T) {
+	const workerEnv = "SKY_RENAME_SCAN_WORKER"
+	if worker := os.Getenv(workerEnv); worker != "" {
+		var n, repetitions int
+		if _, err := fmt.Sscanf(worker, "%d,%d", &n, &repetitions); err != nil || n < 1 || repetitions < 1 {
+			t.Fatalf("invalid worker input %q", worker)
+		}
+		file := renameCaptureFixture(t, n)
+		for range repetitions {
+			if msg := renameCapture(file, "x", "y"); msg != "" {
+				t.Fatalf("unexpected refusal: %s", msg)
+			}
+		}
+		return
+	}
+
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	measure := func(n, repetitions int) time.Duration {
+		t.Helper()
+		timeout := 2 * time.Minute
+		if deadline, ok := t.Deadline(); ok && time.Until(deadline)-time.Second < timeout {
+			timeout = time.Until(deadline) - time.Second
+		}
+		if timeout <= 0 {
+			t.Fatal("parent deadline exhausted before CPU worker")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, binary, "-test.run=^TestRenameCaptureParameterScanCost$", "-test.count=1", "-test.cpu=1")
+		cmd.Env = append(os.Environ(), fmt.Sprintf("%s=%d,%d", workerEnv, n, repetitions))
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("worker n=%d repetitions=%d: %v (context: %v)\n%s", n, repetitions, err, ctx.Err(), out)
+		}
+		cpu := cmd.ProcessState.UserTime() + cmd.ProcessState.SystemTime()
+		if cpu <= 0 {
+			t.Fatal("child CPU accounting unavailable")
+		}
+		return cpu
+	}
+
+	const small, large = 5000, 50000
+	repetitions := 1
+	// Calibrate only the small case, then hold repetition count fixed. Calibrating
+	// both cases to the same CPU budget would hide the quadratic regression.
+	for measure(small, repetitions) < 100*time.Millisecond {
+		if repetitions >= 1<<14 {
+			t.Fatal("could not calibrate a measurable parameter-scan workload")
+		}
+		repetitions *= 2
+	}
+	baseline, doubled := measure(small, repetitions), measure(small, 2*repetitions)
+	t.Logf("amortization: repetitions %d->%d, CPU %v->%v", repetitions, 2*repetitions, baseline, doubled)
+	if doubled < baseline+baseline/4 {
+		t.Fatal("doubling repeated rename work did not materially increase CPU; startup cost may dominate")
+	}
+	var ratios []float64
+	for range 3 {
+		a, b := measure(small, repetitions), measure(large, repetitions)
+		ratio := float64(b) / float64(a)
+		ratios = append(ratios, ratio)
+		t.Logf("parameters %d->%d, repetitions=%d: CPU %v->%v, ratio=%.2f", small, large, repetitions, a, b, ratio)
+	}
+	sort.Float64s(ratios)
+	// A tenfold input increase permits fourfold headroom over proportional cost,
+	// while still rejecting the original per-reference parameter rescan (~100x).
+	if ratios[1] > 4*float64(large)/float64(small) {
+		t.Fatalf("median CPU growth %.2fx for %dx parameters suggests repeated parameter scans", ratios[1], large/small)
+	}
+}
+
+func BenchmarkRenameCaptureParameters(b *testing.B) {
+	for _, n := range []int{1000, 10000} {
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			file := renameCaptureFixture(b, n)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for b.Loop() {
+				if msg := renameCapture(file, "x", "y"); msg != "" {
+					b.Fatalf("unexpected refusal: %s", msg)
+				}
+			}
+		})
 	}
 }
 
