@@ -20,7 +20,7 @@ require (
 	github.com/tetratelabs/wazero v1.11.0
 	github.com/timakin/bodyclose v0.0.0-20241222091800-1db5c5ca4d67
 	go.starlark.net v0.0.0-20260102030733-3fee463870c9
-	golang.org/x/term v0.39.0
+	golang.org/x/term v0.41.0
 	golang.org/x/tools v0.41.0
 	google.golang.org/protobuf v1.36.11
 )
@@ -33,7 +33,7 @@ require (
 	github.com/gostaticanalysis/comment v1.4.2 // indirect
 	golang.org/x/mod v0.32.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.40.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/tools/go/packages/packagestest v0.1.1-deprecated // indirect
 )
 
@@ -44,7 +44,7 @@ require (
 // - OnFunctionEnter/Exit: function coverage
 // - OnIteration: loop coverage
 // TODO(upstream): Remove once hooks are merged to go.starlark.net
-replace go.starlark.net => github.com/albertocavalcante/starlark-go-x v0.0.0-20260203191202-da5a35fe16a6
+replace go.starlark.net => github.com/albertocavalcante/starlark-go-x v0.0.0-20261107042442-29330a31ded8
 
 // CST library stack — versioned via Go pseudo-versions (v0.0.0-{ts}-{hash}).
 // Libraries are intentionally pre-1.0 and untagged; we pin commits via the
