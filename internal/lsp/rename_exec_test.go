@@ -101,19 +101,13 @@ func TestRenameCaptureParameterScanCost(t *testing.T) {
 	}
 
 	const small, large = 5000, 50000
-	repetitions := 1
-	// Calibrate only the small case, then hold repetition count fixed. Calibrating
-	// both cases to the same CPU budget would hide the quadratic regression.
-	for measure(small, repetitions) < 100*time.Millisecond {
-		if repetitions >= 1<<14 {
-			t.Fatal("could not calibrate a measurable parameter-scan workload")
-		}
-		repetitions *= 2
-	}
-	baseline, doubled := measure(small, repetitions), measure(small, 2*repetitions)
-	t.Logf("amortization: repetitions %d->%d, CPU %v->%v", repetitions, 2*repetitions, baseline, doubled)
-	if doubled < baseline+baseline/4 {
-		t.Fatal("doubling repeated rename work did not materially increase CPU; startup cost may dominate")
+	repetitions, err := calibrateRenameWorkload(func(repetitions int) time.Duration {
+		cpu := measure(small, repetitions)
+		t.Logf("calibration repetitions=%d: CPU=%v", repetitions, cpu)
+		return cpu
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 	var ratios []float64
 	for range 3 {
@@ -128,6 +122,68 @@ func TestRenameCaptureParameterScanCost(t *testing.T) {
 	if ratios[1] > 4*float64(large)/float64(small) {
 		t.Fatalf("median CPU growth %.2fx for %dx parameters suggests repeated parameter scans", ratios[1], large/small)
 	}
+}
+
+// Calibrate only the small fixture, then hold repetitions fixed for both sizes.
+// Require added CPU from repeated work, rather than accepting startup/parse CPU
+// as the workload. Added work must account for at least half the baseline CPU
+// so constant startup cannot hide the known quadratic regression. Early noisy
+// pairs are calibration inputs, not test failures.
+func calibrateRenameWorkload(measure func(int) time.Duration) (int, error) {
+	for repetitions := 1; repetitions <= 1<<14; repetitions *= 2 {
+		baseline, doubled := measure(repetitions), measure(2*repetitions)
+		if doubled-baseline >= 100*time.Millisecond && doubled >= baseline+baseline/2 {
+			return repetitions, nil
+		}
+	}
+	return 0, fmt.Errorf("could not amortize worker startup within the repetition limit")
+}
+
+func TestRenameWorkloadCalibration(t *testing.T) {
+	t.Run("constant startup must not hide quadratic work", func(t *testing.T) {
+		measure := func(n int) time.Duration { return 300*time.Millisecond + time.Duration(n)*time.Millisecond }
+		got, err := calibrateRenameWorkload(measure)
+		if err != nil || got != 512 {
+			t.Fatalf("calibrate = %d, %v; want 512, nil", got, err)
+		}
+		quadratic := 300*time.Millisecond + time.Duration(100*got)*time.Millisecond
+		if ratio := float64(quadratic) / float64(measure(got)); ratio <= 40 {
+			t.Fatalf("startup hides quadratic work: ratio %.2f", ratio)
+		}
+	})
+	t.Run("proportional work", func(t *testing.T) {
+		got, err := calibrateRenameWorkload(func(n int) time.Duration { return time.Duration(n) * time.Millisecond })
+		if err != nil || got != 128 {
+			t.Fatalf("calibrate = %d, %v; want 128, nil", got, err)
+		}
+	})
+	t.Run("startup never amortizes", func(t *testing.T) {
+		calls := 0
+		_, err := calibrateRenameWorkload(func(int) time.Duration { calls++; return time.Second })
+		if err == nil || calls != 30 {
+			t.Fatalf("error = %v, measurements = %d; want error and 30", err, calls)
+		}
+	})
+	t.Run("startup dominates recorded trunk samples", func(t *testing.T) {
+		// The first pair is recorded trunk evidence; later values are a
+		// synthetic continuation used to exercise further calibration.
+		cpu := map[int]time.Duration{
+			1: 129605 * time.Microsecond,
+			2: 95345 * time.Microsecond,
+			4: 180 * time.Millisecond,
+			8: 320 * time.Millisecond,
+		}
+		got, err := calibrateRenameWorkload(func(n int) time.Duration {
+			value, ok := cpu[n]
+			if !ok {
+				t.Fatalf("unexpected repetitions %d", n)
+			}
+			return value
+		})
+		if err != nil || got != 4 {
+			t.Fatalf("calibrate = %d, %v; want 4, nil", got, err)
+		}
+	})
 }
 
 func BenchmarkRenameCaptureParameters(b *testing.B) {
