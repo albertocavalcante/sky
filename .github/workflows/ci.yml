@@ -12,21 +12,39 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ===========================================================================
   # Job 1: Go Build & Test (module compatibility)
   # ===========================================================================
   go-build:
     name: Go Build & Test
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 15
     permissions:
       contents: read
       id-token: write   # OIDC federation for octo-sts (private module auth)
 
     steps:
-      # actions/checkout v6.0.1
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Prepare private executable scratch
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$HOME/.cache"
+          sky_scratch=$(mktemp -d "$HOME/.cache/sky-ci.XXXXXX")
+          mkdir -m 700 "$sky_scratch/bin"
+          printf '#!/bin/sh\nexit 0\n' >"$sky_scratch/exec-probe"
+          chmod 700 "$sky_scratch/exec-probe"
+          "$sky_scratch/exec-probe"
+          rm "$sky_scratch/exec-probe"
+          printf 'SKY_CI_SCRATCH=%s\nSKY_CI_BIN=%s/bin\nGOTMPDIR=%s\nTMPDIR=%s\n' \
+            "$sky_scratch" "$sky_scratch" "$sky_scratch" "$sky_scratch" >>"$GITHUB_ENV"
+          printf '%s/bin\n' "$sky_scratch" >>"$GITHUB_PATH"
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
           persist-credentials: false
@@ -36,13 +54,8 @@ jobs:
       # deps without a PAT. See action.yml for the full rationale.
       - uses: ./.github/actions/setup-cst-private-auth
 
-      # actions/setup-go v6.2.0
       - name: Setup Go
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
-        with:
-          go-version-file: go.mod
-          cache: true
-          cache-dependency-path: go.sum
+        uses: ./.github/actions/setup-go-verified
 
       - name: Verify Go version
         run: go version
@@ -54,7 +67,6 @@ jobs:
         run: |
           go mod tidy
           git diff --exit-code go.mod go.sum || (echo "go.mod/go.sum not tidy" && exit 1)
-
       - name: Build
         run: go build -v ./...
 
@@ -66,15 +78,29 @@ jobs:
   # ===========================================================================
   bazel-build:
     name: Bazel Build & Test
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 30
     permissions:
       contents: read
       id-token: write   # OIDC federation for octo-sts (private module auth)
 
     steps:
-      # actions/checkout v6.0.1
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Prepare private executable scratch
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$HOME/.cache"
+          sky_scratch=$(mktemp -d "$HOME/.cache/sky-ci.XXXXXX")
+          mkdir -m 700 "$sky_scratch/bin"
+          printf '#!/bin/sh\nexit 0\n' >"$sky_scratch/exec-probe"
+          chmod 700 "$sky_scratch/exec-probe"
+          "$sky_scratch/exec-probe"
+          rm "$sky_scratch/exec-probe"
+          printf 'SKY_CI_SCRATCH=%s\nSKY_CI_BIN=%s/bin\nGOTMPDIR=%s\nTMPDIR=%s\n' \
+            "$sky_scratch" "$sky_scratch" "$sky_scratch" "$sky_scratch" >>"$GITHUB_ENV"
+          printf '%s/bin\n' "$sky_scratch" >>"$GITHUB_PATH"
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
           persist-credentials: false
@@ -87,55 +113,107 @@ jobs:
       # url.insteadOf rules transparently authenticate those fetches.
       - uses: ./.github/actions/setup-cst-private-auth
 
-      # bazel-contrib/setup-bazel v0.18.0
-      - name: Setup Bazel
-        uses: bazel-contrib/setup-bazel@083175551ceeceebc757ebee2127fde78840ca77
-        with:
-          bazelisk-cache: true
-          disk-cache: ${{ github.workflow }}
-          repository-cache: true
-
+      - name: Install verified Bazel
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat .bazelversion)" = 9.0.0
+          case "$RUNNER_ARCH" in
+            ARM64)
+              sky_arch=arm64
+              sky_bazel_sha=cab23c59d3d39c5e5382f12cd116b47445afdff9813516c18ae3ee8836b3037f
+              ;;
+            X64)
+              sky_arch=x86_64
+              sky_bazel_sha=c44a93f25398c68f904fa1d19b61d321de6c0d2f09dca375d7bc0dc9b9428403
+              ;;
+            *)
+              echo "unsupported runner architecture: $RUNNER_ARCH" >&2
+              exit 1
+              ;;
+          esac
+          curl --fail --silent --show-error --location \
+            "https://releases.bazel.build/9.0.0/release/bazel-9.0.0-linux-$sky_arch" \
+            --output "$SKY_CI_SCRATCH/bazel"
+          printf '%s  %s\n' "$sky_bazel_sha" "$SKY_CI_SCRATCH/bazel" | sha256sum --check --status
+          install -m 755 "$SKY_CI_SCRATCH/bazel" "$SKY_CI_BIN/bazel"
       - name: Bazel version
         run: bazel --version
 
       - name: Build all targets
-        run: bazel build //...
+        run: bazel build --jobs=2 //...
 
       - name: Run all tests
-        run: bazel test //... --test_output=errors
+        run: bazel test --jobs=2 --local_test_jobs=1 //... --test_output=errors
 
   # ===========================================================================
   # Job 3: Lint
   # ===========================================================================
   lint:
     name: Lint
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 10
     permissions:
       contents: read
       id-token: write   # OIDC federation for octo-sts (private module auth)
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Prepare private executable scratch
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$HOME/.cache"
+          sky_scratch=$(mktemp -d "$HOME/.cache/sky-ci.XXXXXX")
+          mkdir -m 700 "$sky_scratch/bin"
+          printf '#!/bin/sh\nexit 0\n' >"$sky_scratch/exec-probe"
+          chmod 700 "$sky_scratch/exec-probe"
+          "$sky_scratch/exec-probe"
+          rm "$sky_scratch/exec-probe"
+          printf 'SKY_CI_SCRATCH=%s\nSKY_CI_BIN=%s/bin\nGOTMPDIR=%s\nTMPDIR=%s\n' \
+            "$sky_scratch" "$sky_scratch" "$sky_scratch" "$sky_scratch" >>"$GITHUB_ENV"
+          printf '%s/bin\n' "$sky_scratch" >>"$GITHUB_PATH"
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
           persist-credentials: false
 
       - uses: ./.github/actions/setup-cst-private-auth
 
-      # actions/setup-go v6.2.0
       - name: Setup Go
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
-        with:
-          go-version-file: go.mod
-          cache: true
-          cache-dependency-path: go.sum
+        uses: ./.github/actions/setup-go-verified
 
-      # golangci/golangci-lint-action v9.2.0
+      - name: Install verified golangci-lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$RUNNER_ARCH" in
+            ARM64)
+              sky_arch=arm64
+              sky_lint_sha=b4d8f17068b35ee6060cc2f69a16fb48740d706fbba81661c318649c114a6998
+              ;;
+            X64)
+              sky_arch=amd64
+              sky_lint_sha=9b7fe6a6bf6334b98decf8d86b11415ea7889afdabdd1959fdce23af2a9ebcea
+              ;;
+            *)
+              echo "unsupported runner architecture: $RUNNER_ARCH" >&2
+              exit 1
+              ;;
+          esac
+          sky_lint_dir="golangci-lint-2.15.0-linux-$sky_arch"
+          curl --fail --silent --show-error --location \
+            "https://github.com/golangci/golangci-lint/releases/download/v2.15.0/$sky_lint_dir.tar.gz" \
+            --output "$SKY_CI_SCRATCH/golangci-lint.tar.gz"
+          printf '%s  %s\n' "$sky_lint_sha" "$SKY_CI_SCRATCH/golangci-lint.tar.gz" | sha256sum --check --status
+          tar -xzf "$SKY_CI_SCRATCH/golangci-lint.tar.gz" -C "$SKY_CI_SCRATCH" "$sky_lint_dir/golangci-lint"
+          install -m 755 "$SKY_CI_SCRATCH/$sky_lint_dir/golangci-lint" "$SKY_CI_BIN/golangci-lint"
+          "$SKY_CI_BIN/golangci-lint" version
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20
+        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
         with:
-          version: latest
+          install-mode: none
+          skip-cache: true # Lint caches may contain private CST package data.
           args: --timeout=5m
 
   # ===========================================================================
@@ -143,30 +221,43 @@ jobs:
   # ===========================================================================
   format:
     name: Format Check
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 5
     permissions:
       contents: read
       id-token: write   # OIDC federation for octo-sts (private module auth)
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Prepare private executable scratch
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$HOME/.cache"
+          sky_scratch=$(mktemp -d "$HOME/.cache/sky-ci.XXXXXX")
+          mkdir -m 700 "$sky_scratch/bin"
+          printf '#!/bin/sh\nexit 0\n' >"$sky_scratch/exec-probe"
+          chmod 700 "$sky_scratch/exec-probe"
+          "$sky_scratch/exec-probe"
+          rm "$sky_scratch/exec-probe"
+          printf 'SKY_CI_SCRATCH=%s\nSKY_CI_BIN=%s/bin\nGOTMPDIR=%s\nTMPDIR=%s\n' \
+            "$sky_scratch" "$sky_scratch" "$sky_scratch" "$sky_scratch" >>"$GITHUB_ENV"
+          printf '%s/bin\n' "$sky_scratch" >>"$GITHUB_PATH"
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
           persist-credentials: false
 
       - uses: ./.github/actions/setup-cst-private-auth
 
-      # actions/setup-go v6.2.0
       - name: Setup Go
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
-        with:
-          go-version-file: go.mod
-          cache: false  # Don't need cache for format check
+        uses: ./.github/actions/setup-go-verified
 
       - name: Check Go formatting
         run: |
-          unformatted=$(gofmt -l $(find . -name '*.go' -not -path './vendor/*' -not -path './bazel-*'))
+          mapfile -d '' sky_go_files < <(find . -name '*.go' -not -path './vendor/*' -not -path './bazel-*' -print0)
+          test "${#sky_go_files[@]}" -gt 0
+          unformatted=$(gofmt -l "${sky_go_files[@]}")
           if [ -n "$unformatted" ]; then
             echo "The following files are not formatted:"
             echo "$unformatted"
@@ -175,7 +266,6 @@ jobs:
             exit 1
           fi
           echo "All Go files are properly formatted"
-
       - name: Check go.mod formatting
         run: |
           go mod tidy
@@ -184,43 +274,90 @@ jobs:
             git diff go.mod go.sum
             exit 1
           fi
-
   # ===========================================================================
   # Job 5: Shell Script Lint
   # ===========================================================================
   shell-lint:
     name: Shell Lint
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 5
     permissions:
       contents: read
 
     steps:
-      # actions/checkout v6.0.1
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Prepare private executable scratch
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$HOME/.cache"
+          sky_scratch=$(mktemp -d "$HOME/.cache/sky-ci.XXXXXX")
+          mkdir -m 700 "$sky_scratch/bin"
+          printf '#!/bin/sh\nexit 0\n' >"$sky_scratch/exec-probe"
+          chmod 700 "$sky_scratch/exec-probe"
+          "$sky_scratch/exec-probe"
+          rm "$sky_scratch/exec-probe"
+          printf 'SKY_CI_SCRATCH=%s\nSKY_CI_BIN=%s/bin\nGOTMPDIR=%s\nTMPDIR=%s\n' \
+            "$sky_scratch" "$sky_scratch" "$sky_scratch" "$sky_scratch" >>"$GITHUB_ENV"
+          printf '%s/bin\n' "$sky_scratch" >>"$GITHUB_PATH"
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Install shfmt
+      - name: Install verified shell tools
+        shell: bash
         run: |
-          curl -sS https://webinstall.dev/shfmt | bash
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
+          set -euo pipefail
+          case "$RUNNER_ARCH" in
+            ARM64)
+              sky_arch=arm64
+              sky_shell_arch=aarch64
+              sky_shfmt_sha=5f2db09dae91fca848f7adbdd014632e921a383863a2ad7e0450ad3aba0c6489
+              sky_shell_sha=68a8133197a50beb8803f8d42f9908d1af1c5540d4bb05fdfca8c1fa47decefc
+              ;;
+            X64)
+              sky_arch=amd64
+              sky_shell_arch=x86_64
+              sky_shfmt_sha=76e77641faa025814b77f153b29796b8e6fa2fca03e0c76a691608b86c7ea7bf
+              sky_shell_sha=b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6
+              ;;
+            *)
+              echo "unsupported runner architecture: $RUNNER_ARCH" >&2
+              exit 1
+              ;;
+          esac
+          curl --fail --silent --show-error --location \
+            "https://github.com/mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_linux_$sky_arch" \
+            --output "$SKY_CI_SCRATCH/shfmt"
+          printf '%s  %s\n' "$sky_shfmt_sha" "$SKY_CI_SCRATCH/shfmt" | sha256sum --check --status
+          install -m 755 "$SKY_CI_SCRATCH/shfmt" "$SKY_CI_BIN/shfmt"
+          curl --fail --silent --show-error --location \
+            "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.$sky_shell_arch.tar.gz" \
+            --output "$SKY_CI_SCRATCH/shellcheck.tar.gz"
+          printf '%s  %s\n' "$sky_shell_sha" "$SKY_CI_SCRATCH/shellcheck.tar.gz" | sha256sum --check --status
+          tar -xzf "$SKY_CI_SCRATCH/shellcheck.tar.gz" -C "$SKY_CI_SCRATCH" shellcheck-v0.11.0/shellcheck
+          install -m 755 "$SKY_CI_SCRATCH/shellcheck-v0.11.0/shellcheck" "$SKY_CI_BIN/shellcheck"
+          "$SKY_CI_BIN/shfmt" --version
+          "$SKY_CI_BIN/shellcheck" --version
+      - name: Test verified Go installer
+        run: bash .github/actions/setup-go-verified/test-install.sh
       - name: Run shellcheck
         run: |
-          shellcheck $(find . -name '*.sh' -not -path './vendor/*' -not -path './bazel-*')
-
+          mapfile -d '' sky_shell_files < <(find . -name '*.sh' -not -path './vendor/*' -not -path './bazel-*' -print0)
+          test "${#sky_shell_files[@]}" -gt 0
+          shellcheck "${sky_shell_files[@]}"
       - name: Run shfmt
         run: |
-          shfmt -d -i 2 -ci $(find . -name '*.sh' -not -path './vendor/*' -not -path './bazel-*')
-
+          mapfile -d '' sky_shell_files < <(find . -name '*.sh' -not -path './vendor/*' -not -path './bazel-*' -print0)
+          test "${#sky_shell_files[@]}" -gt 0
+          shfmt -d -i 2 -ci "${sky_shell_files[@]}"
   # ===========================================================================
   # Job 6: Security Scan (optional but recommended)
   # ===========================================================================
   security:
     name: Security Scan
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -228,28 +365,38 @@ jobs:
       id-token: write   # OIDC federation for octo-sts (private module auth)
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Prepare private executable scratch
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$HOME/.cache"
+          sky_scratch=$(mktemp -d "$HOME/.cache/sky-ci.XXXXXX")
+          mkdir -m 700 "$sky_scratch/bin"
+          printf '#!/bin/sh\nexit 0\n' >"$sky_scratch/exec-probe"
+          chmod 700 "$sky_scratch/exec-probe"
+          "$sky_scratch/exec-probe"
+          rm "$sky_scratch/exec-probe"
+          printf 'SKY_CI_SCRATCH=%s\nSKY_CI_BIN=%s/bin\nGOTMPDIR=%s\nTMPDIR=%s\n' \
+            "$sky_scratch" "$sky_scratch" "$sky_scratch" "$sky_scratch" >>"$GITHUB_ENV"
+          printf '%s/bin\n' "$sky_scratch" >>"$GITHUB_PATH"
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
           persist-credentials: false
 
       - uses: ./.github/actions/setup-cst-private-auth
 
-      # actions/setup-go v6.2.0
       - name: Setup Go
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
-        with:
-          go-version-file: go.mod
-          cache: true
-          cache-dependency-path: go.sum
+        uses: ./.github/actions/setup-go-verified
 
       - name: Run govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          # Run govulncheck - exit 3 means only stdlib vulnerabilities (acceptable)
+          GOBIN="$SKY_CI_BIN" go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          # Preserve the existing non-blocking exit-3 policy; exit 3 is not stdlib-only.
           govulncheck ./... && exit 0 || rc=$?
-          if [ $rc -eq 3 ]; then
-            echo "::warning::govulncheck found stdlib vulnerabilities only - acceptable"
+          if [ "$rc" -eq 3 ]; then
+            echo "::warning::govulncheck reported vulnerabilities (existing non-blocking exit-3 policy)"
             exit 0
           fi
-          exit $rc
+          exit "$rc"
