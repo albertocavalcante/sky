@@ -57,3 +57,16 @@ git commit -m "fix(scope): describe change"
 
 Review the diff before staging. Stage files explicitly. Keep PRs small and
 focused; they are squash-merged.
+
+## Snapshot builds
+
+Run the Snapshot workflow from protected `main`. Leave `ref` as `main` to build
+the commit captured by that workflow event, or enter a full lowercase commit SHA
+already in that commit's history. Branch names, tags, SHA expressions and commits
+outside that history are refused before authentication or builds.
+
+Every platform build and its summary use the same validated commit and version.
+Snapshot builds fetch private modules with short-lived authentication into a
+fresh module cache; they do not depend on a previous runner's cached sources.
+Artifacts include per-platform checksums. Cross-compilation does not establish
+native test coverage for each target platform.

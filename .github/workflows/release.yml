@@ -1,10 +1,14 @@
 name: Snapshot
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
+      - '.github/scripts/*snapshot*.sh'
   workflow_dispatch:
     inputs:
       ref:
-        description: "Branch, commit, or ref to build"
+        description: "main or a full commit SHA already in protected main history"
         required: false
         type: string
         default: "main"
@@ -15,15 +19,83 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  validate:
+    name: Snapshot selection tests
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'air-ci' }}
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - name: Require protected main for publication events
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          [[ "$GITHUB_REPOSITORY" == albertocavalcante/sky ]]
+          [[ "$GITHUB_EVENT_NAME" == push || "$GITHUB_EVENT_NAME" == workflow_dispatch ]]
+          [[ "$GITHUB_REF" == refs/heads/main && "$GITHUB_REF_PROTECTED" == true ]]
+          [[ "$GITHUB_WORKFLOW_REF" == albertocavalcante/sky/.github/workflows/release.yml@refs/heads/main ]]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash .github/scripts/test-snapshot-ref.sh
+
+  resolve:
+    name: Resolve trusted snapshot
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'air-ci' }}
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    outputs:
+      commit: ${{ steps.select.outputs.commit }}
+      version: ${{ steps.select.outputs.version }}
+      date: ${{ steps.select.outputs.date }}
+    steps:
+      # This fence runs before checking out or executing repository code.
+      - name: Require the protected main workflow
+        shell: bash
+        run: |
+          [[ "$GITHUB_REPOSITORY" == albertocavalcante/sky ]]
+          [[ "$GITHUB_EVENT_NAME" == push || "$GITHUB_EVENT_NAME" == workflow_dispatch ]]
+          [[ "$GITHUB_REF" == refs/heads/main && "$GITHUB_REF_PROTECTED" == true ]]
+          [[ "$GITHUB_WORKFLOW_REF" == albertocavalcante/sky/.github/workflows/release.yml@refs/heads/main ]]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Freeze the selected commit and version
+        id: select
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+        shell: bash
+        run: |
+          commit=$(.github/scripts/resolve-snapshot.sh "$GITHUB_WORKSPACE")
+          commit_date=$(git show -s --format=%cI "$commit")
+          timestamp=$(date -u -d "$commit_date" +%Y%m%d%H%M%S)
+          {
+            printf 'commit=%s\n' "$commit"
+            printf 'date=%s\n' "$commit_date"
+            printf 'version=v0.0.0-%s-%s\n' "$timestamp" "${commit:0:12}"
+          } >>"$GITHUB_OUTPUT"
+
   build:
     name: Build Snapshot
-    runs-on: ubuntu-24.04
+    needs: resolve
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'air-ci' }}
     timeout-minutes: 20
     permissions:
       contents: read
+      id-token: write
 
     strategy:
+      fail-fast: false
       matrix:
         include:
           - goos: linux
@@ -43,36 +115,31 @@ jobs:
             suffix: ".exe"
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Prepare private executable scratch
+        id: scratch
+        run: |
+          scratch=$(mktemp -d "$RUNNER_TEMP/snapshot.XXXXXX")
+          mkdir "$scratch/mod" "$scratch/tmp"
+          {
+            printf 'GOMODCACHE=%s/mod\n' "$scratch"
+            printf 'GOTMPDIR=%s/tmp\n' "$scratch"
+            printf 'TMPDIR=%s/tmp\n' "$scratch"
+          } >>"$GITHUB_ENV"
+          printf 'module_cache=%s/mod\n' "$scratch" >>"$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ needs.resolve.outputs.commit }}
           fetch-depth: 1
           persist-credentials: false
 
+      # No tag exists for this source pin. Never load auth from the selected checkout.
+      - name: Authenticate private modules using reviewed action source
+        uses: albertocavalcante/sky/.github/actions/setup-cst-private-auth@423ef04490b88c60b3d6639550716984464eda1b # no corresponding tag
       - name: Setup Go
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache: true
-
-      - name: Compute immutable version
-        id: version
-        run: |
-          commit="$(git rev-parse HEAD)"
-          short_commit="$(git rev-parse --short=12 HEAD)"
-          commit_date="$(git show -s --format=%cI HEAD)"
-          timestamp="$(date -u -d "$commit_date" +%Y%m%d%H%M%S)"
-          version="v0.0.0-${timestamp}-${short_commit}"
-
-          {
-            echo "commit=${commit}"
-            echo "short_commit=${short_commit}"
-            echo "date=${commit_date}"
-            echo "timestamp=${timestamp}"
-            echo "version=${version}"
-          } >> "$GITHUB_OUTPUT"
-
-          echo "Building ${version}"
+          cache: false
 
       - name: Build sky minimal
         env:
@@ -82,9 +149,9 @@ jobs:
         run: |
           mkdir -p dist
           go build -trimpath -ldflags="-s -w \
-            -X github.com/albertocavalcante/sky/internal/version.version=${{ steps.version.outputs.version }} \
-            -X github.com/albertocavalcante/sky/internal/version.commit=${{ steps.version.outputs.commit }} \
-            -X github.com/albertocavalcante/sky/internal/version.date=${{ steps.version.outputs.date }}" \
+            -X github.com/albertocavalcante/sky/internal/version.version=${{ needs.resolve.outputs.version }} \
+            -X github.com/albertocavalcante/sky/internal/version.commit=${{ needs.resolve.outputs.commit }} \
+            -X github.com/albertocavalcante/sky/internal/version.date=${{ needs.resolve.outputs.date }}" \
             -o dist/sky-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} \
             ./cmd/sky
 
@@ -95,9 +162,9 @@ jobs:
           CGO_ENABLED: 0
         run: |
           go build -trimpath -tags=sky_full -ldflags="-s -w \
-            -X github.com/albertocavalcante/sky/internal/version.version=${{ steps.version.outputs.version }} \
-            -X github.com/albertocavalcante/sky/internal/version.commit=${{ steps.version.outputs.commit }} \
-            -X github.com/albertocavalcante/sky/internal/version.date=${{ steps.version.outputs.date }}" \
+            -X github.com/albertocavalcante/sky/internal/version.version=${{ needs.resolve.outputs.version }} \
+            -X github.com/albertocavalcante/sky/internal/version.commit=${{ needs.resolve.outputs.commit }} \
+            -X github.com/albertocavalcante/sky/internal/version.date=${{ needs.resolve.outputs.date }}" \
             -o dist/sky_full-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} \
             ./cmd/sky
 
@@ -109,9 +176,9 @@ jobs:
         run: |
           for tool in skyfmt skylint skycheck skyquery skydoc skytest skyrepl skyls skycov sky-ci; do
             go build -trimpath -ldflags="-s -w \
-              -X github.com/albertocavalcante/sky/internal/version.version=${{ steps.version.outputs.version }} \
-              -X github.com/albertocavalcante/sky/internal/version.commit=${{ steps.version.outputs.commit }} \
-              -X github.com/albertocavalcante/sky/internal/version.date=${{ steps.version.outputs.date }}" \
+              -X github.com/albertocavalcante/sky/internal/version.version=${{ needs.resolve.outputs.version }} \
+              -X github.com/albertocavalcante/sky/internal/version.commit=${{ needs.resolve.outputs.commit }} \
+              -X github.com/albertocavalcante/sky/internal/version.date=${{ needs.resolve.outputs.date }}" \
               -o dist/${tool}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} \
               ./cmd/${tool}
           done
@@ -121,40 +188,36 @@ jobs:
         run: sha256sum ./* > checksums-${{ matrix.goos }}-${{ matrix.goarch }}.txt
 
       - name: Upload snapshot artifacts
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: sky-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: sky-${{ needs.resolve.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/
           retention-days: 30
+      - name: Remove private module source scratch
+        if: always() && steps.scratch.outcome == 'success'
+        env:
+          SNAPSHOT_MODCACHE: ${{ steps.scratch.outputs.module_cache }}
+        run: |
+          [[ "$SNAPSHOT_MODCACHE" == "$RUNNER_TEMP"/snapshot.*/mod ]]
+          cd "$RUNNER_TEMP"
+          GOMODCACHE="$SNAPSHOT_MODCACHE" GOTOOLCHAIN=local go clean -modcache
 
   summary:
     name: Snapshot Summary
-    runs-on: ubuntu-24.04
-    needs: build
-    if: always()
-    permissions:
-      contents: read
-
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'air-ci' }}
+    needs: [resolve, build]
+    if: always() && needs.resolve.result == 'success'
+    timeout-minutes: 5
+    permissions: {}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Summarize
+      - name: Summarize the same immutable selection
+        env:
+          SNAPSHOT_COMMIT: ${{ needs.resolve.outputs.commit }}
+          SNAPSHOT_VERSION: ${{ needs.resolve.outputs.version }}
+          BUILD_RESULT: ${{ needs.build.result }}
         run: |
-          short_commit="$(git rev-parse --short=12 HEAD)"
-          commit_date="$(git show -s --format=%cI HEAD)"
-          timestamp="$(date -u -d "$commit_date" +%Y%m%d%H%M%S)"
-          version="v0.0.0-${timestamp}-${short_commit}"
-
           {
-            echo "## Snapshot"
-            echo ""
-            echo "- Version: \`${version}\`"
-            echo "- Commit: \`$(git rev-parse HEAD)\`"
-            echo "- Commit date: \`${commit_date}\`"
-            echo ""
-            echo "No tag or GitHub Release was created. Artifacts are attached to this workflow run."
-          } >> "$GITHUB_STEP_SUMMARY"
+            printf '## Snapshot\n\n- Version: %s\n- Commit: %s\n- Build result: %s\n' "$SNAPSHOT_VERSION" "$SNAPSHOT_COMMIT" "$BUILD_RESULT"
+            printf '\nNo tag or GitHub Release was created. Successful artifacts are attached to this run.\n'
+          } >>"$GITHUB_STEP_SUMMARY"
+          test "$BUILD_RESULT" = success
