@@ -1,0 +1,29 @@
+name: Runmux Canary
+
+on:
+  push:
+    branches:
+      - 'ci/runmux-*'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  platform:
+    name: Runmux Linux ARM64 non-root
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'air-ci' }}
+    timeout-minutes: 3
+    permissions: {}
+    steps:
+      - name: Verify runner platform
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = Linux
+          case "$(uname -m)" in aarch64 | arm64) ;; *) exit 1 ;; esac
+          test "$(id -u)" -ne 0
+          printf 'Verified non-root Linux ARM64 runner\n'

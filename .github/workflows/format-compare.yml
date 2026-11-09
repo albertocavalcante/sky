@@ -31,6 +31,10 @@ permissions:
   contents: read
   id-token: write   # OIDC federation for octo-sts (sibling checkouts)
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   # COMPARE_BASELINE is the maximum number of sky-corpus files allowed to
   # diverge between Buildtools and CST. Set to the current actual count
@@ -45,32 +49,65 @@ env:
 jobs:
   compare:
     name: skyfmt -engine=compare on sky corpus
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'air-ci' }}
     timeout-minutes: 10
     permissions:
       contents: read
       id-token: write   # OIDC federation for octo-sts (sibling checkouts)
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Prepare private executable scratch
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$HOME/.cache"
+          sky_scratch=$(mktemp -d "$HOME/.cache/sky-ci.XXXXXX")
+          mkdir -m 700 "$sky_scratch/bin"
+          printf '#!/bin/sh\nexit 0\n' >"$sky_scratch/exec-probe"
+          chmod 700 "$sky_scratch/exec-probe"
+          "$sky_scratch/exec-probe"
+          rm "$sky_scratch/exec-probe"
+          printf 'SKY_CI_SCRATCH=%s\nSKY_CI_BIN=%s/bin\nGOTMPDIR=%s\nTMPDIR=%s\n' \
+            "$sky_scratch" "$sky_scratch" "$sky_scratch" "$sky_scratch" >>"$GITHUB_ENV"
+          printf '%s/bin\n' "$sky_scratch" >>"$GITHUB_PATH"
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
           persist-credentials: false
 
       - uses: ./.github/actions/setup-cst-private-auth
 
-      # actions/setup-go v6.2.0
       - name: Setup Go
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
         with:
           go-version-file: go.mod
-          cache: true
-          cache-dependency-path: go.sum
+          cache: false # Private CST dependencies must not enter public Actions caches.
 
-      - name: Install just
+      - name: Install verified just
+        shell: bash
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
-
+          set -euo pipefail
+          case "$RUNNER_ARCH" in
+            ARM64)
+              sky_target=aarch64-unknown-linux-musl
+              sky_just_sha=23871b1702bfd550fb5f901778fd4290ecf2ee034a45a889fbe96d89b188086d
+              ;;
+            X64)
+              sky_target=x86_64-unknown-linux-musl
+              sky_just_sha=409044617b6f06517c1035e55ca38c8c856ff8b650e41bc2aa1ef82d5903a23e
+              ;;
+            *)
+              echo "unsupported runner architecture: $RUNNER_ARCH" >&2
+              exit 1
+              ;;
+          esac
+          curl --fail --silent --show-error --location \
+            "https://github.com/casey/just/releases/download/1.59.0/just-1.59.0-$sky_target.tar.gz" \
+            --output "$SKY_CI_SCRATCH/just.tar.gz"
+          printf '%s  %s\n' "$sky_just_sha" "$SKY_CI_SCRATCH/just.tar.gz" | sha256sum --check --status
+          tar -xzf "$SKY_CI_SCRATCH/just.tar.gz" -C "$SKY_CI_SCRATCH" just
+          install -m 755 "$SKY_CI_SCRATCH/just" "$SKY_CI_BIN/just"
+          "$SKY_CI_BIN/just" --version
       - name: Run formatter compare
         run: just compare-corpus
 
@@ -85,8 +122,8 @@ jobs:
             echo "::error::could not parse divergence count from summary: $summary"
             exit 2
           fi
-          echo "diverged=$diverged" >> "$GITHUB_OUTPUT"
-          echo "baseline=$COMPARE_BASELINE" >> "$GITHUB_OUTPUT"
+          echo "diverged=$diverged" >>"$GITHUB_OUTPUT"
+          echo "baseline=$COMPARE_BASELINE" >>"$GITHUB_OUTPUT"
           if [ "$diverged" -gt "$COMPARE_BASELINE" ]; then
             echo "::error::Divergence regressed: $diverged > baseline $COMPARE_BASELINE"
             echo "See build/compare/diffs.txt for the unified diff per file."
@@ -96,7 +133,6 @@ jobs:
             echo "::notice::Divergence improved: $diverged < baseline $COMPARE_BASELINE"
             echo "Consider lowering COMPARE_BASELINE in .github/workflows/format-compare.yml"
           fi
-
       - name: Summary to PR check
         if: always()
         run: |
@@ -114,4 +150,4 @@ jobs:
             echo "See \`bazel-cst-go/format/buildifier/DIFFERENCES.md\` for the"
             echo "known divergence categories. Migration plan in"
             echo "\`starlark-cst-go/docs/proposal-07-determinism-roadmap.md\`."
-          } >> "$GITHUB_STEP_SUMMARY"
+          } >>"$GITHUB_STEP_SUMMARY"
