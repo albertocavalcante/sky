@@ -26,7 +26,7 @@ concurrency:
 jobs:
   validate:
     name: Snapshot selection tests
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'air-ci' }}
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     permissions:
       contents: read
     timeout-minutes: 5
@@ -48,7 +48,7 @@ jobs:
     name: Resolve trusted snapshot
     if: github.event_name != 'pull_request'
     needs: validate
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'air-ci' }}
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     permissions:
       contents: read
     timeout-minutes: 5
@@ -88,7 +88,7 @@ jobs:
   build:
     name: Build Snapshot
     needs: resolve
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'air-ci' }}
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 20
     permissions:
       contents: read
@@ -136,10 +136,7 @@ jobs:
       - name: Authenticate private modules using reviewed action source
         uses: albertocavalcante/sky/.github/actions/setup-cst-private-auth@423ef04490b88c60b3d6639550716984464eda1b # no corresponding tag
       - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: false
+        uses: albertocavalcante/sky/.github/actions/setup-go-verified@22b20f1f5abe8e9a1441d518b7da038bb5e8c9aa # no corresponding tag
 
       - name: Build sky minimal
         env:
@@ -204,7 +201,7 @@ jobs:
 
   summary:
     name: Snapshot Summary
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'air-ci' }}
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     needs: [resolve, build]
     if: always() && needs.resolve.result == 'success'
     timeout-minutes: 5
