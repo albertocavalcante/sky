@@ -1,0 +1,16 @@
+name: Setup verified Go
+description: Install checksum-verified Go 1.26.9 for Linux without caches or automatic toolchain downloads.
+inputs:
+  parent-directory:
+    description: Parent directory for a new private SDK directory (defaults to HOME/.cache).
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Install pinned SDK
+      shell: bash
+      env:
+        SKY_GO_ACTION_PATH: ${{ github.action_path }}
+        SKY_GO_PARENT: ${{ inputs.parent-directory }}
+      run: bash "$SKY_GO_ACTION_PATH/install.sh" "${SKY_GO_PARENT:-$HOME/.cache}"

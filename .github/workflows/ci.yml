@@ -22,7 +22,7 @@ jobs:
   # ===========================================================================
   go-build:
     name: Go Build & Test
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'air-ci' }}
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 15
     permissions:
       contents: read
@@ -55,10 +55,7 @@ jobs:
       - uses: ./.github/actions/setup-cst-private-auth
 
       - name: Setup Go
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
-        with:
-          go-version-file: go.mod
-          cache: false # Private CST dependencies must not enter public Actions caches.
+        uses: ./.github/actions/setup-go-verified
 
       - name: Verify Go version
         run: go version
@@ -81,7 +78,7 @@ jobs:
   # ===========================================================================
   bazel-build:
     name: Bazel Build & Test
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'air-ci' }}
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -144,17 +141,17 @@ jobs:
         run: bazel --version
 
       - name: Build all targets
-        run: bazel build //...
+        run: bazel build --jobs=2 //...
 
       - name: Run all tests
-        run: bazel test //... --test_output=errors
+        run: bazel test --jobs=2 --local_test_jobs=1 //... --test_output=errors
 
   # ===========================================================================
   # Job 3: Lint
   # ===========================================================================
   lint:
     name: Lint
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'air-ci' }}
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -184,10 +181,7 @@ jobs:
       - uses: ./.github/actions/setup-cst-private-auth
 
       - name: Setup Go
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
-        with:
-          go-version-file: go.mod
-          cache: false # Private CST dependencies must not enter public Actions caches.
+        uses: ./.github/actions/setup-go-verified
 
       - name: Install verified golangci-lint
         shell: bash
@@ -227,7 +221,7 @@ jobs:
   # ===========================================================================
   format:
     name: Format Check
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'air-ci' }}
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 5
     permissions:
       contents: read
@@ -257,10 +251,7 @@ jobs:
       - uses: ./.github/actions/setup-cst-private-auth
 
       - name: Setup Go
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
-        with:
-          go-version-file: go.mod
-          cache: false # Private CST dependencies must not enter public Actions caches.
+        uses: ./.github/actions/setup-go-verified
 
       - name: Check Go formatting
         run: |
@@ -288,7 +279,7 @@ jobs:
   # ===========================================================================
   shell-lint:
     name: Shell Lint
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'air-ci' }}
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 5
     permissions:
       contents: read
@@ -349,6 +340,8 @@ jobs:
           install -m 755 "$SKY_CI_SCRATCH/shellcheck-v0.11.0/shellcheck" "$SKY_CI_BIN/shellcheck"
           "$SKY_CI_BIN/shfmt" --version
           "$SKY_CI_BIN/shellcheck" --version
+      - name: Test verified Go installer
+        run: bash .github/actions/setup-go-verified/test-install.sh
       - name: Run shellcheck
         run: |
           mapfile -d '' sky_shell_files < <(find . -name '*.sh' -not -path './vendor/*' -not -path './bazel-*' -print0)
@@ -364,7 +357,7 @@ jobs:
   # ===========================================================================
   security:
     name: Security Scan
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'air-ci' }}
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -395,10 +388,7 @@ jobs:
       - uses: ./.github/actions/setup-cst-private-auth
 
       - name: Setup Go
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
-        with:
-          go-version-file: go.mod
-          cache: false # Private CST dependencies must not enter public Actions caches.
+        uses: ./.github/actions/setup-go-verified
 
       - name: Run govulncheck
         run: |
