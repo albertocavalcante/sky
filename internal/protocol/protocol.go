@@ -123,7 +123,7 @@ type ClientCapabilities struct {
 	// @since 3.16.0
 	General GeneralClientCapabilities `json:"general,omitempty"`
 	// Experimental client capabilities.
-	Experimental LSPAny `json:"experimental,omitempty"`
+	Experimental LSPAny `json:"experimental,omitzero"`
 }
 
 // @since 3.18.0
@@ -309,10 +309,10 @@ type ClientSemanticTokensRequestFullDelta struct {
 type ClientSemanticTokensRequestOptions struct {
 	// The client will send the `textDocument/semanticTokens/range` request if
 	// the server provides a corresponding handler.
-	Range Or_Literal_bool `json:"range,omitempty"`
+	Range Or_Literal_bool `json:"range,omitzero"`
 	// The client will send the `textDocument/semanticTokens/full` request if
 	// the server provides a corresponding handler.
-	Full Or_ClientSemanticTokensRequestFullDelta_bool `json:"full,omitempty"`
+	Full Or_ClientSemanticTokensRequestFullDelta_bool `json:"full,omitzero"`
 }
 
 // @since 3.18.0
@@ -438,7 +438,7 @@ type CodeAction struct {
 	// a `textDocument/codeAction` and a `codeAction/resolve` request.
 	//
 	// @since 3.16.0
-	Data LSPAny `json:"data,omitempty"`
+	Data LSPAny `json:"data,omitzero"`
 	// Tags for this code action.
 	//
 	// @since 3.18.0 - proposed
@@ -734,7 +734,7 @@ type CompletionItem struct {
 	// about this item, like type or symbol information.
 	Detail string `json:"detail,omitempty"`
 	// A human-readable string that represents a doc-comment.
-	Documentation Or_MarkupContent_string `json:"documentation,omitempty"`
+	Documentation Or_MarkupContent_string `json:"documentation,omitzero"`
 	// Indicates if this item is deprecated.
 	// @deprecated Use `tags` instead.
 	Deprecated bool `json:"deprecated,omitempty"`
@@ -797,7 +797,7 @@ type CompletionItem struct {
 	// contained and starting at the same position.
 	//
 	// @since 3.16.0 additional type `InsertReplaceEdit`
-	TextEdit Or_InsertReplaceEdit_TextEdit `json:"textEdit,omitempty"`
+	TextEdit Or_InsertReplaceEdit_TextEdit `json:"textEdit,omitzero"`
 	// The edit text used if the completion item is part of a CompletionList and
 	// CompletionList defines an item default for the text edit range.
 	//
@@ -827,7 +827,7 @@ type CompletionItem struct {
 	Command Command `json:"command,omitempty"`
 	// A data entry field that is preserved on a completion item between a
 	// {@link CompletionRequest} and a {@link CompletionResolveRequest}.
-	Data LSPAny `json:"data,omitempty"`
+	Data LSPAny `json:"data,omitzero"`
 }
 
 // Specifies how fields from a completion item should be combined with those
@@ -916,7 +916,7 @@ type CompletionItemDefaults struct {
 	// A default edit range.
 	//
 	// @since 3.17.0
-	EditRange Or_EditRangeWithInsertReplace_Range `json:"editRange,omitempty"`
+	EditRange Or_EditRangeWithInsertReplace_Range `json:"editRange,omitzero"`
 	// A default insert text format.
 	//
 	// @since 3.17.0
@@ -928,7 +928,7 @@ type CompletionItemDefaults struct {
 	// A default data value.
 	//
 	// @since 3.17.0
-	Data LSPAny `json:"data,omitempty"`
+	Data LSPAny `json:"data,omitzero"`
 }
 
 // The kind of a completion entry.
@@ -1176,7 +1176,7 @@ type Diagnostic struct {
 	// always provide a severity value.
 	Severity DiagnosticSeverity `json:"severity,omitempty"`
 	// The diagnostic's code, which usually appear in the user interface.
-	Code Or_int32_string `json:"code,omitempty"`
+	Code Or_int32_string `json:"code,omitzero"`
 	// An optional property to describe the error code.
 	// Requires the code field (above) to be present/not null.
 	//
@@ -1199,7 +1199,7 @@ type Diagnostic struct {
 	// notification and `textDocument/codeAction` request.
 	//
 	// @since 3.16.0
-	Data LSPAny `json:"data,omitempty"`
+	Data LSPAny `json:"data,omitzero"`
 }
 
 // Client capabilities specific to diagnostic pull requests.
@@ -1435,7 +1435,7 @@ type DocumentLink struct {
 	Tooltip string `json:"tooltip,omitempty"`
 	// A data entry field that is preserved on a document link between a
 	// DocumentLinkRequest and a DocumentLinkResolveRequest.
-	Data LSPAny `json:"data,omitempty"`
+	Data LSPAny `json:"data,omitzero"`
 }
 
 // The client capabilities of a {@link DocumentLinkRequest}.
@@ -1964,7 +1964,7 @@ type InlayHint struct {
 	// hint itself is now obsolete.
 	TextEdits []TextEdit `json:"textEdits,omitempty"`
 	// The tooltip text when you hover over this item.
-	Tooltip Or_MarkupContent_string `json:"tooltip,omitempty"`
+	Tooltip Or_MarkupContent_string `json:"tooltip,omitzero"`
 	// Render padding before the hint.
 	//
 	// Note: Padding should use the editor's background color, not the
@@ -1979,7 +1979,7 @@ type InlayHint struct {
 	PaddingRight bool `json:"paddingRight,omitempty"`
 	// A data entry field that is preserved on an inlay hint between
 	// a `textDocument/inlayHint` and a `inlayHint/resolve` request.
-	Data LSPAny `json:"data,omitempty"`
+	Data LSPAny `json:"data,omitzero"`
 }
 
 // Inlay hint client capabilities.
@@ -2014,7 +2014,7 @@ type InlayHintLabelPart struct {
 	// The tooltip text when you hover over this label part. Depending on
 	// the client capability `inlayHint.resolveSupport` clients might resolve
 	// this property late using the resolve request.
-	Tooltip Or_MarkupContent_string `json:"tooltip,omitempty"`
+	Tooltip Or_MarkupContent_string `json:"tooltip,omitzero"`
 	// An optional source code location that represents this
 	// label part.
 	//
@@ -2395,7 +2395,7 @@ type NotebookDocumentFilterNotebookType struct {
 	// A Uri {@link Uri.scheme scheme}, like `file` or `untitled`.
 	Scheme string `json:"scheme,omitempty"`
 	// A glob pattern.
-	Pattern GlobPattern `json:"pattern,omitempty"`
+	Pattern GlobPattern `json:"pattern,omitzero"`
 }
 
 // A notebook document filter where `pattern` is required field.
@@ -2423,7 +2423,7 @@ type NotebookDocumentFilterScheme struct {
 	// A Uri {@link Uri.scheme scheme}, like `file` or `untitled`.
 	Scheme string `json:"scheme"`
 	// A glob pattern.
-	Pattern GlobPattern `json:"pattern,omitempty"`
+	Pattern GlobPattern `json:"pattern,omitzero"`
 }
 
 // @since 3.18.0
@@ -2433,7 +2433,7 @@ type NotebookDocumentFilterWithCells struct {
 	// The notebook to be synced If a string
 	// value is provided it matches against the
 	// notebook type. '*' matches every notebook.
-	Notebook Or_NotebookDocumentFilter_string `json:"notebook,omitempty"`
+	Notebook Or_NotebookDocumentFilter_string `json:"notebook,omitzero"`
 	// The cells of the matching notebook to be synced.
 	Cells []NotebookCellLanguage `json:"cells"`
 }
@@ -2527,13 +2527,13 @@ type ParameterInformation struct {
 	Label Or_Tuple_string `json:"label"`
 	// The human-readable doc-comment of this parameter. Will be shown
 	// in the UI but can be omitted.
-	Documentation Or_MarkupContent_string `json:"documentation,omitempty"`
+	Documentation Or_MarkupContent_string `json:"documentation,omitzero"`
 }
 
 type PartialResultParams struct {
 	// An optional token that a server can use to report partial results (e.g. streaming) to
 	// the client.
-	PartialResultToken ProgressToken `json:"partialResultToken,omitempty"`
+	PartialResultToken ProgressToken `json:"partialResultToken,omitzero"`
 }
 
 // The glob pattern to watch relative to the base path. Glob patterns can have the following syntax:
@@ -2911,9 +2911,9 @@ type SemanticTokensOptions struct {
 	Legend SemanticTokensLegend `json:"legend"`
 	// Server supports providing semantic tokens for a specific range
 	// of a document.
-	Range Or_Literal_bool `json:"range,omitempty"`
+	Range Or_Literal_bool `json:"range,omitzero"`
 	// Server supports providing semantic tokens for a full document.
-	Full Or_SemanticTokensFullDelta_bool `json:"full,omitempty"`
+	Full Or_SemanticTokensFullDelta_bool `json:"full,omitzero"`
 }
 
 // @since 3.16.0
@@ -2977,100 +2977,100 @@ type ServerCapabilities struct {
 	// Defines how text documents are synced. Is either a detailed structure
 	// defining each notification or for backwards compatibility the
 	// TextDocumentSyncKind number.
-	TextDocumentSync Or_TextDocumentSyncKind_TextDocumentSyncOptions `json:"textDocumentSync,omitempty"`
+	TextDocumentSync Or_TextDocumentSyncKind_TextDocumentSyncOptions `json:"textDocumentSync,omitzero"`
 	// Defines how notebook documents are synced.
 	//
 	// @since 3.17.0
-	NotebookDocumentSync Or_NotebookDocumentSyncOptions_NotebookDocumentSyncRegistrationOptions `json:"notebookDocumentSync,omitempty"`
+	NotebookDocumentSync Or_NotebookDocumentSyncOptions_NotebookDocumentSyncRegistrationOptions `json:"notebookDocumentSync,omitzero"`
 	// The server provides completion support.
 	CompletionProvider CompletionOptions `json:"completionProvider,omitempty"`
 	// The server provides hover support.
-	HoverProvider Or_HoverOptions_bool `json:"hoverProvider,omitempty"`
+	HoverProvider Or_HoverOptions_bool `json:"hoverProvider,omitzero"`
 	// The server provides signature help support.
 	SignatureHelpProvider SignatureHelpOptions `json:"signatureHelpProvider,omitempty"`
 	// The server provides Goto Declaration support.
-	DeclarationProvider Or_DeclarationOptions_DeclarationRegistrationOptions_bool `json:"declarationProvider,omitempty"`
+	DeclarationProvider Or_DeclarationOptions_DeclarationRegistrationOptions_bool `json:"declarationProvider,omitzero"`
 	// The server provides goto definition support.
-	DefinitionProvider Or_DefinitionOptions_bool `json:"definitionProvider,omitempty"`
+	DefinitionProvider Or_DefinitionOptions_bool `json:"definitionProvider,omitzero"`
 	// The server provides Goto Type Definition support.
-	TypeDefinitionProvider Or_TypeDefinitionOptions_TypeDefinitionRegistrationOptions_bool `json:"typeDefinitionProvider,omitempty"`
+	TypeDefinitionProvider Or_TypeDefinitionOptions_TypeDefinitionRegistrationOptions_bool `json:"typeDefinitionProvider,omitzero"`
 	// The server provides Goto Implementation support.
-	ImplementationProvider Or_ImplementationOptions_ImplementationRegistrationOptions_bool `json:"implementationProvider,omitempty"`
+	ImplementationProvider Or_ImplementationOptions_ImplementationRegistrationOptions_bool `json:"implementationProvider,omitzero"`
 	// The server provides find references support.
-	ReferencesProvider Or_ReferenceOptions_bool `json:"referencesProvider,omitempty"`
+	ReferencesProvider Or_ReferenceOptions_bool `json:"referencesProvider,omitzero"`
 	// The server provides document highlight support.
-	DocumentHighlightProvider Or_DocumentHighlightOptions_bool `json:"documentHighlightProvider,omitempty"`
+	DocumentHighlightProvider Or_DocumentHighlightOptions_bool `json:"documentHighlightProvider,omitzero"`
 	// The server provides document symbol support.
-	DocumentSymbolProvider Or_DocumentSymbolOptions_bool `json:"documentSymbolProvider,omitempty"`
+	DocumentSymbolProvider Or_DocumentSymbolOptions_bool `json:"documentSymbolProvider,omitzero"`
 	// The server provides code actions. CodeActionOptions may only be
 	// specified if the client states that it supports
 	// `codeActionLiteralSupport` in its initial `initialize` request.
-	CodeActionProvider Or_CodeActionOptions_bool `json:"codeActionProvider,omitempty"`
+	CodeActionProvider Or_CodeActionOptions_bool `json:"codeActionProvider,omitzero"`
 	// The server provides code lens.
 	CodeLensProvider CodeLensOptions `json:"codeLensProvider,omitempty"`
 	// The server provides document link support.
 	DocumentLinkProvider DocumentLinkOptions `json:"documentLinkProvider,omitempty"`
 	// The server provides color provider support.
-	ColorProvider Or_DocumentColorOptions_DocumentColorRegistrationOptions_bool `json:"colorProvider,omitempty"`
+	ColorProvider Or_DocumentColorOptions_DocumentColorRegistrationOptions_bool `json:"colorProvider,omitzero"`
 	// The server provides workspace symbol support.
-	WorkspaceSymbolProvider Or_WorkspaceSymbolOptions_bool `json:"workspaceSymbolProvider,omitempty"`
+	WorkspaceSymbolProvider Or_WorkspaceSymbolOptions_bool `json:"workspaceSymbolProvider,omitzero"`
 	// The server provides document formatting.
-	DocumentFormattingProvider Or_DocumentFormattingOptions_bool `json:"documentFormattingProvider,omitempty"`
+	DocumentFormattingProvider Or_DocumentFormattingOptions_bool `json:"documentFormattingProvider,omitzero"`
 	// The server provides document range formatting.
-	DocumentRangeFormattingProvider Or_DocumentRangeFormattingOptions_bool `json:"documentRangeFormattingProvider,omitempty"`
+	DocumentRangeFormattingProvider Or_DocumentRangeFormattingOptions_bool `json:"documentRangeFormattingProvider,omitzero"`
 	// The server provides document formatting on typing.
 	DocumentOnTypeFormattingProvider DocumentOnTypeFormattingOptions `json:"documentOnTypeFormattingProvider,omitempty"`
 	// The server provides rename support. RenameOptions may only be
 	// specified if the client states that it supports
 	// `prepareSupport` in its initial `initialize` request.
-	RenameProvider Or_RenameOptions_bool `json:"renameProvider,omitempty"`
+	RenameProvider Or_RenameOptions_bool `json:"renameProvider,omitzero"`
 	// The server provides folding provider support.
-	FoldingRangeProvider Or_FoldingRangeOptions_FoldingRangeRegistrationOptions_bool `json:"foldingRangeProvider,omitempty"`
+	FoldingRangeProvider Or_FoldingRangeOptions_FoldingRangeRegistrationOptions_bool `json:"foldingRangeProvider,omitzero"`
 	// The server provides selection range support.
-	SelectionRangeProvider Or_SelectionRangeOptions_SelectionRangeRegistrationOptions_bool `json:"selectionRangeProvider,omitempty"`
+	SelectionRangeProvider Or_SelectionRangeOptions_SelectionRangeRegistrationOptions_bool `json:"selectionRangeProvider,omitzero"`
 	// The server provides execute command support.
 	ExecuteCommandProvider ExecuteCommandOptions `json:"executeCommandProvider,omitempty"`
 	// The server provides call hierarchy support.
 	//
 	// @since 3.16.0
-	CallHierarchyProvider Or_CallHierarchyOptions_CallHierarchyRegistrationOptions_bool `json:"callHierarchyProvider,omitempty"`
+	CallHierarchyProvider Or_CallHierarchyOptions_CallHierarchyRegistrationOptions_bool `json:"callHierarchyProvider,omitzero"`
 	// The server provides linked editing range support.
 	//
 	// @since 3.16.0
-	LinkedEditingRangeProvider Or_LinkedEditingRangeOptions_LinkedEditingRangeRegistrationOptions_bool `json:"linkedEditingRangeProvider,omitempty"`
+	LinkedEditingRangeProvider Or_LinkedEditingRangeOptions_LinkedEditingRangeRegistrationOptions_bool `json:"linkedEditingRangeProvider,omitzero"`
 	// The server provides semantic tokens support.
 	//
 	// @since 3.16.0
-	SemanticTokensProvider Or_SemanticTokensOptions_SemanticTokensRegistrationOptions `json:"semanticTokensProvider,omitempty"`
+	SemanticTokensProvider Or_SemanticTokensOptions_SemanticTokensRegistrationOptions `json:"semanticTokensProvider,omitzero"`
 	// The server provides moniker support.
 	//
 	// @since 3.16.0
-	MonikerProvider Or_MonikerOptions_MonikerRegistrationOptions_bool `json:"monikerProvider,omitempty"`
+	MonikerProvider Or_MonikerOptions_MonikerRegistrationOptions_bool `json:"monikerProvider,omitzero"`
 	// The server provides type hierarchy support.
 	//
 	// @since 3.17.0
-	TypeHierarchyProvider Or_TypeHierarchyOptions_TypeHierarchyRegistrationOptions_bool `json:"typeHierarchyProvider,omitempty"`
+	TypeHierarchyProvider Or_TypeHierarchyOptions_TypeHierarchyRegistrationOptions_bool `json:"typeHierarchyProvider,omitzero"`
 	// The server provides inline values.
 	//
 	// @since 3.17.0
-	InlineValueProvider Or_InlineValueOptions_InlineValueRegistrationOptions_bool `json:"inlineValueProvider,omitempty"`
+	InlineValueProvider Or_InlineValueOptions_InlineValueRegistrationOptions_bool `json:"inlineValueProvider,omitzero"`
 	// The server provides inlay hints.
 	//
 	// @since 3.17.0
-	InlayHintProvider Or_InlayHintOptions_InlayHintRegistrationOptions_bool `json:"inlayHintProvider,omitempty"`
+	InlayHintProvider Or_InlayHintOptions_InlayHintRegistrationOptions_bool `json:"inlayHintProvider,omitzero"`
 	// The server has support for pull model diagnostics.
 	//
 	// @since 3.17.0
-	DiagnosticProvider Or_DiagnosticOptions_DiagnosticRegistrationOptions `json:"diagnosticProvider,omitempty"`
+	DiagnosticProvider Or_DiagnosticOptions_DiagnosticRegistrationOptions `json:"diagnosticProvider,omitzero"`
 	// Inline completion options used during static registration.
 	//
 	// @since 3.18.0
 	// @proposed
-	InlineCompletionProvider Or_InlineCompletionOptions_bool `json:"inlineCompletionProvider,omitempty"`
+	InlineCompletionProvider Or_InlineCompletionOptions_bool `json:"inlineCompletionProvider,omitzero"`
 	// Workspace specific server capabilities.
 	Workspace WorkspaceOptions `json:"workspace,omitempty"`
 	// Experimental server capabilities.
-	Experimental LSPAny `json:"experimental,omitempty"`
+	Experimental LSPAny `json:"experimental,omitzero"`
 }
 
 // @since 3.18.0
@@ -3231,7 +3231,7 @@ type SignatureInformation struct {
 	Label string `json:"label"`
 	// The human-readable doc-comment of this signature. Will be shown
 	// in the UI but can be omitted.
-	Documentation Or_MarkupContent_string `json:"documentation,omitempty"`
+	Documentation Or_MarkupContent_string `json:"documentation,omitzero"`
 	// The parameters of this signature.
 	Parameters []ParameterInformation `json:"parameters,omitempty"`
 	// The index of the active parameter.
@@ -3552,7 +3552,7 @@ type TextDocumentFilterLanguage struct {
 	// @since 3.18.0 - support for relative patterns. Whether clients support
 	// relative patterns depends on the client capability
 	// `textDocuments.filters.relativePatternSupport`.
-	Pattern GlobPattern `json:"pattern,omitempty"`
+	Pattern GlobPattern `json:"pattern,omitzero"`
 }
 
 // A document filter where `pattern` is required field.
@@ -3588,7 +3588,7 @@ type TextDocumentFilterScheme struct {
 	// @since 3.18.0 - support for relative patterns. Whether clients support
 	// relative patterns depends on the client capability
 	// `textDocuments.filters.relativePatternSupport`.
-	Pattern GlobPattern `json:"pattern,omitempty"`
+	Pattern GlobPattern `json:"pattern,omitzero"`
 }
 
 // A literal to identify a text document in the client.
@@ -3659,7 +3659,7 @@ type TextDocumentSyncOptions struct {
 	WillSaveWaitUntil bool `json:"willSaveWaitUntil,omitempty"`
 	// If present save notifications are sent to the server. If omitted the notification should not be
 	// sent.
-	Save Or_SaveOptions_bool `json:"save,omitempty"`
+	Save Or_SaveOptions_bool `json:"save,omitzero"`
 }
 
 // A text edit applicable to a text document.
@@ -3762,7 +3762,7 @@ type WorkDoneProgressOptions struct {
 
 type WorkDoneProgressParams struct {
 	// An optional token that a server can use to report work done progress.
-	WorkDoneToken ProgressToken `json:"workDoneToken,omitempty"`
+	WorkDoneToken ProgressToken `json:"workDoneToken,omitzero"`
 }
 
 // Workspace specific client capabilities.
@@ -3933,7 +3933,7 @@ type WorkspaceFoldersServerCapabilities struct {
 	// under which the notification is registered on the client
 	// side. The ID can be used to unregister for these events
 	// using the `client/unregisterCapability` request.
-	ChangeNotifications Or_bool_string `json:"changeNotifications,omitempty"`
+	ChangeNotifications Or_bool_string `json:"changeNotifications,omitzero"`
 }
 
 // Defines workspace specific capabilities of the server.
@@ -3954,7 +3954,7 @@ type WorkspaceOptions struct {
 	//
 	// @since 3.18.0
 	// @proposed
-	TextDocumentContent Or_TextDocumentContentOptions_TextDocumentContentRegistrationOptions `json:"textDocumentContent,omitempty"`
+	TextDocumentContent Or_TextDocumentContentOptions_TextDocumentContentRegistrationOptions `json:"textDocumentContent,omitzero"`
 }
 
 // Client capabilities for a {@link WorkspaceSymbolRequest}.
@@ -4037,7 +4037,7 @@ type XInitializeParams struct {
 	// The capabilities provided by the client (editor or tool)
 	Capabilities ClientCapabilities `json:"capabilities"`
 	// User provided initialization options.
-	InitializationOptions LSPAny `json:"initializationOptions,omitempty"`
+	InitializationOptions LSPAny `json:"initializationOptions,omitzero"`
 	// The initial trace setting. If omitted trace is disabled ('off').
 	Trace TraceValue `json:"trace,omitempty"`
 }
@@ -4067,31 +4067,54 @@ func (t *Or_AnnotatedTextEdit_SnippetTextEdit_TextEdit) UnmarshalJSON(x []byte) 
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{[]string{"annotationId", "newText", "range"}, nil, []string{"annotationId", "newText", "range"}}, keySet{[]string{"range", "snippet"}, []string{"annotationId"}, []string{"range", "snippet"}}, keySet{[]string{"newText", "range"}, nil, []string{"newText", "range"}}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [AnnotatedTextEdit SnippetTextEdit TextEdit]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{[]string{"annotationId", "newText", "range"}, nil}); s > bestScore {
+		failScore := -1
+		var failErr error
+		if s := unionRank(x, keySet{[]string{"annotationId", "newText", "range"}, nil, []string{"annotationId", "newText", "range"}}); s >= 0 {
 			var v AnnotatedTextEdit
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"range", "snippet"}, []string{"annotationId"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"range", "snippet"}, []string{"annotationId"}, []string{"range", "snippet"}}); s >= 0 {
 			var v SnippetTextEdit
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"newText", "range"}, nil}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"newText", "range"}, nil, []string{"newText", "range"}}); s >= 0 {
 			var v TextEdit
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
+		}
+		if failScore > bestScore {
+			return failErr
 		}
 		if bestScore >= 0 {
 			t.Value = best
 			return nil
 		}
+	}
+	if len(x) > 0 {
+		return fmt.Errorf("unmarshal failed to match one of [AnnotatedTextEdit SnippetTextEdit TextEdit]")
 	}
 	var h0 AnnotatedTextEdit
 	if err := json.Unmarshal(x, &h0); err == nil {
@@ -4221,16 +4244,19 @@ func (t *Or_CallHierarchyOptions_CallHierarchyRegistrationOptions_bool) Unmarsha
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{nil, []string{"workDoneProgress"}, nil}, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [CallHierarchyOptions CallHierarchyRegistrationOptions bool]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}, nil}); s > bestScore {
 			var v CallHierarchyOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}); s > bestScore {
 			var v CallHierarchyRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -4440,16 +4466,19 @@ func (t *Or_DeclarationOptions_DeclarationRegistrationOptions_bool) UnmarshalJSO
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{nil, []string{"workDoneProgress"}, nil}, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [DeclarationOptions DeclarationRegistrationOptions bool]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}, nil}); s > bestScore {
 			var v DeclarationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}); s > bestScore {
 			var v DeclarationRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -4536,25 +4565,44 @@ func (t *Or_DiagnosticOptions_DiagnosticRegistrationOptions) UnmarshalJSON(x []b
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{[]string{"interFileDependencies", "workspaceDiagnostics"}, []string{"identifier", "workDoneProgress"}, []string{"interFileDependencies", "workspaceDiagnostics"}}, keySet{[]string{"documentSelector", "interFileDependencies", "workspaceDiagnostics"}, []string{"id", "identifier", "workDoneProgress"}, []string{"interFileDependencies", "workspaceDiagnostics"}}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [DiagnosticOptions DiagnosticRegistrationOptions]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{[]string{"interFileDependencies", "workspaceDiagnostics"}, []string{"identifier", "workDoneProgress"}}); s > bestScore {
+		failScore := -1
+		var failErr error
+		if s := unionRank(x, keySet{[]string{"interFileDependencies", "workspaceDiagnostics"}, []string{"identifier", "workDoneProgress"}, []string{"interFileDependencies", "workspaceDiagnostics"}}); s >= 0 {
 			var v DiagnosticOptions
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"documentSelector", "interFileDependencies", "workspaceDiagnostics"}, []string{"id", "identifier", "workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector", "interFileDependencies", "workspaceDiagnostics"}, []string{"id", "identifier", "workDoneProgress"}, []string{"interFileDependencies", "workspaceDiagnostics"}}); s >= 0 {
 			var v DiagnosticRegistrationOptions
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
+		}
+		if failScore > bestScore {
+			return failErr
 		}
 		if bestScore >= 0 {
 			t.Value = best
 			return nil
 		}
+	}
+	if len(x) > 0 {
+		return fmt.Errorf("unmarshal failed to match one of [DiagnosticOptions DiagnosticRegistrationOptions]")
 	}
 	var h0 DiagnosticOptions
 	if err := json.Unmarshal(x, &h0); err == nil {
@@ -4594,16 +4642,19 @@ func (t *Or_DocumentColorOptions_DocumentColorRegistrationOptions_bool) Unmarsha
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{nil, []string{"workDoneProgress"}, nil}, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [DocumentColorOptions DocumentColorRegistrationOptions bool]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}, nil}); s > bestScore {
 			var v DocumentColorOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}); s > bestScore {
 			var v DocumentColorRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -4795,25 +4846,44 @@ func (t *Or_EditRangeWithInsertReplace_Range) UnmarshalJSON(x []byte) error {
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{[]string{"insert", "replace"}, nil, []string{"insert", "replace"}}, keySet{[]string{"end", "start"}, nil, []string{"end", "start"}}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [EditRangeWithInsertReplace Range]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{[]string{"insert", "replace"}, nil}); s > bestScore {
+		failScore := -1
+		var failErr error
+		if s := unionRank(x, keySet{[]string{"insert", "replace"}, nil, []string{"insert", "replace"}}); s >= 0 {
 			var v EditRangeWithInsertReplace
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"end", "start"}, nil}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"end", "start"}, nil, []string{"end", "start"}}); s >= 0 {
 			var v Range
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
+		}
+		if failScore > bestScore {
+			return failErr
 		}
 		if bestScore >= 0 {
 			t.Value = best
 			return nil
 		}
+	}
+	if len(x) > 0 {
+		return fmt.Errorf("unmarshal failed to match one of [EditRangeWithInsertReplace Range]")
 	}
 	var h0 EditRangeWithInsertReplace
 	if err := json.Unmarshal(x, &h0); err == nil {
@@ -4853,16 +4923,19 @@ func (t *Or_FoldingRangeOptions_FoldingRangeRegistrationOptions_bool) UnmarshalJ
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{nil, []string{"workDoneProgress"}, nil}, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [FoldingRangeOptions FoldingRangeRegistrationOptions bool]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}, nil}); s > bestScore {
 			var v FoldingRangeOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}); s > bestScore {
 			var v FoldingRangeRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -4951,16 +5024,19 @@ func (t *Or_ImplementationOptions_ImplementationRegistrationOptions_bool) Unmars
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{nil, []string{"workDoneProgress"}, nil}, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [ImplementationOptions ImplementationRegistrationOptions bool]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}, nil}); s > bestScore {
 			var v ImplementationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}); s > bestScore {
 			var v ImplementationRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -5014,16 +5090,19 @@ func (t *Or_InlayHintOptions_InlayHintRegistrationOptions_bool) UnmarshalJSON(x 
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{nil, []string{"resolveProvider", "workDoneProgress"}, nil}, keySet{[]string{"documentSelector"}, []string{"id", "resolveProvider", "workDoneProgress"}, nil}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [InlayHintOptions InlayHintRegistrationOptions bool]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{nil, []string{"resolveProvider", "workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"resolveProvider", "workDoneProgress"}, nil}); s > bestScore {
 			var v InlayHintOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "resolveProvider", "workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "resolveProvider", "workDoneProgress"}, nil}); s > bestScore {
 			var v InlayHintRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -5112,16 +5191,19 @@ func (t *Or_InlineValueOptions_InlineValueRegistrationOptions_bool) UnmarshalJSO
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{nil, []string{"workDoneProgress"}, nil}, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [InlineValueOptions InlineValueRegistrationOptions bool]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}, nil}); s > bestScore {
 			var v InlineValueOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}); s > bestScore {
 			var v InlineValueRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -5173,25 +5255,44 @@ func (t *Or_InsertReplaceEdit_TextEdit) UnmarshalJSON(x []byte) error {
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{[]string{"insert", "newText", "replace"}, nil, []string{"insert", "newText", "replace"}}, keySet{[]string{"newText", "range"}, nil, []string{"newText", "range"}}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [InsertReplaceEdit TextEdit]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{[]string{"insert", "newText", "replace"}, nil}); s > bestScore {
+		failScore := -1
+		var failErr error
+		if s := unionRank(x, keySet{[]string{"insert", "newText", "replace"}, nil, []string{"insert", "newText", "replace"}}); s >= 0 {
 			var v InsertReplaceEdit
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"newText", "range"}, nil}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"newText", "range"}, nil, []string{"newText", "range"}}); s >= 0 {
 			var v TextEdit
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
+		}
+		if failScore > bestScore {
+			return failErr
 		}
 		if bestScore >= 0 {
 			t.Value = best
 			return nil
 		}
+	}
+	if len(x) > 0 {
+		return fmt.Errorf("unmarshal failed to match one of [InsertReplaceEdit TextEdit]")
 	}
 	var h0 InsertReplaceEdit
 	if err := json.Unmarshal(x, &h0); err == nil {
@@ -5301,16 +5402,19 @@ func (t *Or_LinkedEditingRangeOptions_LinkedEditingRangeRegistrationOptions_bool
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{nil, []string{"workDoneProgress"}, nil}, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [LinkedEditingRangeOptions LinkedEditingRangeRegistrationOptions bool]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}, nil}); s > bestScore {
 			var v LinkedEditingRangeOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}); s > bestScore {
 			var v LinkedEditingRangeRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -5469,16 +5573,19 @@ func (t *Or_MonikerOptions_MonikerRegistrationOptions_bool) UnmarshalJSON(x []by
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{nil, []string{"workDoneProgress"}, nil}, keySet{[]string{"documentSelector"}, []string{"workDoneProgress"}, nil}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [MonikerOptions MonikerRegistrationOptions bool]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}, nil}); s > bestScore {
 			var v MonikerOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"workDoneProgress"}, nil}); s > bestScore {
 			var v MonikerRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -5530,25 +5637,44 @@ func (t *Or_NotebookCellTextDocumentFilter_TextDocumentFilter) UnmarshalJSON(x [
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{[]string{"notebook"}, []string{"language"}, nil}, keySet{[]string{"language"}, []string{"pattern", "scheme"}, []string{"language"}}, keySet{[]string{"pattern"}, []string{"language", "scheme"}, nil}, keySet{[]string{"scheme"}, []string{"language", "pattern"}, []string{"scheme"}}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [NotebookCellTextDocumentFilter TextDocumentFilter]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{[]string{"notebook"}, []string{"language"}}); s > bestScore {
+		failScore := -1
+		var failErr error
+		if s := unionRank(x, keySet{[]string{"notebook"}, []string{"language"}, nil}); s >= 0 {
 			var v NotebookCellTextDocumentFilter
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"language"}, []string{"pattern", "scheme"}}, keySet{[]string{"pattern"}, []string{"language", "scheme"}}, keySet{[]string{"scheme"}, []string{"language", "pattern"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"language"}, []string{"pattern", "scheme"}, []string{"language"}}, keySet{[]string{"pattern"}, []string{"language", "scheme"}, nil}, keySet{[]string{"scheme"}, []string{"language", "pattern"}, []string{"scheme"}}); s >= 0 {
 			var v TextDocumentFilter
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
+		}
+		if failScore > bestScore {
+			return failErr
 		}
 		if bestScore >= 0 {
 			t.Value = best
 			return nil
 		}
+	}
+	if len(x) > 0 {
+		return fmt.Errorf("unmarshal failed to match one of [NotebookCellTextDocumentFilter TextDocumentFilter]")
 	}
 	var h0 NotebookCellTextDocumentFilter
 	if err := json.Unmarshal(x, &h0); err == nil {
@@ -5588,31 +5714,54 @@ func (t *Or_NotebookDocumentFilterNotebookType_NotebookDocumentFilterPattern_Not
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{[]string{"notebookType"}, []string{"pattern", "scheme"}, []string{"notebookType"}}, keySet{[]string{"pattern"}, []string{"notebookType", "scheme"}, nil}, keySet{[]string{"scheme"}, []string{"notebookType", "pattern"}, []string{"scheme"}}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [NotebookDocumentFilterNotebookType NotebookDocumentFilterPattern NotebookDocumentFilterScheme]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{[]string{"notebookType"}, []string{"pattern", "scheme"}}); s > bestScore {
+		failScore := -1
+		var failErr error
+		if s := unionRank(x, keySet{[]string{"notebookType"}, []string{"pattern", "scheme"}, []string{"notebookType"}}); s >= 0 {
 			var v NotebookDocumentFilterNotebookType
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"pattern"}, []string{"notebookType", "scheme"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"pattern"}, []string{"notebookType", "scheme"}, nil}); s >= 0 {
 			var v NotebookDocumentFilterPattern
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"scheme"}, []string{"notebookType", "pattern"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"scheme"}, []string{"notebookType", "pattern"}, []string{"scheme"}}); s >= 0 {
 			var v NotebookDocumentFilterScheme
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
+		}
+		if failScore > bestScore {
+			return failErr
 		}
 		if bestScore >= 0 {
 			t.Value = best
 			return nil
 		}
+	}
+	if len(x) > 0 {
+		return fmt.Errorf("unmarshal failed to match one of [NotebookDocumentFilterNotebookType NotebookDocumentFilterPattern NotebookDocumentFilterScheme]")
 	}
 	var h0 NotebookDocumentFilterNotebookType
 	if err := json.Unmarshal(x, &h0); err == nil {
@@ -5655,25 +5804,44 @@ func (t *Or_NotebookDocumentFilterWithCells_NotebookDocumentFilterWithNotebook) 
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{[]string{"cells"}, []string{"notebook"}, nil}, keySet{[]string{"notebook"}, []string{"cells"}, nil}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [NotebookDocumentFilterWithCells NotebookDocumentFilterWithNotebook]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{[]string{"cells"}, []string{"notebook"}}); s > bestScore {
+		failScore := -1
+		var failErr error
+		if s := unionRank(x, keySet{[]string{"cells"}, []string{"notebook"}, nil}); s >= 0 {
 			var v NotebookDocumentFilterWithCells
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"notebook"}, []string{"cells"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"notebook"}, []string{"cells"}, nil}); s >= 0 {
 			var v NotebookDocumentFilterWithNotebook
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
+		}
+		if failScore > bestScore {
+			return failErr
 		}
 		if bestScore >= 0 {
 			t.Value = best
 			return nil
 		}
+	}
+	if len(x) > 0 {
+		return fmt.Errorf("unmarshal failed to match one of [NotebookDocumentFilterWithCells NotebookDocumentFilterWithNotebook]")
 	}
 	var h0 NotebookDocumentFilterWithCells
 	if err := json.Unmarshal(x, &h0); err == nil {
@@ -5746,25 +5914,44 @@ func (t *Or_NotebookDocumentSyncOptions_NotebookDocumentSyncRegistrationOptions)
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{[]string{"notebookSelector"}, []string{"save"}, nil}, keySet{[]string{"notebookSelector"}, []string{"id", "save"}, nil}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [NotebookDocumentSyncOptions NotebookDocumentSyncRegistrationOptions]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{[]string{"notebookSelector"}, []string{"save"}}); s > bestScore {
+		failScore := -1
+		var failErr error
+		if s := unionRank(x, keySet{[]string{"notebookSelector"}, []string{"save"}, nil}); s >= 0 {
 			var v NotebookDocumentSyncOptions
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"notebookSelector"}, []string{"id", "save"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"notebookSelector"}, []string{"id", "save"}, nil}); s >= 0 {
 			var v NotebookDocumentSyncRegistrationOptions
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
+		}
+		if failScore > bestScore {
+			return failErr
 		}
 		if bestScore >= 0 {
 			t.Value = best
 			return nil
 		}
+	}
+	if len(x) > 0 {
+		return fmt.Errorf("unmarshal failed to match one of [NotebookDocumentSyncOptions NotebookDocumentSyncRegistrationOptions]")
 	}
 	var h0 NotebookDocumentSyncOptions
 	if err := json.Unmarshal(x, &h0); err == nil {
@@ -5944,16 +6131,19 @@ func (t *Or_SelectionRangeOptions_SelectionRangeRegistrationOptions_bool) Unmars
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{nil, []string{"workDoneProgress"}, nil}, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [SelectionRangeOptions SelectionRangeRegistrationOptions bool]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}, nil}); s > bestScore {
 			var v SelectionRangeOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}); s > bestScore {
 			var v SelectionRangeRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -6040,25 +6230,44 @@ func (t *Or_SemanticTokensOptions_SemanticTokensRegistrationOptions) UnmarshalJS
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{[]string{"legend"}, []string{"full", "range", "workDoneProgress"}, []string{"legend"}}, keySet{[]string{"documentSelector", "legend"}, []string{"full", "id", "range", "workDoneProgress"}, []string{"legend"}}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [SemanticTokensOptions SemanticTokensRegistrationOptions]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{[]string{"legend"}, []string{"full", "range", "workDoneProgress"}}); s > bestScore {
+		failScore := -1
+		var failErr error
+		if s := unionRank(x, keySet{[]string{"legend"}, []string{"full", "range", "workDoneProgress"}, []string{"legend"}}); s >= 0 {
 			var v SemanticTokensOptions
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"documentSelector", "legend"}, []string{"full", "id", "range", "workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector", "legend"}, []string{"full", "id", "range", "workDoneProgress"}, []string{"legend"}}); s >= 0 {
 			var v SemanticTokensRegistrationOptions
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
+		}
+		if failScore > bestScore {
+			return failErr
 		}
 		if bestScore >= 0 {
 			t.Value = best
 			return nil
 		}
+	}
+	if len(x) > 0 {
+		return fmt.Errorf("unmarshal failed to match one of [SemanticTokensOptions SemanticTokensRegistrationOptions]")
 	}
 	var h0 SemanticTokensOptions
 	if err := json.Unmarshal(x, &h0); err == nil {
@@ -6096,25 +6305,44 @@ func (t *Or_TextDocumentContentChangePartial_TextDocumentContentChangeWholeDocum
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{[]string{"range", "text"}, []string{"rangeLength"}, []string{"range", "text"}}, keySet{[]string{"text"}, nil, []string{"text"}}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [TextDocumentContentChangePartial TextDocumentContentChangeWholeDocument]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{[]string{"range", "text"}, []string{"rangeLength"}}); s > bestScore {
+		failScore := -1
+		var failErr error
+		if s := unionRank(x, keySet{[]string{"range", "text"}, []string{"rangeLength"}, []string{"range", "text"}}); s >= 0 {
 			var v TextDocumentContentChangePartial
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"text"}, nil}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"text"}, nil, []string{"text"}}); s >= 0 {
 			var v TextDocumentContentChangeWholeDocument
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
+		}
+		if failScore > bestScore {
+			return failErr
 		}
 		if bestScore >= 0 {
 			t.Value = best
 			return nil
 		}
+	}
+	if len(x) > 0 {
+		return fmt.Errorf("unmarshal failed to match one of [TextDocumentContentChangePartial TextDocumentContentChangeWholeDocument]")
 	}
 	var h0 TextDocumentContentChangePartial
 	if err := json.Unmarshal(x, &h0); err == nil {
@@ -6152,25 +6380,44 @@ func (t *Or_TextDocumentContentOptions_TextDocumentContentRegistrationOptions) U
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{[]string{"schemes"}, nil, nil}, keySet{[]string{"schemes"}, []string{"id"}, nil}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [TextDocumentContentOptions TextDocumentContentRegistrationOptions]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{[]string{"schemes"}, nil}); s > bestScore {
+		failScore := -1
+		var failErr error
+		if s := unionRank(x, keySet{[]string{"schemes"}, nil, nil}); s >= 0 {
 			var v TextDocumentContentOptions
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"schemes"}, []string{"id"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"schemes"}, []string{"id"}, nil}); s >= 0 {
 			var v TextDocumentContentRegistrationOptions
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
+		}
+		if failScore > bestScore {
+			return failErr
 		}
 		if bestScore >= 0 {
 			t.Value = best
 			return nil
 		}
+	}
+	if len(x) > 0 {
+		return fmt.Errorf("unmarshal failed to match one of [TextDocumentContentOptions TextDocumentContentRegistrationOptions]")
 	}
 	var h0 TextDocumentContentOptions
 	if err := json.Unmarshal(x, &h0); err == nil {
@@ -6210,31 +6457,54 @@ func (t *Or_TextDocumentFilterLanguage_TextDocumentFilterPattern_TextDocumentFil
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{[]string{"language"}, []string{"pattern", "scheme"}, []string{"language"}}, keySet{[]string{"pattern"}, []string{"language", "scheme"}, nil}, keySet{[]string{"scheme"}, []string{"language", "pattern"}, []string{"scheme"}}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [TextDocumentFilterLanguage TextDocumentFilterPattern TextDocumentFilterScheme]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{[]string{"language"}, []string{"pattern", "scheme"}}); s > bestScore {
+		failScore := -1
+		var failErr error
+		if s := unionRank(x, keySet{[]string{"language"}, []string{"pattern", "scheme"}, []string{"language"}}); s >= 0 {
 			var v TextDocumentFilterLanguage
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"pattern"}, []string{"language", "scheme"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"pattern"}, []string{"language", "scheme"}, nil}); s >= 0 {
 			var v TextDocumentFilterPattern
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"scheme"}, []string{"language", "pattern"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"scheme"}, []string{"language", "pattern"}, []string{"scheme"}}); s >= 0 {
 			var v TextDocumentFilterScheme
-			if json.Unmarshal(x, &v) == nil {
+			if err := json.Unmarshal(x, &v); err != nil {
+				if s > failScore {
+					failScore, failErr = s, err
+				}
+			} else if s > bestScore {
 				best, bestScore = v, s
 			}
+		}
+		if failScore > bestScore {
+			return failErr
 		}
 		if bestScore >= 0 {
 			t.Value = best
 			return nil
 		}
+	}
+	if len(x) > 0 {
+		return fmt.Errorf("unmarshal failed to match one of [TextDocumentFilterLanguage TextDocumentFilterPattern TextDocumentFilterScheme]")
 	}
 	var h0 TextDocumentFilterLanguage
 	if err := json.Unmarshal(x, &h0); err == nil {
@@ -6349,16 +6619,19 @@ func (t *Or_TypeDefinitionOptions_TypeDefinitionRegistrationOptions_bool) Unmars
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{nil, []string{"workDoneProgress"}, nil}, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [TypeDefinitionOptions TypeDefinitionRegistrationOptions bool]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}, nil}); s > bestScore {
 			var v TypeDefinitionOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}); s > bestScore {
 			var v TypeDefinitionRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
@@ -6412,16 +6685,19 @@ func (t *Or_TypeHierarchyOptions_TypeHierarchyRegistrationOptions_bool) Unmarsha
 		return nil
 	}
 	// union-discriminate: prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).
+	if unionNullRequired(x, keySet{nil, []string{"workDoneProgress"}, nil}, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}) {
+		return fmt.Errorf("unmarshal failed: null for a required field of one of [TypeHierarchyOptions TypeHierarchyRegistrationOptions bool]")
+	}
 	{
 		bestScore := -1
 		var best any
-		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{nil, []string{"workDoneProgress"}, nil}); s > bestScore {
 			var v TypeHierarchyOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s
 			}
 		}
-		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}}); s > bestScore {
+		if s := unionRank(x, keySet{[]string{"documentSelector"}, []string{"id", "workDoneProgress"}, nil}); s > bestScore {
 			var v TypeHierarchyRegistrationOptions
 			if json.Unmarshal(x, &v) == nil {
 				best, bestScore = v, s

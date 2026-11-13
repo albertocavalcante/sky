@@ -74,11 +74,11 @@ func main() {
 	}
 	// keys collects the required and optional JSON keys of a struct,
 	// following embedded structs.
-	var keys func(name string, seen map[string]bool) (req, opt []string)
-	keys = func(name string, seen map[string]bool) (req, opt []string) {
+	var keys func(name string, seen map[string]bool) (req, opt, nonNull []string)
+	keys = func(name string, seen map[string]bool) (req, opt, nonNull []string) {
 		st := structs[name]
 		if st == nil || seen[name] {
-			return nil, nil
+			return nil, nil, nil
 		}
 		seen[name] = true
 		for _, fld := range st.Fields.List {
@@ -88,8 +88,8 @@ func main() {
 			}
 			if len(fld.Names) == 0 {
 				if id, ok := fld.Type.(*ast.Ident); ok && tag == "" {
-					r, o := keys(id.Name, seen)
-					req, opt = append(req, r...), append(opt, o...)
+					r, o, n := keys(id.Name, seen)
+					req, opt, nonNull = append(req, r...), append(opt, o...), append(nonNull, n...)
 				}
 				continue
 			}
@@ -97,18 +97,38 @@ func main() {
 			if parts[0] == "" || parts[0] == "-" {
 				continue
 			}
-			if strings.Contains(tag, "omitempty") {
+			if strings.Contains(tag, "omitempty") || strings.Contains(tag, "omitzero") {
 				opt = append(opt, parts[0])
 			} else {
 				req = append(req, parts[0])
+				// A required field of a plain scalar or struct type is not
+				// nullable: pointers, slices, maps, any and union types are
+				// how lspls spells "T | null", so only those may be null.
+				if id, ok := fld.Type.(*ast.Ident); ok && id.Name != "any" && !strings.HasPrefix(id.Name, "Or_") {
+					if _, isAlias := aliases[id.Name]; !isAlias {
+						nonNull = append(nonNull, parts[0])
+					}
+				}
 			}
 		}
 		sort.Strings(req)
 		sort.Strings(opt)
-		return req, opt
+		sort.Strings(nonNull)
+		return req, opt, nonNull
 	}
 
 	text := string(src)
+	// encoding/json never treats a struct as empty, so an absent optional
+	// union field tagged omitempty re-marshals as null. omitzero omits it
+	// while the union's Value is nil.
+	fre := regexp.MustCompile("(?m)^(\\t\\w+ (\\w+)) `json:\"(\\w+),omitempty\"`$")
+	text = fre.ReplaceAllStringFunc(text, func(line string) string {
+		typ := fre.FindStringSubmatch(line)[2]
+		if _, isAlias := aliases[typ]; !isAlias && !strings.HasPrefix(typ, "Or_") {
+			return line
+		}
+		return strings.Replace(line, ",omitempty", ",omitzero", 1)
+	})
 	// Strip blocks from a previous run so output is a pure function of the
 	// lspls-generated code (regeneration is exact and picks up generator fixes).
 	text = regexp.MustCompile(`(?s)\t`+marker+`:.*?\n\tvar h0 `).ReplaceAllString(text, "\tvar h0 ")
@@ -131,8 +151,8 @@ func main() {
 			return nil, false
 		}
 		if structs[v] != nil {
-			req, opt := keys(v, map[string]bool{})
-			return []string{fmt.Sprintf("keySet{%s, %s}", strSlice(req), strSlice(opt))}, true
+			req, opt, nn := keys(v, map[string]bool{})
+			return []string{fmt.Sprintf("keySet{%s, %s, %s}", strSlice(req), strSlice(opt), strSlice(nn))}, true
 		}
 		target, isAlias := aliases[v]
 		if !isAlias {
@@ -174,11 +194,38 @@ func main() {
 		}
 		var b strings.Builder
 		b.WriteString("\t" + marker + ": prefer the struct variant whose required keys are present (most specific wins; optional keys break ties).\n")
-		b.WriteString("\t{\n\t\tbestScore := -1\n\t\tvar best any\n")
+		// strict: every variant is a struct, so no later fallback can accept
+		// input that the key discrimination rejected.
+		strict := len(cands) == len(variants[name])
+		// A variant whose required keys are all present but one of them is
+		// null is malformed input, not a cue to fall back to a less specific
+		// variant (which would silently drop the null field).
+		var all []string
 		for _, c := range cands {
+			all = append(all, c.sets...)
+		}
+		fmt.Fprintf(&b, "\tif unionNullRequired(x, %s) {\n\t\treturn fmt.Errorf(\"unmarshal failed: null for a required field of one of [%s]\")\n\t}\n", strings.Join(all, ", "), strings.Join(variants[name], " "))
+		b.WriteString("\t{\n\t\tbestScore := -1\n\t\tvar best any\n")
+		if strict {
+			b.WriteString("\t\tfailScore := -1\n\t\tvar failErr error\n")
+		}
+		for _, c := range cands {
+			if strict {
+				fmt.Fprintf(&b, "\t\tif s := unionRank(x, %s); s >= 0 {\n\t\t\tvar v %s\n\t\t\tif err := json.Unmarshal(x, &v); err != nil {\n\t\t\t\tif s > failScore {\n\t\t\t\t\tfailScore, failErr = s, err\n\t\t\t\t}\n\t\t\t} else if s > bestScore {\n\t\t\t\tbest, bestScore = v, s\n\t\t\t}\n\t\t}\n", strings.Join(c.sets, ", "), c.typ)
+				continue
+			}
 			fmt.Fprintf(&b, "\t\tif s := unionRank(x, %s); s > bestScore {\n\t\t\tvar v %s\n\t\t\tif json.Unmarshal(x, &v) == nil {\n\t\t\t\tbest, bestScore = v, s\n\t\t\t}\n\t\t}\n", strings.Join(c.sets, ", "), c.typ)
 		}
+		if strict {
+			// A more specific variant matched the keys but failed to decode.
+			b.WriteString("\t\tif failScore > bestScore {\n\t\t\treturn failErr\n\t\t}\n")
+		}
 		b.WriteString("\t\tif bestScore >= 0 {\n\t\t\tt.Value = best\n\t\t\treturn nil\n\t\t}\n\t}\n")
+		if strict {
+			// len(x) > 0 always holds; it keeps the fallbacks below reachable
+			// for go vet while rejecting input the keys did not match.
+			fmt.Fprintf(&b, "\tif len(x) > 0 {\n\t\treturn fmt.Errorf(\"unmarshal failed to match one of [%s]\")\n\t}\n", strings.Join(variants[name], " "))
+		}
 		sb.WriteString(text[last:m[1]])
 		sb.WriteString(b.String())
 		last = m[1]
