@@ -1,34 +1,8 @@
-# Source (bundled)
-src/
-**/*.ts
-
-# Config
-tsconfig.json
-eslint.config.mjs
-.prettierrc
-lefthook.yml
-justfile
-
-# Build systems
-BUILD.bazel
-MODULE.bazel
-.bazelrc
-.bazelversion
-.bazelignore
-BUCK
-.buckconfig
-.buckroot
-bazel-*/
-buck-out/
-
-# Development
-.git/
-.github/
-.vscode/
-node_modules/
-.vscode-test/
-**/*.map
-
-# Docs (keep README)
-*.md
+**/*
+!package.json
 !README.md
+!LICENSE
+!language-configuration.json
+!out/
+!out/extension.js
+!syntaxes/**

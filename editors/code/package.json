@@ -74,7 +74,7 @@
   },
   "scripts": {
     "build": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap",
-    "build:prod": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --target=node20 --minify",
+    "build:prod": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --target=node20 --minify && node -e \"require('node:fs').rmSync('out/extension.js.map', { force: true })\"",
     "watch": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap --watch",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
@@ -83,7 +83,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "package": "vsce package",
+    "package": "vsce package --no-dependencies",
     "vscode:prepublish": "pnpm run build:prod"
   },
   "devDependencies": {
@@ -104,9 +104,5 @@
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
-  }
+  "packageManager": "pnpm@12.6.0"
 }
