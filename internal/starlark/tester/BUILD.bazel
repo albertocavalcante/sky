@@ -38,6 +38,7 @@ go_test(
         "snapshot_legacy_test.go",
         "snapshot_robust_test.go",
         "tester_test.go",
+        "watcher_deps_test.go",
         "watcher_regress_test.go",
         "watcher_test.go",
     ],

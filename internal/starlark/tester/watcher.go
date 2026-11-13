@@ -29,6 +29,10 @@ type Watcher struct {
 	// loads maps a test file to the files it loads (forward deps).
 	loads map[string][]string
 
+	// gone remembers test files that disappeared, so that an atomic save
+	// (remove or rename, then create) re-adds the file instead of losing it.
+	gone map[string]bool
+
 	// rootDir is the root directory for resolving relative paths.
 	rootDir string
 
@@ -70,6 +74,7 @@ func NewWatcher(rootDir string) (*Watcher, error) {
 		testFiles:    make(map[string]bool),
 		dependencies: make(map[string]map[string]bool),
 		loads:        make(map[string][]string),
+		gone:         make(map[string]bool),
 		rootDir:      rootDir,
 		Events:       make(chan WatchEvent, 100),
 		Errors:       make(chan error, 10),
@@ -92,10 +97,15 @@ func (w *Watcher) sendErr(err error) {
 // watchPath watches a file and its parent directory (so atomic saves that
 // replace the file via rename are still observed).
 func (w *Watcher) watchPath(p string) error {
+	// The directory goes first: it is what reports the creation of a file
+	// that does not exist yet.
+	dirErr := w.fsWatcher.Add(filepath.Dir(p))
 	if err := w.fsWatcher.Add(p); err != nil {
+		if os.IsNotExist(err) && dirErr == nil {
+			return nil
+		}
 		return err
 	}
-	_ = w.fsWatcher.Add(filepath.Dir(p))
 	return nil
 }
 
@@ -119,6 +129,7 @@ func (w *Watcher) Add(testFile string) error {
 		return fmt.Errorf("watching %s: %w", absPath, err)
 	}
 	w.testFiles[absPath] = true
+	delete(w.gone, absPath)
 
 	if err := w.trackTest(absPath); err != nil {
 		// Report but don't fail - the file might have syntax errors
@@ -130,6 +141,12 @@ func (w *Watcher) Add(testFile string) error {
 // trackTest parses testFile and records its direct and transitive deps.
 // Caller must hold w.mu.
 func (w *Watcher) trackTest(testFile string) error {
+	// conftest.star files are loaded implicitly by every test below them, so
+	// edits (or creation) must rerun the test even without a load().
+	for _, c := range w.conftestCandidates(testFile) {
+		w.trackDep(c, testFile, map[string]bool{testFile: true})
+	}
+
 	deps, err := w.extractLoads(testFile)
 	if err != nil {
 		return err
@@ -145,6 +162,30 @@ func (w *Watcher) trackTest(testFile string) error {
 		w.trackDep(depPath, testFile, visited)
 	}
 	return nil
+}
+
+// conftestCandidates lists the conftest.star paths (existing or not) that the
+// runner may load for testFile: its directory and each ancestor up to rootDir.
+// A test outside rootDir only considers its own directory.
+func (w *Watcher) conftestCandidates(testFile string) []string {
+	dir := filepath.Dir(testFile)
+	root, err := filepath.Abs(w.rootDir)
+	if err != nil {
+		root = dir
+	}
+	if rel, err := filepath.Rel(root, dir); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		root = dir
+	}
+
+	var out []string
+	for {
+		out = append(out, filepath.Join(dir, "conftest.star"))
+		parent := filepath.Dir(dir)
+		if dir == root || parent == dir {
+			return out
+		}
+		dir = parent
+	}
 }
 
 // trackDep records depPath as a dependency of testFile and recurses into its
@@ -210,11 +251,8 @@ func (w *Watcher) resolveLoadPath(fromFile, loadPath string) string {
 	dir := filepath.Dir(fromFile)
 	resolved := filepath.Join(dir, loadPath)
 
-	// Check if file exists
-	if _, err := os.Stat(resolved); err != nil {
-		return ""
-	}
-
+	// The file need not exist yet: it is still tracked so that creating it
+	// later triggers a rerun.
 	absPath, err := filepath.Abs(resolved)
 	if err != nil {
 		return ""
@@ -266,18 +304,7 @@ func (w *Watcher) run() {
 				return
 			}
 
-			// Ignore non-modify events for now (could expand later)
-			if event.Op&(fsnotify.Remove|fsnotify.Rename) != 0 {
-				// Atomic saves replace the inode; re-arm the watch.
-				if _, err := os.Stat(event.Name); err == nil {
-					_ = w.fsWatcher.Add(event.Name)
-				}
-			}
-			if event.Op&(fsnotify.Write|fsnotify.Create) == 0 {
-				continue
-			}
-
-			w.handleEvent(event)
+			w.process(event)
 
 		case err, ok := <-w.fsWatcher.Errors:
 			if !ok {
@@ -286,6 +313,53 @@ func (w *Watcher) run() {
 			w.sendErr(err)
 		}
 	}
+}
+
+// process applies one filesystem event to the watched set.
+func (w *Watcher) process(event fsnotify.Event) {
+	if event.Op&(fsnotify.Remove|fsnotify.Rename) != 0 {
+		if _, err := os.Stat(event.Name); err == nil {
+			// Atomic saves replace the inode; re-arm the watch.
+			_ = w.fsWatcher.Add(event.Name)
+		} else if abs, err := filepath.Abs(event.Name); err == nil {
+			// Really gone. A removed dependency stays tracked (so that
+			// recreating it is noticed) and reruns its dependents; a removed
+			// test file leaves the watched set.
+			w.forgetTest(abs)
+			w.handleEvent(event)
+			return
+		}
+	}
+	if event.Op&(fsnotify.Write|fsnotify.Create) == 0 {
+		return
+	}
+	if event.Op&fsnotify.Create != 0 {
+		if abs, err := filepath.Abs(event.Name); err == nil && w.wasGone(abs) {
+			_ = w.Add(abs)
+		}
+	}
+	w.handleEvent(event)
+}
+
+// forgetTest drops a deleted test file from the watched set.
+func (w *Watcher) forgetTest(abs string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.testFiles[abs] {
+		return
+	}
+	delete(w.testFiles, abs)
+	delete(w.loads, abs)
+	for _, set := range w.dependencies {
+		delete(set, abs)
+	}
+	w.gone[abs] = true
+}
+
+func (w *Watcher) wasGone(abs string) bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.gone[abs]
 }
 
 // handleEvent processes a file change event.
