@@ -22,7 +22,14 @@ type Index struct {
 }
 
 // New creates a new index rooted at the given directory.
+//
+// A relative root is made absolute: discovery returns root-prefixed paths,
+// and a relative one would be mistaken for an already root-relative path and
+// joined with the root a second time.
 func New(root string) *Index {
+	if abs, err := filepath.Abs(root); err == nil {
+		root = abs
+	}
 	return &Index{
 		root:       root,
 		files:      make(map[string]*File),
