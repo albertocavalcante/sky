@@ -11,12 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
       - name: Run Copybara
-        uses: olivr/copybara-action@v1.2.3
+        uses: olivr/copybara-action@a0bb6a37362014a57421a6c8dec43fa1908dda06 # v1.2.3
         with:
           ssh_key: ${{ secrets.COPYBARA_SSH_KEY }}
           sot_repo: albertocavalcante/sky
